@@ -120,23 +120,47 @@ func _build_world() -> void:
 
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.045, 0.05, 0.06)
+	env.background_color = Color(0.02, 0.022, 0.026)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.55, 0.58, 0.68)
-	env.ambient_light_energy = 0.55
+	env.ambient_light_color = Color(0.62, 0.66, 0.76)
+	env.ambient_light_energy = 0.95
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.05
 	env.glow_enabled = false
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 
+	# The set stands on a stage floor. Without it the camera sees raw background
+	# every time a swing takes it outside the room's footprint, which reads as a
+	# hole in the world rather than as a dark stage.
+	var stage := MeshInstance3D.new()
+	stage.name = "Stage"
+	var stage_plane := PlaneMesh.new()
+	stage_plane.size = Vector2(72.0, 60.0)
+	stage.mesh = stage_plane
+	var stage_mat := StandardMaterial3D.new()
+	stage_mat.albedo_color = Color(0.085, 0.088, 0.098)
+	stage_mat.roughness = 1.0
+	stage.material_override = stage_mat
+	stage.position = Vector3(size_v.x * 0.5, -0.02, size_v.y * 0.5)
+	add_child(stage)
+
+	# Key light: high and slightly behind-left, the way a set is lit for
+	# coverage. A low sun stretched every wall into a black parallelogram that
+	# read as a pit in the floor.
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
-	sun.rotation_degrees = Vector3(-58.0, -38.0, 0.0)
-	sun.light_energy = 1.15
-	sun.light_color = Color(1.0, 0.96, 0.90)
+	sun.rotation_degrees = Vector3(-72.0, -32.0, 0.0)
+	sun.light_energy = 1.0
+	sun.light_color = Color(1.0, 0.97, 0.92)
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 60.0
+	sun.light_angular_distance = 1.2
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+	sun.directional_shadow_max_distance = 34.0
+	sun.directional_shadow_blend_splits = true
+	sun.shadow_bias = 0.04
+	sun.shadow_normal_bias = 1.0
 	add_child(sun)
 
 	# Two practicals so the room has depth and the office reads as "lit set".

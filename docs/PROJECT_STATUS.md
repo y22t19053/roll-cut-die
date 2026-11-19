@@ -29,6 +29,28 @@ godot --headless --path . --script tools/check_plan.gd  # → PLAN CLEAR (0 prob
 | routes | 18/18 | TAKE 01 25.5 s / 62.9 m / NPC 3.80 m；TAKE 02 24.8 s / 61.1 m / NPC 3.49 m / **幽灵 0.89 m**；TAKE 03 39.2 s / 73.4 m / NPC 1.34 m / **幽灵 1.10 m** |
 | scene | 16/16 | 主场景 headless 装配：`room built 24x18`、`main ready: 2 npcs, 4 evidence, ghosts 0`、246 帧后开场冻结解除 |
 
+### 2.1 · 真机运行证据（2026-11-19 22:5x，窗口模式，RTX 4060 Laptop，165 fps）
+
+第一次在真实窗口里跑起来（`godot_run_project` + `godot_command`），用 `eval` 直接读运行时状态。这组数字证明 headless 里的 ROLL 数学在真实游戏循环里同样成立：
+
+| 操作 | 实测 |
+|---|---|
+| 按住 D（世界 +X） | `facing = -90°`；镜头 yaw 从 0 追到 **-82°** 后停住，`w = 0` —— 停在**死区边缘 8°**，正是设计值 |
+| 按住 A（世界 -X） | `facing = +90°`；yaw 稳定在 **+82°**，`w = 0`，roll = 0 |
+| 从 +90° 瞬间切到 D | 90 帧采样：`w` 单调加速到 **-120°/s 饱和**，`roll` 升到 **+12° 饱和**，yaw 一路滞后于 facing（第一帧 yaw 81.9 / facing 54，第 68 帧 yaw 49 / facing -89.5） |
+| 松开按键 | `w` 保持 -120°/s 直到追平，roll 在 0.35 s 内回 0 |
+
+也就是说：**死区 8°、限速 120°/s、roll 上限 12°、roll 回正 0.35 s 四项在真机上逐项对上**，静止时 `w` 精确归零。这是 D-001/D-003 从「数学自洽」升级为「运行可验证」的一步。
+
+真机运行同时暴露了两个 headless 永远看不到的问题（已修，见 §3.1）：
+
+1. **相机会甩到房间外，看到纯黑的虚空**。12 m 距离/55° 俯角在 24×18 m 的房间里必然把镜头带到墙外，而场景没有舞台地板，于是画面上出现一大块「世界破了个洞」的黑色。
+2. **主光角度太低**。58° 仰角的平行光把每面墙投成一条长而全黑的平行四边形，读起来像地上有坑，而且把门的开口糊掉。
+
+修法（`scripts/main.gd::_build_world`）：加 72×60 m 舞台地板（深灰、无光泽）、主光抬到 72° 仰角并配 `light_angular_distance=1.2` 的软阴影、加 `ambient_light_energy 0.95` 抬高暗部、阴影最大距离收到 34 m。截图对比见 `shots/02_d12_p55.png`（修前）与 `shots/06_lit_d12.png`（修后，未被 git 跟踪，属本地取证）。
+
+对应决策：`RCD_DECISION_LOG.md` D-016。
+
 ## 3 · 本轮改了什么（都能用 `git diff c3de553` 复核）
 
 1. **ROLL 按圣经重写**：`scripts/camera/camera_math.gd`（纯关系）+ 新文件 `scripts/camera/camera_chase.gd`（有状态积分器）+ `scripts/camera/camera_rig.gd`（有效 yaw = chase yaw + 鼠标 offset；roll 不参与任何判定）。

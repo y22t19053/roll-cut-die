@@ -16,3 +16,10 @@ Thumbs.db
 
 # Runtime user data accidentally copied in
 runtime.log
+
+# godot-bridge injects this autoload on demand and rewrites project.godot with it.
+# It is a dev tool: it must never ship in an export, so it stays out of the tree.
+autoload/
+
+# Screenshots taken through the interaction server during a run.
+shots/
