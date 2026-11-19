@@ -1,0 +1,19 @@
+# Line endings: keep the repository LF so Windows checkout, CI and the Godot
+# import cache all see the same bytes. Godot accepts both; mixing them makes
+# every diff noisy.
+* text=auto eol=lf
+
+# Binary assets: never touch them.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ogg binary
+*.wav binary
+*.mp3 binary
+*.ttf binary
+*.otf binary
+*.res binary
+*.exe binary
+*.pck binary
+*.zip binary

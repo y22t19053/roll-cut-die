@@ -1,0 +1,162 @@
+extends Node3D
+## GhostActor — a previous take, walking itself back into the room.
+##
+## A ghost replays a fixed track against its own clock. It never looks at the
+## current player, never changes the world, and never touches other ghosts. Its
+## only interaction is the one the design asks for: if the current player walks
+## into it, the current player dies, and the death names the take.
+##
+## Bounds: a ghost plays once. When its track runs out it holds the final pose
+## with collision disabled and fades to a stub, so a slow player is not
+## permanently walled in by a finished recording.
+
+const GhostTrack = preload("res://scripts/ghost/ghost_track.gd")
+
+signal caught_player(take_id: int)
+
+const DANGER_RADIUS := 0.34
+const BODY_RADIUS := 0.32
+const BODY_HEIGHT := 1.7
+const FADE_OUT_S := 1.2
+## The projection needs a moment to come up, and every take starts on the same
+## mark as the ghosts do: without this window take 2 would begin inside take 1
+## and die on the first frame. So the ghost is visible but harmless while it
+## materialises, and the danger only comes on after it has walked clear.
+const WARMUP := 2.0
+const ALPHA := 0.42
+
+var track
+var take_id := 0
+var playing := false
+var spent := false
+var playhead := 0.0
+
+var _danger: Area3D
+var _visual: Node3D
+var _label: Label3D
+var _mat: StandardMaterial3D
+var _alpha := 0.0
+var _armed := false
+
+
+func setup(t: Variant, id: int) -> void:
+	track = t
+	take_id = id
+	playhead = 0.0
+	playing = true
+	spent = false
+	_armed = false
+	_alpha = 0.0
+	if _danger != null:
+		_danger.monitoring = false
+	if _label != null:
+		_label.text = "TAKE %02d" % take_id
+
+
+func _ready() -> void:
+	_build()
+
+
+func _hue() -> Color:
+	# Stable per take, so the third take's two ghosts are told apart instantly.
+	var h := fmod(0.55 + 0.13 * float(take_id), 1.0)
+	return Color.from_hsv(h, 0.45, 1.0)
+
+
+func _build() -> void:
+	_visual = Node3D.new()
+	_visual.name = "Visual"
+	add_child(_visual)
+
+	_mat = StandardMaterial3D.new()
+	var c := _hue()
+	_mat.albedo_color = Color(c.r, c.g, c.b, _alpha)
+	_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_mat.no_depth_test = false
+	_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	var mesh := MeshInstance3D.new()
+	mesh.name = "Body"
+	var cm := CapsuleMesh.new()
+	cm.radius = BODY_RADIUS
+	cm.height = BODY_HEIGHT
+	cm.radial_segments = 12
+	cm.rings = 4
+	mesh.mesh = cm
+	mesh.position = Vector3(0.0, BODY_HEIGHT * 0.5, 0.0)
+	mesh.material_override = _mat
+	_visual.add_child(mesh)
+
+	_label = Label3D.new()
+	_label.name = "Tag"
+	_label.text = "TAKE %02d" % take_id
+	_label.font_size = 40
+	_label.pixel_size = 0.0055
+	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_label.modulate = Color(c.r, c.g, c.b, 0.9)
+	_label.outline_size = 8
+	_label.outline_modulate = Color(0, 0, 0, 0.7)
+	_label.position = Vector3(0.0, BODY_HEIGHT + 0.3, 0.0)
+	add_child(_label)
+
+	_danger = Area3D.new()
+	_danger.name = "Danger"
+	_danger.collision_layer = 8
+	_danger.collision_mask = 2
+	_danger.monitoring = false
+	_danger.monitorable = false
+	var dc := CollisionShape3D.new()
+	var cyl := CylinderShape3D.new()
+	cyl.radius = DANGER_RADIUS
+	cyl.height = BODY_HEIGHT
+	dc.shape = cyl
+	dc.position = Vector3(0.0, BODY_HEIGHT * 0.5, 0.0)
+	_danger.add_child(dc)
+	add_child(_danger)
+	_danger.body_entered.connect(_on_body_entered)
+
+
+func _on_body_entered(body: Node3D) -> void:
+	if spent or not playing or not _armed:
+		return
+	if body is CharacterBody3D and body.get("frozen") != null:
+		caught_player.emit(take_id)
+
+
+func _physics_process(dt: float) -> void:
+	if track == null or not playing:
+		return
+	playhead += dt
+	var s: Dictionary = track.sample_at(playhead)
+	global_position = s["position"]
+	if _visual != null:
+		_visual.rotation.y = s["facing"]
+	if not _armed:
+		if playhead >= WARMUP:
+			_armed = true
+			if _danger != null:
+				_danger.set_deferred("monitoring", true)
+			if _label != null:
+				_label.text = "TAKE %02d" % take_id
+		_set_alpha(ALPHA * clampf(playhead / WARMUP, 0.0, 1.0))
+	if track.duration() > 0.0 and playhead > track.duration():
+		_finish()
+
+
+func _finish() -> void:
+	playing = false
+	spent = true
+	if _danger != null:
+		_danger.set_deferred("monitoring", false)
+	var tw := create_tween()
+	tw.tween_method(_set_alpha, _alpha, 0.10, FADE_OUT_S)
+	if _label != null:
+		_label.text = "TAKE %02d · OUT" % take_id
+
+
+func _set_alpha(a: float) -> void:
+	_alpha = a
+	if _mat != null:
+		var c := _mat.albedo_color
+		_mat.albedo_color = Color(c.r, c.g, c.b, a)

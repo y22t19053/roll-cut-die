@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "case": {
+    "id": "lost_property",
+    "title": {"zh": "失物", "en": "LOST PROPERTY"},
+    "premise": {"zh": "十二号，展品箱登记为已移交。箱子还在房间里，锁没有动过。你要写的是正式说法。", "en": "On the 12th the exhibit crate was logged as handed over. The crate is still in the room. The lock is intact. You are here to write the official account."}
+  },
+  "evidence": [
+    {
+      "id": "clapboard",
+      "name": {"zh": "场记板", "en": "CLAPPERBOARD"},
+      "inspect": {"zh": "正面写着十一号。背面贴了一条胶带，写着十二号。", "en": "The slate says the 11th. A strip of tape on the back says the 12th."},
+      "seal": {"zh": "已封存。两面都算数。", "en": "Sealed. Both sides count."},
+      "meaning": {"zh": "有人在十二号补拍过，没有登记。", "en": "Someone shot again on the 12th and never logged it."},
+      "prop": "clapboard"
+    },
+    {
+      "id": "script_page",
+      "name": {"zh": "剧本页", "en": "SCRIPT PAGE"},
+      "inspect": {"zh": "一行被划掉：已移交。旁边补写：已封存。", "en": "One line crossed out: HANDED OVER. Written beside it: SEALED."},
+      "seal": {"zh": "已封存。笔迹不算证据，纸算。", "en": "Sealed. The handwriting is not evidence. The paper is."},
+      "meaning": {"zh": "改这个词的人知道移交，也知道要把它抹掉。", "en": "Whoever changed the word knew about the handover. And wanted it gone."},
+      "prop": "script_page"
+    },
+    {
+      "id": "walkie",
+      "name": {"zh": "对讲机", "en": "WALKIE"},
+      "inspect": {"zh": "最后一条通话：先把箱子挪走。", "en": "Last transmission: move the crate first."},
+      "seal": {"zh": "已封存。电池还有电。", "en": "Sealed. The battery still has charge."},
+      "meaning": {"zh": "箱子是在移交登记之后才被挪走的。", "en": "The crate moved after the handover was logged."},
+      "prop": "walkie"
+    },
+    {
+      "id": "receipt",
+      "name": {"zh": "回执", "en": "RECEIPT"},
+      "inspect": {"zh": "快递回执，十二号下午。寄件人空着。地址在本地。", "en": "Courier receipt, 12th, afternoon. Sender blank. A local address."},
+      "seal": {"zh": "已封存。抽屉就那样开着。", "en": "Sealed. The drawer stays open."},
+      "meaning": {"zh": "展品没有出城。移交是编的。", "en": "The exhibit never left town. The handover is fiction."},
+      "prop": "receipt"
+    }
+  ],
+  "npcs": [
+    {
+      "id": "director",
+      "name": {"zh": "导演", "en": "Director"},
+      "lines": [
+        {"min_asks": 0, "requires_inspected": [], "text": {"zh": "这房间整个下午都这么大。", "en": "The room was this big all afternoon."}},
+        {"min_asks": 0, "requires_inspected": ["script_page"], "text": {"zh": "不是我写的。今天只有两个人进过这间屋子，其中一个是我。", "en": "Not my handwriting. Two people came through this room today. One of them was me."}},
+        {"min_asks": 2, "requires_inspected": [], "text": {"zh": "回执上有收件人签名吗。没有。那就别问我。", "en": "Is there a receiving signature on the receipt? No. Then stop asking me."}}
+      ]
+    },
+    {
+      "id": "stagehand",
+      "name": {"zh": "场务", "en": "Stagehand"},
+      "lines": [
+        {"min_asks": 0, "requires_inspected": [], "text": {"zh": "我在门口。门是关着的。", "en": "I was at the door. It was shut."}},
+        {"min_asks": 0, "requires_inspected": ["walkie"], "text": {"zh": "对讲机响过。串台。片场整天串台。", "en": "The walkie squawked. Crossed channel. Happens all day on a set."}},
+        {"min_asks": 2, "requires_inspected": [], "text": {"zh": "我挪过箱子。空的。你可以写下来。", "en": "I moved the crate. It was empty. Write that down."}}
+      ]
+    }
+  ],
+  "report": {
+    "header": {"zh": "事由：展品移交", "en": "SUBJECT: EXHIBIT HANDOVER"},
+    "stances": [
+      {
+        "id": "file",
+        "name": {"zh": "如实归档", "en": "File as read"},
+        "desc": {"zh": "四件都摆上去，两个人也都问过。少一样，纸就退回来。", "en": "All four attached. Both of them asked. Short of that, the paper comes back."}
+      },
+      {
+        "id": "bury",
+        "name": {"zh": "压下去", "en": "Bury it"},
+        "desc": {"zh": "拿走几件，就把几件还回去。留一件在手上，房间会替我们说话。", "en": "Take a few, hand them all back. Hold one and the room speaks for you."}
+      },
+      {
+        "id": "reframe",
+        "name": {"zh": "改一版", "en": "Rewrite it"},
+        "desc": {"zh": "纸越薄越好。堆到三件，谁的名字都跑不掉。", "en": "Keep the paper thin. Three items and every name shows."}
+      }
+    ],
+    "verdicts": {
+      "file_closed": {
+        "title": {"zh": "成立", "en": "IT HOLDS"},
+        "body": {"zh": "差额进了档案，两个人的说法都附在后面。箱子留在原位，锁没有动过。按纸归档，就这样。", "en": "The discrepancy is on file. Both accounts are attached. The crate stays where it is, lock intact. Filed as read."}
+      },
+      "file_insufficient": {
+        "title": {"zh": "退回", "en": "SENT BACK"},
+        "body": {"zh": "纸太薄。补东西，再交一次。箱子不会自己走。", "en": "Too thin. Bring more. Submit again. The crate is not going anywhere."}
+      },
+      "file_rejected": {
+        "title": {"zh": "没人信", "en": "NOBODY BUYS IT"},
+        "body": {"zh": "你写的东西进不了档。房间还是那个房间，箱子还是那个箱子。", "en": "What you wrote does not go on file. The room is still the room. The crate is still in it."}
+      },
+      "bury_registered": {
+        "title": {"zh": "登记簿不动", "en": "LOGBOOK STANDS"},
+        "body": {"zh": "你拿走多少，就还回多少。纸和房间对得上，别的没人问。", "en": "You took it, you gave it back. Paper agrees with the room. Nobody asks the rest."}
+      },
+      "bury_failed": {
+        "title": {"zh": "压不住", "en": "IT WILL NOT CLOSE"},
+        "body": {"zh": "你留了一件。房间还在这儿，那件东西也还在。封不上。", "en": "You kept one back. The room is still here. So is the thing. It will not close."}
+      },
+      "reframe_held": {
+        "title": {"zh": "官方版本留着", "en": "THE OFFICIAL VERSION HOLDS"},
+        "body": {"zh": "纸上东西不多。箱子不在上面。这一版谁都能签。", "en": "Not much on paper. The crate is not one of them. Anybody can sign this."}
+      },
+      "reframe_unravelled": {
+        "title": {"zh": "纸太多", "en": "TOO MUCH PAPER"},
+        "body": {"zh": "三件摆在一起，谁的名字都在上面。没人肯签你这一版。", "en": "Three items together and every name is on the page. Nobody will sign your version."}
+      }
+    }
+  }
+}

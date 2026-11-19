@@ -1,0 +1,76 @@
+{
+  "_comment": "Three-take route proofs. Read by tests/test_routes.gd, which walks each route at 60 Hz against the real NPC clocks and against the ghosts recorded from the earlier takes. Every step is 'auto': the simulator finds the first instant at which that whole crossing is clear, so the waits printed by the test are results, not inputs. Edit waypoints only.",
+  "schema_version": 1,
+  "speed": 2.8,
+  "act_time": 0.7,
+  "reach": 1.15,
+  "takes": [
+    {
+      "take": 1,
+      "_note": "Learning loop: the receipt right next to the mark teaches the pickup, then west and north, the east yard, and the office last. No ghosts.",
+      "plan": [
+        { "to": [2.2, 15.4], "act": "receipt" },
+        { "to": [3.2, 12.6] },
+        { "to": [3.2, 4.9] },
+        { "to": [4.2, 4.5], "act": "script_page" },
+        { "to": [8.0, 2.2] },
+        { "to": [15.0, 1.4] },
+        { "to": [19.0, 1.2] },
+        { "to": [19.0, 3.9], "auto": true },
+        { "to": [18.4, 8.6], "auto": true },
+        { "to": [19.6, 11.8], "auto": true, "act": "walkie" },
+        { "to": [15.8, 9.0], "auto": true },
+        { "to": [12.4, 10.3], "act": "clapboard" },
+        { "to": [12.0, 12.6] },
+        { "to": [7.0, 13.6] },
+        { "to": [3.2, 14.2] },
+        { "to": [2.2, 15.0], "report": true }
+      ]
+    },
+    {
+      "take": 2,
+      "_note": "Take 01's ghost walks the west loop first. This route goes the other way round the room: east along the back wall, into the office from the south, then the yard, and the receipt is the last pickup.",
+      "plan": [
+        { "to": [3.0, 16.8], "auto": true },
+        { "to": [8.0, 16.8], "auto": true },
+        { "to": [12.0, 16.2], "auto": true },
+        { "to": [12.0, 12.4], "auto": true },
+        { "to": [12.4, 10.3], "auto": true, "act": "clapboard" },
+        { "to": [15.8, 9.0], "auto": true },
+        { "to": [17.6, 10.4], "auto": true },
+        { "to": [19.6, 11.8], "auto": true, "act": "walkie" },
+        { "to": [18.4, 8.6], "auto": true },
+        { "to": [19.0, 3.9], "auto": true },
+        { "to": [19.0, 1.2], "auto": true },
+        { "to": [15.0, 1.4], "auto": true },
+        { "to": [8.0, 2.4], "auto": true },
+        { "to": [4.2, 4.5], "auto": true, "act": "script_page" },
+        { "to": [3.2, 9.0], "auto": true },
+        { "to": [2.2, 15.0], "auto": true, "act": "receipt" },
+        { "to": [2.2, 15.0], "report": true }
+      ]
+    },
+    {
+      "take": 3,
+      "_note": "Two ghosts: take 01 goes west-first, take 02 goes east-first. This route takes the office from the north door in the middle of the loop, then hands back through the yard. The proof that two recorded bodies still leave a line through the room.",
+      "plan": [
+        { "to": [3.2, 12.6], "auto": true },
+        { "to": [3.2, 4.9], "auto": true },
+        { "to": [4.2, 4.5], "auto": true, "act": "script_page" },
+        { "to": [8.0, 2.2], "auto": true },
+        { "to": [12.0, 6.7], "auto": true },
+        { "to": [12.4, 10.3], "auto": true, "act": "clapboard" },
+        { "to": [15.8, 9.0], "auto": true },
+        { "to": [17.6, 10.4], "auto": true },
+        { "to": [19.6, 11.8], "auto": true, "act": "walkie" },
+        { "to": [18.4, 8.6], "auto": true },
+        { "to": [19.0, 3.9], "auto": true },
+        { "to": [15.0, 1.4], "auto": true },
+        { "to": [8.0, 3.0], "auto": true },
+        { "to": [3.2, 9.0], "auto": true },
+        { "to": [2.2, 15.0], "auto": true, "act": "receipt" },
+        { "to": [2.2, 15.0], "report": true }
+      ]
+    }
+  ]
+}

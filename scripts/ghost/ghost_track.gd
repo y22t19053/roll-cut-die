@@ -1,0 +1,228 @@
+extends RefCounted
+## GhostTrack — one recorded take, stored small and replayed exactly.
+##
+## Quantisation on purpose:
+##   time      centiseconds
+##   position  millimetres
+##   angle     centidegrees
+## Worst-case position error is 0.5 mm, worst-case angle error is 0.005 deg.
+## At 10 Hz a 90 second take costs ~47 KB as raw arrays; as JSON ints, still
+## under 200 KB. The point of declaring the units here is that replay,
+## interpolation and the file format cannot drift apart.
+
+const VERSION := 1
+
+const TIME_SCALE := 100.0  # per second
+const POS_SCALE := 1000.0  # per metre
+const ANG_SCALE := 100.0  # per degree
+
+## bit flags per sample
+const FLAG_ALIVE := 1
+const FLAG_INTERACT := 2
+
+var take_id := 0
+var times := PackedInt32Array()
+var px := PackedInt32Array()
+var py := PackedInt32Array()
+var pz := PackedInt32Array()
+var facing_cd := PackedInt32Array()
+var cam_yaw_cd := PackedInt32Array()
+var cam_roll_cd := PackedInt32Array()
+var flags := PackedByteArray()
+
+
+static func quant_time(t: float) -> int:
+	return int(round(t * TIME_SCALE))
+
+
+static func dequant_time(i: int) -> float:
+	return float(i) / TIME_SCALE
+
+
+static func quant_pos(v: float) -> int:
+	return int(round(v * POS_SCALE))
+
+
+static func dequant_pos(i: int) -> float:
+	return float(i) / POS_SCALE
+
+
+static func quant_ang(a: float) -> int:
+	var w := wrapf(a, -PI, PI)
+	return int(round(w * 180.0 / PI * ANG_SCALE))
+
+
+static func dequant_ang(i: int) -> float:
+	return deg_to_rad(float(i) / ANG_SCALE)
+
+
+func size() -> int:
+	return times.size()
+
+
+func duration() -> float:
+	if times.is_empty():
+		return 0.0
+	return dequant_time(times[times.size() - 1])
+
+
+func clear() -> void:
+	times.clear()
+	px.clear()
+	py.clear()
+	pz.clear()
+	facing_cd.clear()
+	cam_yaw_cd.clear()
+	cam_roll_cd.clear()
+	flags.clear()
+
+
+## Append a sample. Duplicate timestamps are dropped, and a sample identical to
+## the previous one is skipped, which is most of what a stationary player
+## produces.
+func add_sample(t: float, pos: Vector3, facing: float, cam_yaw: float, cam_roll: float, flag: int = FLAG_ALIVE) -> bool:
+	var qt := quant_time(t)
+	if not times.is_empty():
+		if qt <= times[times.size() - 1]:
+			return false
+		var last := times.size() - 1
+		if px[last] == quant_pos(pos.x) and py[last] == quant_pos(pos.y) and pz[last] == quant_pos(pos.z) \
+				and facing_cd[last] == quant_ang(facing) and cam_yaw_cd[last] == quant_ang(cam_yaw):
+			# keep the flag advancement, drop the position noise
+			flags[last] = flags[last] | flag
+			return false
+	times.append(qt)
+	px.append(quant_pos(pos.x))
+	py.append(quant_pos(pos.y))
+	pz.append(quant_pos(pos.z))
+	facing_cd.append(quant_ang(facing))
+	cam_yaw_cd.append(quant_ang(cam_yaw))
+	cam_roll_cd.append(quant_ang(cam_roll))
+	flags.append(flag)
+	return true
+
+
+## Index of the last sample at or before `t`, or -1.
+func _index_before(t: float) -> int:
+	var qt := quant_time(t)
+	var lo := 0
+	var hi := times.size() - 1
+	if hi < 0:
+		return -1
+	if qt < times[0]:
+		return -1
+	if qt >= times[hi]:
+		return hi
+	while lo < hi:
+		var mid := int((lo + hi + 1) / 2)
+		if times[mid] <= qt:
+			lo = mid
+		else:
+			hi = mid - 1
+	return lo
+
+
+## Interpolated pose at time t. Before the first sample it holds the first pose;
+## after the last it holds the last pose (and callers may choose to retire the
+## ghost instead — see ghost_actor.gd).
+func sample_at(t: float) -> Dictionary:
+	if times.is_empty():
+		return {"position": Vector3.ZERO, "facing": 0.0, "cam_yaw": 0.0, "cam_roll": 0.0, "finished": true, "interact": false}
+	var i := _index_before(t)
+	if i < 0:
+		return _pose(0, 0.0)
+	if i >= times.size() - 1:
+		return _pose(i, 0.0)
+	var t0 := dequant_time(times[i])
+	var t1 := dequant_time(times[i + 1])
+	var span := maxf(t1 - t0, 0.0001)
+	var a := clampf((t - t0) / span, 0.0, 1.0)
+	return _pose(i, a)
+
+
+func _pose(i: int, alpha: float) -> Dictionary:
+	var j := mini(i + 1, times.size() - 1)
+	var p := Vector3(
+		lerpf(dequant_pos(px[i]), dequant_pos(px[j]), alpha),
+		lerpf(dequant_pos(py[i]), dequant_pos(py[j]), alpha),
+		lerpf(dequant_pos(pz[i]), dequant_pos(pz[j]), alpha)
+	)
+	return {
+		"position": p,
+		"facing": lerp_angle(dequant_ang(facing_cd[i]), dequant_ang(facing_cd[j]), alpha),
+		"cam_yaw": lerp_angle(dequant_ang(cam_yaw_cd[i]), dequant_ang(cam_yaw_cd[j]), alpha),
+		"cam_roll": lerpf(dequant_ang(cam_roll_cd[i]), dequant_ang(cam_roll_cd[j]), alpha),
+		"finished": false,
+		"interact": (flags[i] & FLAG_INTERACT) != 0,
+	}
+
+
+## Exact sample at an index, no interpolation (used when re-recording a ghost).
+func raw_at(i: int) -> Dictionary:
+	return _pose(clampi(i, 0, times.size() - 1), 0.0)
+
+
+func to_dict() -> Dictionary:
+	return {
+		"version": VERSION,
+		"take_id": take_id,
+		"n": times.size(),
+		"t": Array(times),
+		"x": Array(px),
+		"y": Array(py),
+		"z": Array(pz),
+		"f": Array(facing_cd),
+		"cy": Array(cam_yaw_cd),
+		"cr": Array(cam_roll_cd),
+		"fl": Array(flags),
+	}
+
+
+static func from_dict(d: Dictionary) -> Variant:
+	if not d.has("version") or int(d["version"]) != VERSION:
+		return null
+	var tr := new()
+	tr.take_id = int(d.get("take_id", 0))
+	tr.times = _i32(d.get("t", []))
+	tr.px = _i32(d.get("x", []))
+	tr.py = _i32(d.get("y", []))
+	tr.pz = _i32(d.get("z", []))
+	tr.facing_cd = _i32(d.get("f", []))
+	tr.cam_yaw_cd = _i32(d.get("cy", []))
+	tr.cam_roll_cd = _i32(d.get("cr", []))
+	tr.flags = _u8(d.get("fl", []))
+	if tr.px.size() != tr.times.size() or tr.pz.size() != tr.times.size():
+		return null
+	if tr.flags.size() != tr.times.size():
+		tr.flags.resize(tr.times.size())
+		tr.flags.fill(FLAG_ALIVE)
+	return tr
+
+
+static func _i32(arr: Variant) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	if arr is Array:
+		out.resize(arr.size())
+		for i in arr.size():
+			out[i] = int(arr[i])
+	return out
+
+
+static func _u8(arr: Variant) -> PackedByteArray:
+	var out := PackedByteArray()
+	if arr is Array:
+		out.resize(arr.size())
+		for i in arr.size():
+			out[i] = int(arr[i]) & 0xFF
+	return out
+
+
+## Cheap trajectory comparison used by tests to prove replay fidelity.
+func max_deviation(other) -> float:
+	var worst := 0.0
+	var n := mini(times.size(), other.times.size())
+	for i in n:
+		var a := Vector3(dequant_pos(px[i]), 0.0, dequant_pos(pz[i]))
+		var b := Vector3(dequant_pos(other.px[i]), 0.0, dequant_pos(other.pz[i]))
+		worst = maxf(worst, a.distance_to(b))
+	return worst

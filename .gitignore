@@ -1,0 +1,18 @@
+# Godot 4 editor / import cache — regenerated on every open, never committed.
+.godot/
+*.translation
+
+# Export output
+builds/
+*.exe
+*.pck
+*.zip
+
+# Local scratch
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# Runtime user data accidentally copied in
+runtime.log
