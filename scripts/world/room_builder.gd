@@ -41,7 +41,8 @@ static func build(root: Node3D, spec: Dictionary) -> Dictionary:
 		var col := Color(0.36, 0.33, 0.28)
 		if pd.get("color") is Array and (pd["color"] as Array).size() >= 3:
 			col = Color(float(pd["color"][0]), float(pd["color"][1]), float(pd["color"][2]))
-		var node := _make_box(rr, float(pd.get("height", 0.8)), col, str(pd.get("id", "prop")))
+		var node := _make_box(rr, float(pd.get("height", 0.8)), col, str(pd.get("id", "prop")),
+			bool(pd.get("solid", true)))
 		node.set_meta("prop_id", str(pd.get("id", "")))
 		layout.add_child(node)
 		props[str(pd.get("id", ""))] = node
@@ -86,7 +87,9 @@ static func _make_floor(w: float, h: float) -> Node3D:
 	return holder
 
 
-static func _make_box(r: Rect2, height: float, color: Color, node_name: String) -> Node3D:
+## `solid = false` is for markings only (door frames, floor tape): things that
+## must never be in the way, and are placed so they never look in the way.
+static func _make_box(r: Rect2, height: float, color: Color, node_name: String, solid := true) -> Node3D:
 	var holder := Node3D.new()
 	holder.name = node_name
 
@@ -102,6 +105,10 @@ static func _make_box(r: Rect2, height: float, color: Color, node_name: String) 
 	mat.metallic = 0.05
 	mi.material_override = mat
 	holder.add_child(mi)
+	holder.position = Vector3(r.position.x + r.size.x * 0.5, height * 0.5, r.position.y + r.size.y * 0.5)
+	if not solid:
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		return holder
 
 	var body := StaticBody3D.new()
 	body.name = "Body"
@@ -113,8 +120,6 @@ static func _make_box(r: Rect2, height: float, color: Color, node_name: String) 
 	cs.shape = shape
 	body.add_child(cs)
 	holder.add_child(body)
-
-	holder.position = Vector3(r.position.x + r.size.x * 0.5, height * 0.5, r.position.y + r.size.y * 0.5)
 	return holder
 
 

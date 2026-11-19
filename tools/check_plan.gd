@@ -88,6 +88,8 @@ func _main() -> void:
 ## Which prop the point landed in, for a readable report. Walls are unnamed.
 func _solid_name(map: Dictionary, p: Vector2) -> String:
 	for prop: Dictionary in map.get("props", []):
+		if not bool(prop.get("solid", true)):
+			continue
 		var r: Array = prop["rect"]
 		if p.x >= float(r[0]) and p.x <= float(r[2]) and p.y >= float(r[1]) and p.y <= float(r[3]):
 			return "prop '" + str(prop.get("id", "?")) + "'"

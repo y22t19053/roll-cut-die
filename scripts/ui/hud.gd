@@ -5,6 +5,7 @@ extends CanvasLayer
 ## All strings come in already localised.
 
 const Loc = preload("res://scripts/core/loc.gd")
+const SlateBoard = preload("res://scripts/ui/slate_board.gd")
 
 var take_label: Label
 var hint_label: Label
@@ -15,6 +16,9 @@ var roll_label: Label
 var death_label: Label
 var screen: Control
 
+var _take_index := 0
+var _ghost_count := 0
+var _phase := ""
 var _banner_left := 0.0
 var _banner_hold := 0.0
 
@@ -73,17 +77,27 @@ func _ready() -> void:
 	roll_label.offset_top = 18.0
 	roll_label.offset_bottom = 48.0
 
-	# Stays up from the moment of death until the retake: the cause must not be
-	# only a flash on the slate.
+	# Stays up from the moment of death until the retake, and is the only place
+	# the cause is written; the slate says DIE./CUT! but not who. Its own layer
+	# sits above the slate's dimmer, in the band SlateBoard keeps clear.
+	var death_layer := CanvasLayer.new()
+	death_layer.name = "DeathLayer"
+	death_layer.layer = 30
+	add_child(death_layer)
+	var death_screen := Control.new()
+	death_screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	death_layer.add_child(death_screen)
+	death_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	death_label = _mk("", 0, 0, 1200, 120, 72, HORIZONTAL_ALIGNMENT_CENTER)
+	death_label.reparent(death_screen, false)
 	death_label.anchor_left = 0.5
 	death_label.anchor_right = 0.5
-	death_label.anchor_top = 0.5
-	death_label.anchor_bottom = 0.5
+	death_label.anchor_top = 1.0
+	death_label.anchor_bottom = 1.0
 	death_label.offset_left = -600.0
 	death_label.offset_right = 600.0
-	death_label.offset_top = -60.0
-	death_label.offset_bottom = 60.0
+	death_label.offset_top = -SlateBoard.BOTTOM_CLEAR + 8.0
+	death_label.offset_bottom = -SlateBoard.BOTTOM_CLEAR + 128.0
 	death_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	death_label.add_theme_color_override("font_color", Color(1.0, 0.32, 0.28))
 	death_label.add_theme_constant_override("outline_size", 12)
@@ -107,8 +121,20 @@ func _mk(text: String, x: float, y: float, w: float, h: float, fsize: int, align
 
 
 func set_take(index: int, ghost_count: int, phase: String) -> void:
+	_take_index = index
+	_ghost_count = ghost_count
+	_phase = phase
+	_render_take()
+
+
+func set_ghost_count(ghost_count: int) -> void:
+	_ghost_count = ghost_count
+	_render_take()
+
+
+func _render_take() -> void:
 	take_label.text = "TAKE %02d   ·   %d GHOST%s   ·   %s" % [
-		index, ghost_count, "" if ghost_count == 1 else "S", phase
+		_take_index, _ghost_count, "" if _ghost_count == 1 else "S", _phase
 	]
 
 

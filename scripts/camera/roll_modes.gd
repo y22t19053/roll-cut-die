@@ -37,8 +37,9 @@ const HEADING_GRID_DEG := 45.0
 ## Body turn: instant, the brim points at the new heading on the press frame.
 
 # --- ORBIT (mode 2) --------------------------------------------------------
-## Revolution rate while any direction is held. 45 deg/s = a full turn in 8 s.
-const ORBIT_W_DEG := 45.0
+## Revolution rate while any direction is held. 30 deg/s = a full turn in 12 s:
+## still visible on a long straight, slow enough that the straight stays readable.
+const ORBIT_W_DEG := 30.0
 const ORBIT_W := ORBIT_W_DEG * PI / 180.0
 ## Spin-up/spin-down; 0.25 s to full rate, so release stops almost in place.
 const ORBIT_ACCEL_DEG := 180.0

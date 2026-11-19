@@ -23,7 +23,8 @@ static func solids(map: Dictionary) -> Array:
 	for w in map.get("walls", []):
 		out.append(rect(w))
 	for p in map.get("props", []):
-		out.append(rect(p.get("rect", [0, 0, 0, 0])))
+		if bool(p.get("solid", true)):
+			out.append(rect(p.get("rect", [0, 0, 0, 0])))
 	return out
 
 

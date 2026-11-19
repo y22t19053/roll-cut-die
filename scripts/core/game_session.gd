@@ -12,11 +12,14 @@ const SaveManager = preload("res://scripts/save/save_manager.gd")
 const GhostTrack = preload("res://scripts/ghost/ghost_track.gd")
 const Logger = preload("res://scripts/core/logger.gd")
 const Loc = preload("res://scripts/core/loc.gd")
+const RollModes = preload("res://scripts/camera/roll_modes.gd")
 
 signal take_died(source: String)
 signal take_cut()
 signal report_filed(stance: String, verdict: String)
 signal ghost_added(take_id: int)
+## Fires on every add and every clear, so read-outs never wait for the next take.
+signal ghosts_changed(count: int)
 signal language_changed(lang: String)
 
 var takes
@@ -24,7 +27,8 @@ var case_state
 ## Finished takes in order: [{take: int, track: GhostTrack}]
 var ghosts: Array = []
 ## ROLL scheme under comparison: 0 CHASE, 1 SNAP, 2 ORBIT (scripts/camera/roll_modes.gd).
-var roll_mode := 0
+## ORBIT by default: the only scheme that never converges back onto the keys.
+var roll_mode: int = RollModes.ORBIT
 var settings := {
 	"language": "en",
 	"reduce_motion": false,
@@ -47,6 +51,7 @@ func _ready() -> void:
 
 func reset_run() -> void:
 	ghosts.clear()
+	ghosts_changed.emit(0)
 	takes = TakeManager.new()
 	takes.take_died.connect(func(src: String) -> void: take_died.emit(src))
 	takes.take_cut.connect(func() -> void: take_cut.emit())
@@ -62,6 +67,7 @@ func add_ghost(track: Variant) -> void:
 		return
 	ghosts.append({"take": track.take_id, "track": track})
 	ghost_added.emit(track.take_id)
+	ghosts_changed.emit(ghosts.size())
 	Logger.info("ghost registered for take %d (%d samples, %.1fs)" % [track.take_id, track.size(), track.duration()])
 
 
@@ -71,7 +77,7 @@ func ghost_count() -> int:
 
 
 func set_roll_mode(m: int) -> int:
-	roll_mode = posmod(m, 3)
+	roll_mode = RollModes.clamp_mode(m)
 	return roll_mode
 
 
@@ -112,6 +118,7 @@ func from_dict(d: Dictionary) -> void:
 			var tr: Variant = GhostTrack.from_dict(raw)
 			if tr != null:
 				ghosts.append({"take": tr.take_id, "track": tr})
+	ghosts_changed.emit(ghosts.size())
 	if d.get("settings") is Dictionary:
 		for k: String in settings:
 			if d["settings"].has(k):

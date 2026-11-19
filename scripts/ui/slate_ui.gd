@@ -13,7 +13,7 @@ signal sequence_finished(kind: String)
 const BoardScript = preload("res://scripts/ui/slate_board.gd")
 const SlateAudio = preload("res://scripts/ui/slate_audio.gd")
 
-const OPEN := -0.34
+const OPEN := -BoardScript.OPEN_MAX
 
 var board: Control
 var enabled := true
@@ -80,16 +80,16 @@ func play_cut(take_index: int) -> void:
 	])
 
 
-## Death: DIE first, then the slate shuts on it. `source` is already localised.
-func play_die(source: String, take_index: int) -> void:
+## Death: DIE first, then the slate shuts on it. The cause is the HUD's line,
+## not the board's: two copies of it on screen at once read as two events.
+func play_die(take_index: int) -> void:
 	_run("die", 2.05, [
 		{"at": 0.0, "fn": func() -> void:
 			board.headline = "DIE."
-			board.subline = source
+			board.subline = ""
 			board.corner = "TAKE %02d" % take_index},
 		{"at": 0.62, "fn": func() -> void:
 			board.headline = "CUT!"
-			board.subline = source
 			_animate_stick(0.0, 0.06)
 			_clack_now(0.0)},
 	])

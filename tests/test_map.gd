@@ -90,9 +90,12 @@ static func run(h, _tree = null) -> void:
 
 	# --- props do not swallow the doors -----------------------------------
 	# The office has four doors; if furniture blocks one of them the room has a
-	# fake route and take 3 will not be solvable.
-	for door: Vector2 in [Vector2(12.0, 6.2), Vector2(12.0, 11.8), Vector2(8.2, 9.0), Vector2(15.8, 9.0)]:
+	# fake route and take 3 will not be solvable. The east door's pillar leaves
+	# only its south metre, so that door is probed on the line through it.
+	for door: Vector2 in [Vector2(12.0, 6.2), Vector2(12.0, 11.8), Vector2(8.2, 9.0), Vector2(15.8, 9.5)]:
 		h.ok("door at %s is passable" % str(door), Geom.walkable(map, door))
+
+	_zones(h, map)
 
 	# --- both languages present on every visible string --------------------
 	var missing := 0
@@ -112,3 +115,58 @@ static func run(h, _tree = null) -> void:
 			if str(b.get("zh", "")).is_empty() or str(b.get("en", "")).is_empty():
 				missing += 1
 	h.eq("no bilingual gaps in case text", missing, 0)
+
+
+## Zones B and C exist in the data, not only in docs/LEVEL_ZONES_ROLL.md.
+static func _zones(h, map: Dictionary) -> void:
+	var by_id := {}
+	for p: Dictionary in map.get("props", []):
+		by_id[str(p.get("id", ""))] = p
+	var r := func(id: String) -> Rect2: return Geom.rect(by_id[id]["rect"])
+
+	# B: two lamp gates against the cabinet's east face.
+	var cab: Rect2 = r.call("cabinet")
+	for id: String in ["lamp_b_south", "lamp_b_north"]:
+		var lamp: Rect2 = r.call(id)
+		var gap := lamp.position.x - cab.end.x
+		h.ok("B: %s gate is %.2f m (0.8-1.2)" % [id, gap], gap >= 0.8 and gap <= 1.2)
+		h.ok("B: %s is a 0.35 m stand" % id, is_equal_approx(lamp.size.x, 0.35) and is_equal_approx(lamp.size.y, 0.35))
+		var mid_y := lamp.get_center().y
+		h.ok("B: %s gate is walkable on x=2.7" % id, Geom.walkable(map, Vector2(2.7, mid_y)))
+		h.ok("B: %s closes the old x=3.2 line" % id, not Geom.walkable(map, Vector2(3.2, mid_y)))
+
+	# C: the pillar in the east door leaves one metre or less, and only one side.
+	var pil: Rect2 = r.call("pillar_c_east_door")
+	var gap_s := 10.0 - pil.end.y
+	var gap_n := pil.position.y - 8.0
+	h.ok("C: pillar leaves %.2f m to the south jamb (<= 1.0)" % gap_s, gap_s <= 1.0 and gap_s > 2.0 * Geom.PLAYER_RADIUS)
+	h.ok("C: the %.2f m north slot is too narrow for a body" % gap_n, gap_n < 2.0 * Geom.PLAYER_RADIUS)
+	h.ok("C: old y=9.0 line through the east door is closed", not Geom.walkable(map, Vector2(15.8, 9.0)))
+
+	# Markings never take space: frames and floor tape are not in the solids.
+	var marks := 0
+	var frames := 0
+	for id: String in by_id:
+		if bool(by_id[id].get("solid", true)):
+			continue
+		marks += 1
+		if id.begins_with("frame_"):
+			frames += 1
+	var solid_props := (map.get("props", []) as Array).size() - marks
+	h.eq("markings are left out of the solids",
+		Geom.solids(map).size(), (map.get("walls", []) as Array).size() + solid_props)
+	h.at_least("C: door frames", float(frames), 2.0)
+
+	# Floor references: each L has a long north arm and a short east arm in two
+	# colours, so it reads differently from every side.
+	var lengths := []
+	for zone: String in ["b", "c", "n"]:
+		var n: Rect2 = r.call("mark_%s_north" % zone)
+		var e: Rect2 = r.call("mark_%s_east" % zone)
+		h.ok("mark %s: arms differ in length (%.1f vs %.1f)" % [zone, n.size.y, e.size.x],
+			absf(n.size.y - e.size.x) >= 0.4)
+		h.ok("mark %s: arms differ in colour" % zone,
+			str(by_id["mark_%s_north" % zone]["color"]) != str(by_id["mark_%s_east" % zone]["color"]))
+		lengths.append(snappedf(n.size.y, 0.01))
+	h.ok("each zone's mark has its own north-arm length %s" % str(lengths),
+		lengths[0] != lengths[1] and lengths[1] != lengths[2] and lengths[0] != lengths[2])

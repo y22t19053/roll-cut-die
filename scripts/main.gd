@@ -234,6 +234,7 @@ func _build_ui() -> void:
 	slate.name = "Slate"
 	add_child(slate)
 	slate.sequence_finished.connect(_on_slate_finished)
+	GameSession.ghosts_changed.connect(hud.set_ghost_count)
 
 	_set_roll_mode(GameSession.get_roll_mode())
 
@@ -312,7 +313,7 @@ func _die(source_id: String, source_label: String) -> void:
 	var text := "DIED TO " + source_label if Loc.language == "en" else "死于 " + source_label
 	hud.set_take(GameSession.takes.take_index, GameSession.ghost_count(), "DIED — " + source_label)
 	hud.show_death(text)
-	slate.play_die(text, GameSession.takes.take_index)
+	slate.play_die(GameSession.takes.take_index)
 	Logger.info("die: %s (take %d)" % [source_label, GameSession.takes.take_index])
 
 

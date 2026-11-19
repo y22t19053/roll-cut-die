@@ -98,6 +98,8 @@ static func validate(d: Variant) -> Array:
 				out.append("map: props[%d] needs a rect [x0, z0, x1, z1]" % i)
 			if float(pd.get("height", 0.0)) <= 0.0:
 				out.append("map: props[%d] needs a positive height" % i)
+			if pd.has("solid") and not (pd["solid"] is bool):
+				out.append("map: props[%d] solid must be true or false" % i)
 
 	var evidence: Variant = m.get("evidence", [])
 	if not (evidence is Array) or (evidence as Array).is_empty():
