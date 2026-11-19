@@ -4,6 +4,7 @@ extends RefCounted
 ## did in take 1, not an approximation of it.
 
 const GhostTrack = preload("res://scripts/ghost/ghost_track.gd")
+const GhostRecorderScript = preload("res://scripts/ghost/ghost_recorder.gd")
 
 
 static func run(h, _tree = null) -> void:
@@ -57,6 +58,24 @@ static func run(h, _tree = null) -> void:
 	var ang := deg_to_rad(-137.25)
 	var round_ang: float = GhostTrack.dequant_ang(GhostTrack.quant_ang(ang))
 	h.at_most("angle round-trips within 0.02deg", absf(rad_to_deg(round_ang) - rad_to_deg(ang)), 0.02)
+
+	# --- recorder restart --------------------------------------------------
+	# start() is reachable without setup() (retake, manual restart). Reusing the
+	# previous track would restart timestamps at 0 with old samples still in it,
+	# so every new sample would be rejected as out of order and the take would
+	# save an empty ghost.
+	var rec = GhostRecorderScript.new()
+	rec.setup(null, null, 5)
+	rec.start()
+	h.eq("recorder starts empty", rec.track.size(), 0)
+	rec.track.add_sample(0.0, Vector3(1.0, 0.0, 1.0), 0.0, 0.0, 0.0)
+	h.eq("track accepts a sample", rec.track.size(), 1)
+	rec.start()
+	h.eq("start clears the previous track", rec.track.size(), 0)
+	h.eq("take id survives a restart", rec.track.take_id, 5)
+	rec.stop()
+	h.ok("stop leaves the recorder idle", not rec.recording)
+	rec.free()
 
 	# --- persistence -------------------------------------------------------
 	var src = GhostTrack.new()

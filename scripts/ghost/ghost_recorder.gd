@@ -15,6 +15,7 @@ var recording := false
 
 var _player: Node3D
 var _cam: Node3D
+var _take_id := 1
 var _acc := 0.0
 var _samples := 0
 var _elapsed := 0.0
@@ -27,6 +28,7 @@ func _init() -> void:
 func setup(player: Node3D, cam: Node3D, take_id: int) -> void:
 	_player = player
 	_cam = cam
+	_take_id = take_id
 	track = GhostTrack.new()
 	track.take_id = take_id
 	_samples = 0
@@ -35,6 +37,12 @@ func setup(player: Node3D, cam: Node3D, take_id: int) -> void:
 
 
 func start() -> void:
+	# Every take records into a fresh track. start() is reachable without
+	# setup() (retake, manual restart), and reusing the previous track would
+	# restart the timestamps at 0 while the old samples are still in it, so
+	# add_sample() would reject every new sample as out of order.
+	track = GhostTrack.new()
+	track.take_id = _take_id
 	recording = true
 	_acc = 1.0 / HZ  # take a sample on the first physics tick
 	_elapsed = 0.0
