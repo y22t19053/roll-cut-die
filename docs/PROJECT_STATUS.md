@@ -51,7 +51,25 @@ godot --headless --path . --script tools/check_plan.gd  # → PLAN CLEAR (0 prob
 
 对应决策：`RCD_DECISION_LOG.md` D-016。
 
-## 3 · 本轮改了什么（都能用 `git diff c3de553` 复核）
+### 2.2 · 历史幽灵闭环实测（2026-11-19 23:0x，同一个运行中的窗口）
+
+这是 m00001 第 23 节第⑦项要求的「一次完整历史循环」的第一段，用 `eval` 在真实进程里跑完，不是 headless 数字：
+
+| 步骤 | 实测结果 |
+|---|---|
+| 在走廊 `(3.2, 13.0)` 真按 WASD 走了 6.5 s | `GhostRecorder` 采到 **66 个样本 / 10 Hz**，起点 `(3.20, 13.00)`，终点 `(3.20, 14.22)` |
+| `GameSession.add_ghost(track)` | `ghost_count()` 变成 1，节点 `Ghost_01` 生成 |
+| 幽灵预热 | `Danger` Area3D 在 `playhead >= 2.0 s`（`WARMUP`）才 `monitoring = true`；之前 `monitoring` 与 `monitorable` 都是 false，玩家可以穿过尚未显影的自己 |
+| 把玩家传进幽灵当前位置 | **6 帧后死亡**：`takes.state_name() == "DIED"`、`death_source == "take_01"`、`main.phase == 1` |
+
+结论：**「过去的自己」已经成为当前玩家的真实碰撞危险，而且死亡源正确指向 TAKE 01** —— 这句话现在有运行证据。
+
+同一次运行暴露的三个真问题：
+1. `ghost_recorder.start()` 不清空旧轨道 → 第二次开拍时时间戳从 0 重新开始、旧样本还在，`add_sample` 全部按乱序拒绝，于是存下来的是空幽灵。已修，并补了 5 条测试（291 assertions）。
+2. 轨道比 `WARMUP`（2 s）短的幽灵永远不会 arm —— 录 2.0 s 时 `monitoring` 始终 false。这是设计边界，需要写进 GHOST_REPLAY_SPEC：太短的 Take 不应生成会伤人的幽灵。
+3. 死亡瞬间 HUD 仍显示 `TAKE 01 · 0 GHOSTS · ROLLING`，与 `DIED` 状态自相矛盾；幽灵在画面上是一坨半透明灰块，读不出「这是第几周目的自己」。表现层待修。
+
+
 
 1. **ROLL 按圣经重写**：`scripts/camera/camera_math.gd`（纯关系）+ 新文件 `scripts/camera/camera_chase.gd`（有状态积分器）+ `scripts/camera/camera_rig.gd`（有效 yaw = chase yaw + 鼠标 offset；roll 不参与任何判定）。
 2. **移动改为世界轴锚定**：`scripts/player/player.gd` 删掉了相机相对的 `move_dir(ix, cam_yaw())`。原因见 `RCD_DECISION_LOG.md` D-002。
