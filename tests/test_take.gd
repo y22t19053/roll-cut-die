@@ -46,7 +46,8 @@ static func run(h, _tree = null) -> void:
 	h.eq("third take", m.take_index, 3)
 
 	# --- report ------------------------------------------------------------
-	h.ok("cannot open the report while rolling", not m.begin_report())
+	# Filing is a rolling-state action: the player walks to the desk and opens
+	# the file. It is refused in every take-ending state, never while rolling.
 	m.begin_report()
 	h.eq("state is REPORTING", m.state, TakeManager.State.REPORTING)
 	h.ok("cannot act while filing", not m.can_act())
@@ -61,6 +62,7 @@ static func run(h, _tree = null) -> void:
 	h.eq("history kind", str(m.history[0]["kind"]), "complete")
 	h.eq("history keeps the verdict", str(m.history[0]["verdict"]), "file_closed")
 	h.ok("cannot commit twice", not m.commit_report("bury", "bury_registered"))
+	h.ok("cannot open a report after finishing", not m.begin_report())
 
 	# --- names are used in UI and in logs, so they are fixed ---------------
 	var names: Array = []

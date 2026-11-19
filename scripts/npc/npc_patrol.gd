@@ -305,7 +305,12 @@ static func state_from_timeline(tl: Dictionary, seconds: float) -> Dictionary:
 		var a: Vector3 = s["a"]
 		var b: Vector3 = s["b"]
 		leg = i
-		if t <= d:
+		# Strict comparison: at exactly the end of a leg the walker has already
+		# arrived and stepped onto the next one (that is what _physics_process
+		# does when its budget lands on zero), so the boundary belongs to the
+		# outgoing leg. `<=` here would report the previous leg while the
+		# position already sits on the corner.
+		if t < d:
 			if d > 0.0:
 				pos = a.lerp(b, clampf(t / d, 0.0, 1.0))
 				walked += a.distance_to(pos)

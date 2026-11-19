@@ -45,16 +45,20 @@ static func run(h, _tree = null) -> void:
 	h.eq("empty bury -> failed", cs.verdict("bury"), "bury_failed")
 	h.eq("empty reframe -> holds", cs.verdict("reframe"), "reframe_held")
 
+	# Seizing takes two presses, so "two attached" has to press each item twice;
+	# one press only marks it seen and nothing lands on the record.
 	var two = _fresh(data)
-	two.inspect("receipt")
-	two.inspect("walkie")
+	for id: String in ["receipt", "walkie"]:
+		two.inspect(id)
+		two.inspect(id)
 	h.eq("two attached -> sent back", two.verdict("file"), "file_insufficient")
 	h.eq("two attached -> rewrite holds", two.verdict("reframe"), "reframe_held")
 	h.eq("two taken, two attached -> buried", two.verdict("bury"), "bury_registered")
 
 	var kept = _fresh(data)
-	kept.inspect("clapboard")
-	kept.inspect("walkie")
+	for id: String in ["clapboard", "walkie"]:
+		kept.inspect(id)
+		kept.inspect(id)
 	kept.toggle_attach("clapboard")  # keep one back
 	h.eq("keeping one back breaks the burial", kept.verdict("bury"), "bury_failed")
 
@@ -83,6 +87,7 @@ static func run(h, _tree = null) -> void:
 	var l1b: Dictionary = talk.ask("director")
 	h.ok("without inspecting, the door stays shut",
 		str(l1b.get("text", {}).get("en", "")) == str(l1.get("text", {}).get("en", "")))
+	h.eq("a repeated answer is not a new question", talk.asks("director"), 1)
 
 	talk.inspect("script_page")
 	var l2: Dictionary = talk.ask("director")
@@ -105,11 +110,14 @@ static func run(h, _tree = null) -> void:
 
 	# --- retake semantics --------------------------------------------------
 	# Looking is undone, seizing is not: the sealed item is on the SCENE axis.
+	# The question is asked before the script page is looked at, so it is the
+	# first answer and the counter is 1 — asking after inspecting would already
+	# deliver the second answer.
 	var rt = _fresh(data)
-	rt.inspect("script_page")     # seen only
 	rt.inspect("receipt")
 	rt.inspect("receipt")         # seized
-	rt.ask("director")
+	rt.ask("director")            # first answer
+	rt.inspect("script_page")     # seen only
 	rt.on_retake()
 	h.ok("retake forgets what was only looked at", not rt.is_seen("script_page"))
 	h.ok("retake keeps what was seized", rt.is_taken("receipt"))

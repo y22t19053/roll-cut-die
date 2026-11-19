@@ -1,9 +1,17 @@
 extends CharacterBody3D
-## Player — camera-relative movement, plus the facing channel the camera chases.
+## Player — world-anchored movement (§4.2 hard rule), plus the facing channel the
+## camera chases.
 ##
-## The player moves in the camera's frame (that is the whole joke), then turns to
-## face where it is going. The camera lags behind that turn. The lag is the
-## game.
+## W is always world -Z, whatever the camera is doing. The camera then swings to
+## get behind the direction you are walking, late and at a bounded speed, so the
+## world appears to turn under a key that never changed meaning. That mismatch is
+## the game.
+##
+## Camera-relative movement was the earlier implementation and is rejected by the
+## bible: because facing is derived from the movement direction, a camera-relative
+## basis closes a positive feedback loop (yaw → move dir → facing → yaw). Holding
+## D spins the camera forever and holding W freezes it, which makes the headline
+## key do nothing at all.
 
 const CameraMath = preload("res://scripts/camera/camera_math.gd")
 
@@ -27,8 +35,6 @@ var facing := 0.0
 var frozen := false
 ## Optional Vector2 driving the player instead of the keyboard (tests, replays).
 var input_override: Variant = null
-## Camera rig to read the basis from. Assigned by Main.
-var camera_rig: Node3D
 
 var _visual: Node3D
 var _last_intent := Vector3.ZERO
@@ -119,12 +125,6 @@ func _read_input() -> Vector2:
 	return Vector2(x, y)
 
 
-func cam_yaw() -> float:
-	if camera_rig != null:
-		return camera_rig.get("yaw")
-	return 0.0
-
-
 func _physics_process(dt: float) -> void:
 	if frozen:
 		velocity = Vector3(0.0, velocity.y, 0.0)
@@ -134,7 +134,8 @@ func _physics_process(dt: float) -> void:
 		return
 
 	var ix := _read_input()
-	var dir := CameraMath.move_dir(ix, cam_yaw())
+	# World axes, no camera basis: see the file header and §4.2.
+	var dir := CameraMath.move_dir(ix)
 	_last_intent = dir
 
 	var target_v := dir * SPEED

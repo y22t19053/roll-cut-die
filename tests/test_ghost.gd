@@ -33,8 +33,13 @@ static func run(h, _tree = null) -> void:
 	h.ok("after end is finished", after["finished"])
 
 	# --- flags -------------------------------------------------------------
+	# A stationary player is mostly noise, so identical frames are dropped. A new
+	# flag is an event though: it keeps its own timestamp instead of being
+	# attached to the start of the standstill.
+	h.ok("identical frame with no news is dropped",
+		not t.add_sample(0.15, Vector3(2.0, 0.0, 4.0), 0.7, 1.2, 0.05))
 	t.add_sample(0.2, Vector3(2.0, 0.0, 4.0), 0.7, 1.2, 0.05, GhostTrack.FLAG_INTERACT)
-	h.eq("identical pose folds into the previous sample", t.size(), 3)
+	h.eq("an interact on a still frame keeps its own sample", t.size(), 3)
 	var folded: Dictionary = t.sample_at(0.2)
 	h.ok("folded sample keeps the interact flag", folded["interact"])
 

@@ -72,12 +72,20 @@ static func run(h, tree = null) -> void:
 		h.ok("TAKE %02d keeps %.2f m from the ghosts" % [take_no, min_ghost],
 			min_ghost >= GHOST_CLEAR or min_ghost > 900.0)
 		h.ok("TAKE %02d takes a sane amount of time (%.0f s)" % [take_no, secs], secs < 200.0)
-		h.eq("TAKE %02d collects all four" % take_no, str(res["acts"]), str(EVIDENCE_IDS))
+		# Taking the four things is a set, not a sequence: TAKE 01 deliberately
+		# starts with the receipt at the player's feet to teach the pickup.
+		var got: Array = (res["acts"] as Array).duplicate()
+		var want: Array = EVIDENCE_IDS.duplicate()
+		got.sort()
+		want.sort()
+		h.eq("TAKE %02d collects all four" % take_no, str(got), str(want))
 
 		h.note("TAKE %02d: %.1f s, %.1f m walked, npc %.2f m, ghost %.2f m"
 			% [take_no, secs, float(res["meters"]), min_npc, min_ghost])
 		for line: String in res["events"]:
 			h.note(line)
+		if not str(res.get("worst", "")).is_empty():
+			h.note("  closest ghost call: " + str(res["worst"]))
 
 		ghosts.append({"take": take_no, "trail": trail})
 
@@ -124,24 +132,46 @@ static func _simulate(map: Dictionary, cfg: Dictionary, take_def: Dictionary, gh
 	for step_def: Dictionary in take_def["plan"]:
 		if not problem.is_empty():
 			break
+		# A take may hold position on purpose: the crew and the ghosts move on a
+		# clock, so standing still for a beat is a real route instruction.
+		if step_def.has("wait"):
+			var hold_s := float(step_def["wait"])
+			var wf := int(round(hold_s / DT))
+			var wsafe := _stand_frames(map, ghosts, here, trail.size(), wf)
+			if wsafe < wf:
+				var wb := _nearest(map, ghosts, here, float(trail.size() + wsafe) * DT)
+				problem = "cannot wait %.1f s at (%.1f, %.1f): %s reaches %.2f m after %.1f s" % [
+					hold_s, here.x, here.y, str(wb["who"]), float(wb["min"]), float(wsafe) * DT]
+				break
+			events.append("  wait %.1f s at (%.1f, %.1f)" % [hold_s, here.x, here.y])
+			for i in wf:
+				var wq := _nearest(map, ghosts, here, float(trail.size()) * DT)
+				min_npc = minf(min_npc, float(wq["npc"]))
+				min_ghost = minf(min_ghost, float(wq["ghost"]))
+				trail.append(here)
+			continue
 		var to := Vector2(float(step_def["to"][0]), float(step_def["to"][1]))
 		var auto := bool(step_def.get("auto", false))
 
 		# 1. wait for a safe window, if this crossing needs one.
 		var wait_frames := 0
 		if auto:
+			# A step that ends in taking something needs the stance to stay clear
+			# for the whole reach-in, not just at the instant of arrival.
+			var hold := int(round(act_time / DT)) if step_def.has("act") else 0
 			var limit := _stand_frames(map, ghosts, here, trail.size(), int(MAX_WAIT / DT))
 			var found := false
 			var f := 0
 			while f <= limit:
-				if bool(_walk_check(map, ghosts, here, to, speed, trail.size() + f)["ok"]):
+				if bool(_walk_check(map, ghosts, here, to, speed, trail.size() + f, hold)["ok"]):
 					wait_frames = f
 					found = true
 					break
 				f += int(round(SEARCH / DT))
 			if not found:
-				problem = "no window to cross to (%.1f, %.1f); waited %.1f s, nearest crew %.2f m" % [
-					to.x, to.y, float(limit) * DT, _nearest(map, ghosts, here, float(trail.size() + limit) * DT)["npc"]]
+				var wn := _nearest(map, ghosts, here, float(trail.size() + limit) * DT)
+				problem = "no window to cross to (%.1f, %.1f); stood %.1f s, %s at %.2f m" % [
+					to.x, to.y, float(limit) * DT, str(wn["who"]), float(wn["min"])]
 				break
 			if wait_frames > 0:
 				events.append("  wait %.1f s at (%.1f, %.1f)" % [float(wait_frames) * DT, here.x, here.y])
@@ -203,6 +233,11 @@ static func _simulate(map: Dictionary, cfg: Dictionary, take_def: Dictionary, gh
 					rad, rp.x, rp.y, here.distance_to(rp)]
 				break
 
+		# Print the clock where it is being designed against: at the pickups.
+		if step_def.has("act") or bool(step_def.get("report", false)):
+			events.append("  %5.1f s  (%.1f, %.1f)%s" % [float(trail.size()) * DT, here.x, here.y,
+				"  took " + str(step_def["act"]) if step_def.has("act") else "  filed"])
+
 	if problem.is_empty():
 		var missing: Array = []
 		for eid in EVIDENCE_IDS:
@@ -211,15 +246,26 @@ static func _simulate(map: Dictionary, cfg: Dictionary, take_def: Dictionary, gh
 		if not missing.is_empty():
 			problem = "the take never collects " + str(missing)
 
+	# Name the frame where the closest ghost call happened: a bare 0.00 m cannot
+	# be acted on, the time and place can.
+	var worst := ""
+	if min_ghost < GHOST_CLEAR:
+		for i in trail.size():
+			var ww := _nearest(map, ghosts, trail[i], float(i) * DT)
+			if float(ww["ghost"]) < GHOST_CLEAR:
+				var pp: Vector2 = trail[i]
+				worst = "%s at %.1f s on (%.1f, %.1f)" % [str(ww["who"]), float(i) * DT, pp.x, pp.y]
+				break
+
 	if not problem.is_empty():
 		return {"problem": problem, "trail": [], "events": events, "acts": acts,
-			"min_npc": min_npc, "min_ghost": min_ghost, "meters": meters}
+			"min_npc": min_npc, "min_ghost": min_ghost, "meters": meters, "worst": worst}
 	return {"problem": "", "trail": trail, "events": events, "acts": acts,
-		"min_npc": min_npc, "min_ghost": min_ghost, "meters": meters}
+		"min_npc": min_npc, "min_ghost": min_ghost, "meters": meters, "worst": worst}
 
 
 static func _walk_check(map: Dictionary, ghosts: Array, from: Vector2, to: Vector2,
-		speed: float, start_frame: int) -> Dictionary:
+		speed: float, start_frame: int, hold := 0) -> Dictionary:
 	var seg := to - from
 	var n := maxi(1, int(ceil(seg.length() / (speed * DT))))
 	var stepv := seg / float(n)
@@ -230,6 +276,12 @@ static func _walk_check(map: Dictionary, ghosts: Array, from: Vector2, to: Vecto
 		var w := _nearest(map, ghosts, p, float(start_frame + i) * DT)
 		if float(w["min"]) < float(w["need"]):
 			return {"ok": false, "why": "blocked"}
+	# A window that closes the moment you arrive is not a window: the stance has
+	# to stay clear for the whole reach-in.
+	for i in range(1, hold + 1):
+		var w2 := _nearest(map, ghosts, to, float(start_frame + n + i) * DT)
+		if float(w2["min"]) < float(w2["need"]):
+			return {"ok": false, "why": "stance"}
 	return {"ok": true, "why": ""}
 
 
@@ -264,6 +316,10 @@ static func _nearest(map: Dictionary, ghosts: Array, pos: Vector2, t: float) -> 
 			continue
 		var tr: Array = g["trail"]
 		if tr.size() == 0:
+			continue
+		# A ghost that has played out its recording retires, exactly as
+		# ghost_actor.gd does: it must not keep standing on the mark it finished at.
+		if t > float(tr.size() - 1) * DT:
 			continue
 		var idx := mini(int(floor(t / DT)), tr.size() - 1)
 		var d2 := (tr[idx] as Vector2).distance_to(pos)

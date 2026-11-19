@@ -2,20 +2,35 @@
 
 口径：**只有能在磁盘上核到的证据才算通过。** 没有跑过的层写「未验证」，没写的层写「未实现」。本文件不描述「应该会通过」，只描述「跑什么、看什么算过」。
 
-快照时间：2026-11-14 14:06。`tests/` 目录正在被另一条工作流扩展，清单以本行时间为准。
+快照时间：2026-11-19 22:47（本轮实测）。清单以本行时间为准。
 
 ## 0 · 结论先行：本轮实际做到哪一层
 
-| 层 | 状态 | 证据 |
-|---|---|---|
-| L0 引擎能启动 | **已达成（有日志证据）** | `logs\godot.log` 含 `main ready: 2 npcs, 4 evidence, ghosts 0`；`rcd\runtime.log` 含 `room built 24x18` |
-| L1 纯函数 | **文件已存在，本轮未运行** | `tests/` 截至 14:06 共 12 个文件：`harness.gd`、`geom.gd`、`smoke.gd`、`diag_logger.gd`、`test_camera.gd`、`test_case.gd`、`test_ghost.gd`、`test_map.gd`、`test_npc.gd`、`test_save.gd`、`test_scene.gd`、`test_take.gd`；**没有 `run_all.gd`**，也没有任何一次运行记录 |
-| L2 数据校验 | **未实现（只有校验函数，没有测试）** | `scripts/world/room_spec.gd` 的 `validate()` 存在，但没有测试调用它 |
-| L3 场景集成 | **未实现** | 只有 `tests/smoke.gd` 能加载主场景两帧，不覆盖 DIE/CUT/Retake 状态迁移 |
-| L4 路线可行性 | **未实现** | `tests/test_routes.gd` 不存在 |
-| L5 人工验收 | **未验证（本轮未执行）** | 没有 Editor 实跑记录，没有导出产物，没有外网/他人试玩 |
+跑一次全量：
 
-一句话：**L0 有证据，L1 有文件没跑过，L2–L5 都没有。** 任何汇报不得把这句改写成「测试体系已建立」。
+```
+godot --headless --path . --script tests/run_all.gd      # 约 2.1 s，退出码 0
+```
+
+实测输出末行：`RCD TESTS: ALL PASS — 286 assertions in 2.1 s`。
+
+| 层 | 状态 | 证据（2026-11-19 22:47 实测） |
+|---|---|---|
+| L0 引擎能启动 | **已达成** | `>> scene` 加载主场景，日志 `room built 24x18`、`main ready: 2 npcs, 4 evidence, ghosts 0`、`released after 246 frames`；scene 16/16 |
+| L1 纯函数 | **已达成** | `run_all.gd` 九个模块全绿：camera 78/78、ghost 26/26、npc 21/21、map 24/24、case 50/50、take 36/36、save 17/17、routes 18/18、scene 16/16 |
+| L2 数据校验 | **已达成** | map 24/24：`RoomSpec.validate()` 零问题、证物 id 双向相等、报告区在房内、证物最近站位 0.55 m |
+| L3 场景集成 | **部分达成** | scene 16/16 覆盖装配、开场冻结与解冻、take 1 零幽灵、相机绑定距离 1.0。**未覆盖**：headless 里真实按键驱动 DIE→CUT→RETAKE 的状态迁移（take 36/36 只测状态机本身） |
+| L4 路线可行性 | **已达成（三张表）** | routes 18/18：TAKE 01 25.5 s / 62.9 m / 与 NPC 最近 3.80 m；TAKE 02 24.8 s / 61.1 m / NPC 3.49 m / **与 TAKE 01 幽灵最近 0.89 m**；TAKE 03 39.2 s / 73.4 m / NPC 1.34 m / **与两条幽灵最近 1.10 m**（阈值 GHOST_CLEAR 0.66、NPC_CLEAR 0.77） |
+| L5 人工验收 | **未验证** | 没有 Editor 实跑记录，没有导出产物，没有他人试玩 |
+
+一句话：**L0–L2、L4 有真实输出，L3 只有一半，L5 一次都没做。** 任何人不得把这句改写成「游戏可玩」。
+
+配套工具与已知噪音：
+
+- `tools/check_plan.gd`（几何静态检查，不看时间）：一次列出三张表所有阻断腿，输出 `PLAN CLEAR (0 problems)`。改航点先跑它，再跑 routes。
+- `tests/only.gd` + `tests/only_module.txt`：只跑一个模块，带 60 s watchdog。调试某个模块时用它，不要反复跑全量。
+- stderr 常驻噪音：`ERROR: Parameter "m" is null. at: mesh_get_surface_count`（headless dummy renderer）与 `WARNING: ObjectDB instances leaked at exit`。两者都不影响退出码。曾经还有一条 `ERROR: Parse JSON failed`，来自「坏存档必须被拒绝」这条测试自己写的非法 JSON；`save_manager.load_save()` 已改用 `JSON.new().parse()`，该类失败不再打引擎错误。
+
 
 ## 1 · 分层总表
 
@@ -66,9 +81,11 @@
 
 ### L4 · 三周目路线可行性
 
-跑：`tests/test_routes.gd`，对 SCENE 01/02/03 的候选路径做时空采样：玩家路径按固定速度离散成 `t → (x,z)`，NPC 用 `npc_patrol.state_at(pts, spd, dwell, mode, t)`，幽灵用 `ghost_track.sample_at(t)`，逐点求最近距离。
+跑：`godot --headless --path . --script tools/check_plan.gd`（只看几何，0.2 s，一次列出所有阻断腿），再跑 `tests/test_routes.gd`（连 NPC 与幽灵一起看）。
 
-判据：存在一条路径使全程最小距离 > 玩家胶囊半径 + NPC 半径之和；且 TAKE 03 在两条幽灵同时活动时仍存在这条路径。**这是本项目第一个硬验收**，不通过就不做美术。
+模型（`tests/test_routes.gd` 头注释即契约，改动两边必须同步）：玩家按 `speed` 匀速走直线，`auto` 步由搜索决定等到第几帧才动；NPC 用 `NpcPatrol.build_timeline` + `state_from_timeline` 的解析式时间线；幽灵用前一张表的真实采样轨迹，`t < GHOST_WARMUP(2.0 s)` 不伤害，**播完即退休**（与 `ghost_actor.gd` 一致）；取物需要整个 `act_time(0.7 s)` 内站位安全；`{ "wait": 秒 }` 是合法的「站住等」指令。
+
+判据：每张表都能走完并集齐四件证物；全程 `min_npc ≥ 0.77`、`min_ghost ≥ 0.66`；三张表里 TAKE 03 必须在两条幽灵同时活动时仍存在这条路径。**这是本项目第一个硬验收**，不通过就不做美术。
 
 失败先看：`data\studio_map.json` 的通道宽度（内圈净宽 1.1–1.4 m 是「靠时机过」，不是「靠身位过」）；再看 NPC 路线的相位是否把唯一通道锁死。
 
@@ -84,5 +101,5 @@
 
 - 不引入 gdUnit4 / GUT / 任何第三方测试框架：现有 `tests/harness.gd` 只有 57 行，够用，且不增加授权与版本风险。
 - 不做截图比对：灰盒阶段画面本来就要变，像素基线只会制造假失败。
-- 不做 CI：没有远端仓库、没有 Git（见 `PROJECT_STATUS.md`），先有版本历史再谈自动化。
-- 不用「跑通一次」代替回归：每个提交至少要过一次 L0；改到 `camera_math` / `ghost_track` / `case_state` 时必须过 L1。
+- 不做 CI：仓库只有本地 Git（`c3de553` 起），没有远端。先有稳定的一键入口（`tests/run_all.gd`），再谈自动化。
+- 不用「跑通一次」代替回归：每个提交至少要过一次 `run_all`；改到 `camera_math` / `ghost_track` / `case_state` / `routes.json` 时必须重跑对应模块并看 NOTE 里的实测数字。

@@ -113,16 +113,13 @@ func asks(npc_id: String) -> int:
 	return int(asked.get(npc_id, 0))
 
 
-## Ask an NPC. Returns the line that applies right now.
-## Selection rule: the LAST line whose min_asks <= asks_so_far and whose
-## requires_inspected list is fully inspected. Counter then advances.
-func ask(npc_id: String) -> Dictionary:
-	var meta := npc_meta(npc_id)
-	if meta.is_empty():
-		return {}
-	var count := asks(npc_id)
-	var chosen := {}
-	for line: Dictionary in meta.get("lines", []):
+## The line that applies at a given ask count: the LAST line whose min_asks is
+## already reached and whose requires_inspected list is fully inspected.
+func _select_index(meta: Dictionary, count: int) -> int:
+	var lines: Array = meta.get("lines", [])
+	var best := -1
+	for i in range(lines.size()):
+		var line: Dictionary = lines[i]
 		if count < int(line.get("min_asks", 0)):
 			continue
 		var ok := true
@@ -131,11 +128,31 @@ func ask(npc_id: String) -> Dictionary:
 				ok = false
 				break
 		if ok:
-			chosen = line
-	asked[npc_id] = count + 1
-	if chosen.is_empty():
+			best = i
+	return best
+
+
+## Ask an NPC. Returns the line that applies right now.
+##
+## The counter is "how many distinct answers this person has given", not "how
+## many times the key was pressed". A press only advances it when the line it
+## produces sits at or past the counter — that is, when there is new material to
+## press on. Repeating the same answer leaves the counter alone, so hammering the
+## key cannot grind the interview open; what moves the conversation is what you
+## inspected. A line whose min_asks was skipped over advances the counter past
+## it, so the numbering never deadlocks.
+func ask(npc_id: String) -> Dictionary:
+	var meta := npc_meta(npc_id)
+	if meta.is_empty():
+		return {}
+	var count := asks(npc_id)
+	var idx := _select_index(meta, count)
+	if idx >= count:
+		asked[npc_id] = maxi(count + 1, idx + 1)
+	if idx < 0:
 		return {"text": {"zh": "……", "en": "..."}}
-	return chosen
+	var lines: Array = meta.get("lines", [])
+	return lines[idx]
 
 
 func both_asked() -> bool:

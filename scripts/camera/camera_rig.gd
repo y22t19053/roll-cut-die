@@ -1,33 +1,44 @@
 extends Node3D
-## CameraRig — the ROLL camera.
+## CameraRig — the ROLL camera, §4.1 of the design bible.
 ##
 ## The rig sits on the player's focus point and orbits it at a fixed pitch. The
-## orbit angle (yaw) is not controlled directly: it chases the player's facing
-## through CameraMath, which is where the mechanic lives. Mouse input is a
-## correction channel only — it nudges yaw, it never owns it.
+## orbit angle is not controlled directly: CameraChase makes it chase the
+## player's facing through a deadzone and a finite angular speed, and that lag is
+## the mechanic.
+##
+## Two yaw channels, kept strictly apart (§4.3 已决策):
+##   chase.yaw      automatic, chases facing, and is the ONLY source of roll;
+##   yaw_offset     mouse correction, decays back to zero, never feeds roll.
+## `yaw` is the effective view angle the rest of the game records and reads.
 
 const CameraMath = preload("res://scripts/camera/camera_math.gd")
-const Logger = preload("res://scripts/core/logger.gd")
+const CameraChase = preload("res://scripts/camera/camera_chase.gd")
 
 signal roll_changed(roll_deg: float)
 
-## Camera orbit angle in radians. Read by the player to build its move basis.
+## Effective camera orbit angle in radians (chase + mouse offset).
 var yaw := 0.0
-## Dutch tilt in radians, derived from yaw velocity.
+## Dutch tilt in radians, derived from yaw speed only.
 var roll := 0.0
 ## Degrees below the horizon. Constant by design — no input may change it.
 var pitch_deg := CameraMath.PITCH_DEG
 var distance := CameraMath.DISTANCE
-## Set by the comfort settings.
+## Comfort settings (§4.6). These change presentation only, never rules.
 var reduce_motion := false
-var mouse_sensitivity := 0.0022
-## Scaling of roll for players who want less lean without losing the rule.
 var roll_scale := 1.0
+var mouse_sensitivity := 0.0022
 
 var target: Node3D
 var camera: Camera3D
+var chase = CameraChase.new()
 
-var _last_yaw := 0.0
+## Mouse correction, radians. It is a view offset, not a gameplay input.
+var yaw_offset := 0.0
+## How far the mouse may push the frame away from the chase before it is
+## clamped. PROPOSED guard: the bible fixes the 1.2 s decay but sets no cap, and
+## an uncapped sweep can leave the camera looking at the player's back.
+const MOUSE_OFFSET_MAX := PI / 3.0
+
 var _shake := 0.0
 var _shake_decay := 6.0
 var _rng := RandomNumberGenerator.new()
@@ -43,22 +54,23 @@ func _ready() -> void:
 	camera.far = 250.0
 	camera.current = true
 	add_child(camera)
-	_last_yaw = yaw
 	_apply()
 
 
 func setup(follow: Node3D) -> void:
 	target = follow
 	if target != null:
-		yaw = target.get("facing")
-		_last_yaw = yaw
+		chase.reset(target.get("facing"))
+		yaw_offset = 0.0
+		yaw = chase.yaw
 		global_position = target.global_position + Vector3.UP * CameraMath.FOCUS_HEIGHT
 		_apply()
 
 
-## Camera yaw offset from the mouse. Routes through the same wrap as the chase.
+## Mouse correction channel (§4.1 rule ③: the mouse only corrects yaw).
 func mouse_look(relative_x: float) -> void:
-	yaw = CameraMath.wrap_angle(yaw - relative_x * mouse_sensitivity)
+	yaw_offset = clampf(yaw_offset - relative_x * mouse_sensitivity,
+		-MOUSE_OFFSET_MAX, MOUSE_OFFSET_MAX)
 
 
 func add_shake(amount: float) -> void:
@@ -66,19 +78,19 @@ func add_shake(amount: float) -> void:
 
 
 func _physics_process(dt: float) -> void:
-	if target == null:
+	if target == null or dt <= 0.0:
 		return
 	_t += dt
-	var facing: float = target.get("facing")
-	yaw = CameraMath.chase_step(yaw, facing, dt)
 
-	var rate := 0.0
-	if dt > 0.0:
-		rate = CameraMath.wrap_angle(yaw - _last_yaw) / dt
-	_last_yaw = yaw
+	chase.step(target.get("facing"), dt)
 
-	var rt := 0.0 if reduce_motion else CameraMath.roll_target(rate) * roll_scale
-	roll = CameraMath.roll_step(roll, rt, dt)
+	yaw_offset *= exp(-dt / CameraMath.MOUSE_TAU)
+	if absf(yaw_offset) < 0.00001:
+		yaw_offset = 0.0
+
+	yaw = CameraMath.wrap_angle(chase.yaw + yaw_offset)
+	roll = 0.0 if reduce_motion else chase.roll * roll_scale
+
 	if _shake > 0.0:
 		_shake = maxf(0.0, _shake - _shake_decay * dt)
 
@@ -108,6 +120,9 @@ func _apply() -> void:
 func snapshot() -> Dictionary:
 	return {
 		"yaw_deg": rad_to_deg(yaw),
+		"chase_yaw_deg": rad_to_deg(chase.yaw),
+		"yaw_offset_deg": rad_to_deg(yaw_offset),
+		"w_deg": rad_to_deg(chase.w),
 		"roll_deg": rad_to_deg(roll),
 		"pitch_deg": pitch_deg,
 		"distance": distance,

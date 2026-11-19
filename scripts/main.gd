@@ -164,7 +164,6 @@ func _build_actors() -> void:
 	rig.reduce_motion = bool(GameSession.settings.get("reduce_motion", false))
 	rig.roll_scale = float(GameSession.settings.get("roll_scale", 1.0))
 	rig.mouse_sensitivity = float(GameSession.settings.get("mouse_sensitivity", 0.0022))
-	player.camera_rig = rig
 
 	for n: Variant in map_data.get("npcs", []):
 		var nd: Dictionary = n

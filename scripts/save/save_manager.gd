@@ -41,8 +41,13 @@ static func load_save() -> Dictionary:
 	if not FileAccess.file_exists(PATH):
 		return {"ok": false, "reason": "missing", "data": {}}
 	var txt := FileAccess.get_file_as_string(PATH)
-	var parsed: Variant = JSON.parse_string(txt)
-	if parsed == null or not (parsed is Dictionary):
+	# JSON.new().parse() reports failure to us instead of printing an engine
+	# error: a broken save is an expected state we handle, not a crash log line.
+	var json := JSON.new()
+	if json.parse(txt) != OK:
+		return {"ok": false, "reason": "corrupt", "data": {}}
+	var parsed: Variant = json.data
+	if not (parsed is Dictionary):
 		return {"ok": false, "reason": "corrupt", "data": {}}
 	var d: Dictionary = parsed
 	var ver := int(d.get("version", 0))

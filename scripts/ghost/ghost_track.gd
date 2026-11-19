@@ -77,19 +77,21 @@ func clear() -> void:
 	flags.clear()
 
 
-## Append a sample. Duplicate timestamps are dropped, and a sample identical to
+## Append a sample. Duplicate timestamps are dropped, and a frame identical to
 ## the previous one is skipped, which is most of what a stationary player
-## produces.
+## produces. A frame that carries a new flag is not skipped: an interaction is an
+## event with a time of its own, and folding it into the start of a long standstill
+## would move it seconds into the past.
 func add_sample(t: float, pos: Vector3, facing: float, cam_yaw: float, cam_roll: float, flag: int = FLAG_ALIVE) -> bool:
 	var qt := quant_time(t)
 	if not times.is_empty():
 		if qt <= times[times.size() - 1]:
 			return false
 		var last := times.size() - 1
-		if px[last] == quant_pos(pos.x) and py[last] == quant_pos(pos.y) and pz[last] == quant_pos(pos.z) \
-				and facing_cd[last] == quant_ang(facing) and cam_yaw_cd[last] == quant_ang(cam_yaw):
-			# keep the flag advancement, drop the position noise
-			flags[last] = flags[last] | flag
+		var same_frame := px[last] == quant_pos(pos.x) and py[last] == quant_pos(pos.y) \
+			and pz[last] == quant_pos(pos.z) and facing_cd[last] == quant_ang(facing) \
+			and cam_yaw_cd[last] == quant_ang(cam_yaw) and cam_roll_cd[last] == quant_ang(cam_roll)
+		if same_frame and (flags[last] | flag) == flags[last]:
 			return false
 	times.append(qt)
 	px.append(quant_pos(pos.x))
@@ -132,7 +134,12 @@ func sample_at(t: float) -> Dictionary:
 	if i < 0:
 		return _pose(0, 0.0)
 	if i >= times.size() - 1:
-		return _pose(i, 0.0)
+		var held := _pose(i, 0.0)
+		# The recording is over: the pose holds, and the flag says so. Callers may
+		# retire on this instead of comparing clocks (ghost_actor.gd currently
+		# retires on its own playhead, which is the same instant).
+		held["finished"] = t >= duration()
+		return held
 	var t0 := dequant_time(times[i])
 	var t1 := dequant_time(times[i + 1])
 	var span := maxf(t1 - t0, 0.0001)
@@ -191,10 +198,17 @@ static func from_dict(d: Dictionary) -> Variant:
 	tr.cam_yaw_cd = _i32(d.get("cy", []))
 	tr.cam_roll_cd = _i32(d.get("cr", []))
 	tr.flags = _u8(d.get("fl", []))
-	if tr.px.size() != tr.times.size() or tr.pz.size() != tr.times.size():
+	# A truncated or spliced file must be refused, not half-loaded: the declared
+	# sample count has to match every channel.
+	var n := int(d.get("n", tr.times.size()))
+	if n != tr.times.size():
 		return null
-	if tr.flags.size() != tr.times.size():
-		tr.flags.resize(tr.times.size())
+	if tr.px.size() != n or tr.py.size() != n or tr.pz.size() != n:
+		return null
+	if tr.facing_cd.size() != n or tr.cam_yaw_cd.size() != n or tr.cam_roll_cd.size() != n:
+		return null
+	if tr.flags.size() != n:
+		tr.flags.resize(n)
 		tr.flags.fill(FLAG_ALIVE)
 	return tr
 
