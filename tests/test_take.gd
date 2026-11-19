@@ -72,3 +72,28 @@ static func run(h, _tree = null) -> void:
 		probe.state = s
 		names.append(probe.state_name())
 	h.eq("state names", str(names), "[\"ROLLING\", \"DIED\", \"CUT\", \"REPORTING\", \"FINISHED\"]")
+
+	# --- resources: DIE spends a Retake, CUT does not (D-005) -------------
+	var r = TakeManager.new()
+	var stock0: int = r.retake_stock
+	h.eq("stock starts full", stock0, TakeManager.RETAKE_STOCK)
+	r.die("director")
+	h.eq("death spends one Retake", r.retake_stock, stock0 - 1)
+	r.retake()
+	r.tick(2.5)
+	h.eq("resume refused while rolling", r.resume_after_cut("MARK 1", 1.0), -1)
+	r.manual_cut()
+	h.eq("CUT spends no Retake", r.retake_stock, stock0 - 1)
+	var took: int = r.take_index
+	h.eq("resume after CUT starts the next take", r.resume_after_cut("MARK 2", 1.75), took + 1)
+	h.eq("resume is rolling", r.state, TakeManager.State.ROLLING)
+	h.near("resume runs on the point's clock", r.elapsed, 1.75, 0.0001)
+	h.eq("resume spends no Retake", r.retake_stock, stock0 - 1)
+	h.eq("cut take stays an outtake", str(r.outtakes[-1]["kind"]), "cut")
+	h.eq("outtake names where it resumed", str(r.outtakes[-1].get("resume", "")), "MARK 2")
+	h.eq("outtake belongs to the cut take", int(r.outtakes[-1]["take"]), took)
+	h.eq("resume twice is refused", r.resume_after_cut("MARK 1", 0.0), -1)
+	for i in 10:
+		r.die("x")
+		r.retake()
+	h.eq("stock never goes negative", r.retake_stock, 0)

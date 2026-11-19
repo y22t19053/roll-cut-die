@@ -37,6 +37,10 @@ var death_source := ""
 var history: Array = []
 ## One record per death or manual cut.
 var outtakes: Array = []
+## Global slate stock (D-005/D-006): DIE spends one, CUT and MARK spend none.
+## The size is a placeholder; running out does not end the run yet.
+const RETAKE_STOCK := 5
+var retake_stock := RETAKE_STOCK
 
 
 func _init() -> void:
@@ -80,6 +84,7 @@ func die(source: String) -> bool:
 	if state != State.ROLLING:
 		return false
 	death_source = source
+	retake_stock = maxi(retake_stock - 1, 0)
 	outtakes.append({
 		"take": take_index,
 		"kind": "die",
@@ -104,6 +109,19 @@ func manual_cut() -> bool:
 	_set_state(State.CUT)
 	take_cut.emit()
 	return true
+
+
+## Leave CUT by resuming from a chosen point: the cut take stays an outtake
+## (now naming where it resumed), the next take starts on that point's clock,
+## and the Retake stock is untouched. Returns the new take index, or -1.
+func resume_after_cut(point_label: String, resume_time: float) -> int:
+	if state != State.CUT:
+		return -1
+	if not outtakes.is_empty() and str(outtakes[-1].get("kind", "")) == "cut":
+		outtakes[-1]["resume"] = point_label
+	retake()
+	elapsed = maxf(resume_time, 0.0)
+	return take_index
 
 
 ## Begin filing the report. The player can still back out to ROLLING.

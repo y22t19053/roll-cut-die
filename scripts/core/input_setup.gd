@@ -13,6 +13,7 @@ const ACTIONS := {
 	"move_right": [KEY_D, KEY_RIGHT],
 	"interact": [KEY_E],
 	"cut": [KEY_C],
+	"mark": [KEY_M],
 	"report": [KEY_R],
 	"retake": [KEY_SPACE],
 	"pause": [KEY_ESCAPE],

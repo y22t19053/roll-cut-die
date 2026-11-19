@@ -221,6 +221,24 @@
 - **待定**：是把它写进规则（短 Take 不产生危险幽灵，HUD 应提示「TOO SHORT TO HAUNT」），还是让 `WARMUP` 随轨道长度自适应（`min(2.0, duration * 0.3)`）。两种都能解释给玩家，不能留着不解释。
 - **实现位置**：`scripts/ghost/ghost_actor.gd`（`WARMUP`、`set_deferred("monitoring", ...)`）。
 
+## D-021 · MARK / CUT 的第一版规则（锚点容量、满额处理、CUT 回到哪里）
+
+- **日期**：2026-11-20
+- **来源**：创作者第四轮任务（MARK 为个人锚点、CUT 为可选目标的时间线面板）＋ Claude Opus 5.5 实现；方向依据 N-04、D-005、D-006
+- **状态**：PROPOSED（已实现，数值为保守占位，待创作者裁决）
+- **结论**：
+  1. `M` 只在 `Phase.ROLLING`、未暂停、玩家未被冻结时有效。一条锚点记录 take 序号、世界坐标、角色朝向、相机 yaw/roll、证物状态深拷贝、游戏时钟 `TakeManager.elapsed`、世界时钟（NPC/幽灵已运行的物理秒数）、幽灵录制时钟。
+  2. 容量默认 **3**。满额时**拒绝并提示** `MARKS FULL 3/3 — CUT BACK TO FREE ONE`，不覆盖最旧的。理由：锚点是玩家给自己的承诺，在玩家又按一次 M 的时刻悄悄删掉最旧的那个，等于在最需要它的时候让它消失；拒绝把容量管理留给玩家（D-005「MARK 管理个人锚点容量」）。容量通过 CUT 回到更早的点归还：该点之后的锚点属于被放弃的 Take，一并作废。
+  3. `C` 冻结世界（玩家、NPC、幽灵、录制、世界时钟），CUT 场记板拍完后打开时间线面板：系统检查点 `START`（本时间线交出控制权的时刻）＋ 本时间线的 MARK，每行显示 take、游戏时间、证物数（含已取走数）、坐标。`UP/DOWN` 或 `1–9` 选择，选中即把预览相机放到该点记录的相机位置；`ESC` 取消选中回到自由视角，面板保持打开；面板打开期间 `C` 不能撤销，CUT 一旦按下不可反悔（圣经 §6.1）。
+  4. `SPACE` 确认：被 CUT 的 Take 记入 Outtakes（`kind=cut`，新增 `resume` 字段写明回到哪个点），`take_index+1`，玩家/朝向/相机/证物状态恢复为该点记录值，NPC 按自己的 `_physics_process` 快进到该点的世界时钟，幽灵 playhead 设到同一时刻；新 Take 的幽灵轨道接上通往该点的那段旧轨迹。ROLL 场记板期间世界保持冻结，拍板后一起开始。
+  5. **CUT 与 MARK 不消耗 Retake 库存**；DIE 消耗 1（`TakeManager.retake_stock`，默认 5，下限 0）。
+- **未定 / 已知差异**：
+  - Retake 库存耗尽后的后果未实现（不会 game over）；库存与锚点**不进存档**（`game_session.gd` 不在本轮可改范围）。
+  - 死亡后 `SPACE` 重拍仍走旧路径：回出生点、清空全部锚点、`case_state.on_retake()`（已取走的保留）。CUT 到 `START` 则把证物恢复到该检查点快照（本 Take 里取走的也回退），与圣经 §7.2 #6 一致，但与死亡路径不一致。是否统一待裁决。
+  - 「上一个已确认检查点」目前只有出生点：封存（Sealed）与证物柜尚未实现。
+  - NPC 问话计数不随 CUT 回退（沿用 `on_retake` 的「回答过的人不会忘」）。
+- **实现位置**：`scripts/take/mark_ledger.gd`、`scripts/take/take_manager.gd`（`retake_stock`、`resume_after_cut`）、`scripts/ui/cut_panel.gd`、`scripts/ui/mark_beacon.gd`、`scripts/ui/hud.gd`（`set_marks`）、`scripts/main.gd`（`_mark`、`_manual_cut`、`_open_cut_panel`、`_select_point`、`_cut_to`、`_release_resumed`）；测试 `tests/test_mark.gd`、`tests/test_take.gd`、`tests/probe_mark_cut.gd`。
+
 ## 变更规则
 
 1. 新增决策 → 追加条目，编号连续，不得改写历史条目。

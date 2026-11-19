@@ -13,6 +13,7 @@ var banner: Label
 var case_label: Label
 var debug_label: Label
 var roll_label: Label
+var mark_label: Label
 var death_label: Label
 var screen: Control
 
@@ -32,6 +33,8 @@ func _ready() -> void:
 	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	take_label = _mk("", 24, 18, 520, 30, 20, HORIZONTAL_ALIGNMENT_LEFT)
+	mark_label = _mk("", 24, 50, 520, 30, 18, HORIZONTAL_ALIGNMENT_LEFT)
+	mark_label.add_theme_color_override("font_color", Color(0.55, 0.95, 0.85))
 	case_label = _mk("", 0, 0, 420, 260, 17, HORIZONTAL_ALIGNMENT_RIGHT)
 	case_label.anchor_left = 1.0
 	case_label.anchor_right = 1.0
@@ -136,6 +139,10 @@ func _render_take() -> void:
 	take_label.text = "TAKE %02d   ·   %d GHOST%s   ·   %s" % [
 		_take_index, _ghost_count, "" if _ghost_count == 1 else "S", _phase
 	]
+
+
+func set_marks(used: int, capacity: int) -> void:
+	mark_label.text = "MARK %d/%d" % [used, capacity]
 
 
 func set_roll_mode(mode_name: String) -> void:

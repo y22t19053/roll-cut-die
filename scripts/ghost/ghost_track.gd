@@ -77,22 +77,24 @@ func clear() -> void:
 	flags.clear()
 
 
-## Append a sample. Duplicate timestamps are dropped, and a frame identical to
-## the previous one is skipped, which is most of what a stationary player
-## produces. A frame that carries a new flag is not skipped: an interaction is an
-## event with a time of its own, and folding it into the start of a long standstill
-## would move it seconds into the past.
+## Append a sample. Out-of-order timestamps are refused (returns false).
+##
+## A standstill is stored as two samples, its first and its latest frame: when
+## the last two samples already hold this exact pose and flag, the new frame only
+## moves the last timestamp forward. The clock keeps running through the
+## standstill (duration() is the real length of the take) and interpolating
+## across it holds the pose, while a long wait still costs two samples, not one
+## per tick. An interaction is never stretched: it is an instant of its own.
 func add_sample(t: float, pos: Vector3, facing: float, cam_yaw: float, cam_roll: float, flag: int = FLAG_ALIVE) -> bool:
 	var qt := quant_time(t)
 	if not times.is_empty():
-		if qt <= times[times.size() - 1]:
-			return false
 		var last := times.size() - 1
-		var same_frame := px[last] == quant_pos(pos.x) and py[last] == quant_pos(pos.y) \
-			and pz[last] == quant_pos(pos.z) and facing_cd[last] == quant_ang(facing) \
-			and cam_yaw_cd[last] == quant_ang(cam_yaw) and cam_roll_cd[last] == quant_ang(cam_roll)
-		if same_frame and (flags[last] | flag) == flags[last]:
+		if qt <= times[last]:
 			return false
+		if last >= 1 and (flag & FLAG_INTERACT) == 0 and flags[last] == flag and flags[last - 1] == flag \
+				and _pose_is(last, pos, facing, cam_yaw, cam_roll) and _same_pose(last - 1, last):
+			times[last] = qt
+			return true
 	times.append(qt)
 	px.append(quant_pos(pos.x))
 	py.append(quant_pos(pos.y))
@@ -102,6 +104,37 @@ func add_sample(t: float, pos: Vector3, facing: float, cam_yaw: float, cam_roll:
 	cam_roll_cd.append(quant_ang(cam_roll))
 	flags.append(flag)
 	return true
+
+
+func _pose_is(i: int, pos: Vector3, facing: float, cam_yaw: float, cam_roll: float) -> bool:
+	return px[i] == quant_pos(pos.x) and py[i] == quant_pos(pos.y) and pz[i] == quant_pos(pos.z) \
+		and facing_cd[i] == quant_ang(facing) and cam_yaw_cd[i] == quant_ang(cam_yaw) \
+		and cam_roll_cd[i] == quant_ang(cam_roll)
+
+
+func _same_pose(i: int, j: int) -> bool:
+	return px[i] == px[j] and py[i] == py[j] and pz[i] == pz[j] and facing_cd[i] == facing_cd[j] \
+		and cam_yaw_cd[i] == cam_yaw_cd[j] and cam_roll_cd[i] == cam_roll_cd[j]
+
+
+## Copy of the samples at or before `t` (the road to a MARK, kept when a CUT
+## resumes from it).
+func head_until(t: float) -> Variant:
+	var out = new()
+	out.take_id = take_id
+	var qt := quant_time(t)
+	for i in times.size():
+		if times[i] > qt:
+			break
+		out.times.append(times[i])
+		out.px.append(px[i])
+		out.py.append(py[i])
+		out.pz.append(pz[i])
+		out.facing_cd.append(facing_cd[i])
+		out.cam_yaw_cd.append(cam_yaw_cd[i])
+		out.cam_roll_cd.append(cam_roll_cd[i])
+		out.flags.append(flags[i])
+	return out
 
 
 ## Index of the last sample at or before `t`, or -1.

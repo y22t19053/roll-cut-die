@@ -19,6 +19,9 @@ const GhostTrack = preload("res://scripts/ghost/ghost_track.gd")
 const EvidenceScript = preload("res://scripts/case/evidence_prop.gd")
 const SlateScript = preload("res://scripts/ui/slate_ui.gd")
 const HudScript = preload("res://scripts/ui/hud.gd")
+const CutPanelScript = preload("res://scripts/ui/cut_panel.gd")
+const MarkBeaconScript = preload("res://scripts/ui/mark_beacon.gd")
+const MarkLedger = preload("res://scripts/take/mark_ledger.gd")
 const InputSetup = preload("res://scripts/core/input_setup.gd")
 const Loc = preload("res://scripts/core/loc.gd")
 const Logger = preload("res://scripts/core/logger.gd")
@@ -42,6 +45,15 @@ var ghost_nodes: Array = []
 var recorder: Node
 var slate: CanvasLayer
 var hud: CanvasLayer
+var cut_panel: CanvasLayer
+var preview_rig: Node3D
+var preview_cam: Camera3D
+
+## Personal anchors and the system checkpoint of the current timeline.
+var marks = MarkLedger.new()
+var beacons: Array = []
+## Row selected in the CUT panel, -1 = free view.
+var cut_cursor := -1
 
 var spawn_pos := Vector3(2.0, 0.05, 16.6)
 var report_pos := Vector3.ZERO
@@ -53,6 +65,12 @@ var debug_on := false
 var report_cursor := 0
 
 var _occluder: Node = null
+## Physics seconds the NPCs and ghosts have run this take. A CUT puts the world
+## back on the chosen point's clock, so this must count exactly what they count.
+var _world_t := 0.0
+var _world_running := false
+## Point the current take resumes from; consumed when the ROLL slate releases.
+var _resume_point: Dictionary = {}
 
 
 func _ready() -> void:
@@ -234,6 +252,23 @@ func _build_ui() -> void:
 	slate.name = "Slate"
 	add_child(slate)
 	slate.sequence_finished.connect(_on_slate_finished)
+
+	cut_panel = CutPanelScript.new()
+	cut_panel.name = "CutPanel"
+	add_child(cut_panel)
+
+	# Preview camera for the CUT panel: same geometry as CameraRig, parked on a
+	# recorded point. Only `current` moves between the two cameras.
+	preview_rig = Node3D.new()
+	preview_rig.name = "PreviewRig"
+	add_child(preview_rig)
+	preview_cam = Camera3D.new()
+	preview_cam.name = "Camera"
+	preview_cam.fov = CameraMath.FOV
+	preview_cam.near = 0.05
+	preview_cam.far = 250.0
+	preview_cam.current = false
+	preview_rig.add_child(preview_cam)
 	GameSession.ghosts_changed.connect(hud.set_ghost_count)
 
 	_set_roll_mode(GameSession.get_roll_mode())
@@ -263,6 +298,12 @@ func _begin_take() -> void:
 	_refresh_evidence()
 	recorder.setup(player, rig, idx)
 	recorder.start()
+	_world_t = 0.0
+	_world_running = true
+	_resume_point = {}
+	marks.clear()
+	marks.checkpoint = _snapshot()
+	_sync_beacons()
 	slate.play_roll(idx)
 	_update_hud()
 	hud.clear_death()
@@ -307,6 +348,7 @@ func _die(source_id: String, source_label: String) -> void:
 	player.set_frozen(true)
 	rig.add_shake(1.4)
 	recorder.recording = false
+	_world_running = false
 	for n: Node in npcs:
 		n.set_active(false)
 	GameSession.takes.die(source_id)
@@ -317,37 +359,234 @@ func _die(source_id: String, source_label: String) -> void:
 	Logger.info("die: %s (take %d)" % [source_label, GameSession.takes.take_index])
 
 
+## C: freeze the world and open the timeline once the slate has clapped.
+## Refused while paused (bible §6.1) and while the ROLL slate still holds the
+## player, so a CUT always starts from a take that was actually rolling.
 func _manual_cut() -> void:
-	if phase != Phase.ROLLING:
+	if phase != Phase.ROLLING or paused or bool(player.get("frozen")):
 		return
 	phase = Phase.CUT
 	player.set_frozen(true)
 	recorder.recording = false
+	_freeze_world()
 	GameSession.takes.manual_cut()
 	hud.set_take(GameSession.takes.take_index, GameSession.ghost_count(), "CUT")
+	hud.set_hint("")
 	slate.play_cut(GameSession.takes.take_index)
 	Logger.info("manual cut (take %d)" % GameSession.takes.take_index)
+
+
+func _freeze_world() -> void:
+	_world_running = false
+	for n: Node in npcs:
+		n.set_active(false)
+	for g: Node in ghost_nodes:
+		g.playing = false
+
+
+# --- MARK ----------------------------------------------------------------
+
+## Everything a CUT needs to put the take back on this instant.
+func _snapshot() -> Dictionary:
+	return {
+		"kind": "checkpoint",
+		"no": 0,
+		"take": GameSession.takes.take_index,
+		"pos": player.global_position,
+		"facing": float(player.facing),
+		"cam_yaw": float(rig.yaw),
+		"cam_roll": float(rig.roll),
+		"evidence": GameSession.case_state.evidence.duplicate(true),
+		"time": GameSession.takes.elapsed,
+		"world_t": _world_t,
+		"rec_t": recorder.elapsed(),
+	}
+
+
+func _mark() -> void:
+	if phase != Phase.ROLLING or paused or bool(player.get("frozen")):
+		return
+	if not marks.add(_snapshot()):
+		hud.flash("MARKS FULL %d/%d — CUT BACK TO FREE ONE" % [marks.count(), marks.capacity])
+		return
+	_sync_beacons()
+	hud.flash("MARK %d/%d" % [marks.count(), marks.capacity], 1.4)
+	Logger.info("mark %d at %.2f %.2f (take %d)" % [marks.count(), player.global_position.x,
+		player.global_position.z, GameSession.takes.take_index])
+
+
+func _sync_beacons() -> void:
+	for b: Node in beacons:
+		b.queue_free()
+	beacons.clear()
+	for p: Dictionary in marks.marks:
+		var b = MarkBeaconScript.new()
+		b.name = "Mark_%d" % int(p["no"])
+		add_child(b)
+		b.setup(int(p["no"]), p["pos"])
+		beacons.append(b)
+	hud.set_marks(marks.count(), marks.capacity)
+
+
+# --- CUT panel -----------------------------------------------------------
+
+func _open_cut_panel() -> void:
+	var rows := PackedStringArray()
+	for p: Dictionary in marks.points():
+		rows.append(MarkLedger.describe(p))
+	var t = GameSession.takes
+	var title := "CUT — TAKE %02d ABANDONED   ·   RETAKES %d (CUT COSTS NONE)   ·   MARK %d/%d" % [
+		t.take_index, t.retake_stock, marks.count(), marks.capacity]
+	cut_cursor = -1
+	cut_panel.open(title, rows, _cut_footer())
+	hud.set_hint("[UP/DOWN] PICK A POINT   [SPACE] CUT HERE   [ESC] FREE VIEW")
+
+
+func _cut_footer() -> String:
+	var pts: Array = marks.points()
+	if cut_cursor < 0 or cut_cursor >= pts.size():
+		return "FREE VIEW — pick a point to see the shot it holds"
+	var p: Dictionary = pts[cut_cursor]
+	return "PREVIEW %s — FACING %.1f°   CAM YAW %.1f°   ROLL %.2f°   WORLD T %.1f s" % [
+		MarkLedger.label(p), rad_to_deg(float(p["facing"])), rad_to_deg(float(p["cam_yaw"])),
+		rad_to_deg(float(p["cam_roll"])), float(p["world_t"])]
+
+
+func _cut_input(code: int) -> void:
+	if not cut_panel.is_open():
+		return
+	var n: int = marks.points().size()
+	match code:
+		KEY_UP:
+			_select_point(n - 1 if cut_cursor < 0 else maxi(cut_cursor - 1, 0))
+		KEY_DOWN:
+			_select_point(0 if cut_cursor < 0 else mini(cut_cursor + 1, n - 1))
+		KEY_ESCAPE:
+			_select_point(-1)
+		KEY_SPACE:
+			if cut_cursor >= 0:
+				_cut_to(marks.points()[cut_cursor])
+			else:
+				hud.flash("PICK A POINT FIRST", 1.4)
+		_:
+			if code >= KEY_1 and code <= KEY_9 and code - KEY_1 < n:
+				_select_point(code - KEY_1)
+
+
+## Real preview: the camera goes where the point's camera was. Player, world
+## and case state are not touched.
+func _select_point(i: int) -> void:
+	var pts: Array = marks.points()
+	cut_cursor = i if i >= 0 and i < pts.size() else -1
+	cut_panel.set_selected(cut_cursor)
+	cut_panel.set_footer(_cut_footer())
+	if cut_cursor < 0:
+		rig.camera.current = true
+		return
+	var p: Dictionary = pts[cut_cursor]
+	preview_rig.global_position = (p["pos"] as Vector3) + Vector3.UP * CameraMath.FOCUS_HEIGHT
+	preview_rig.rotation = Vector3(0.0, float(p["cam_yaw"]), 0.0)
+	preview_cam.position = CameraMath.camera_offset(rig.pitch_deg, rig.distance)
+	preview_cam.rotation = CameraMath.camera_euler(rig.pitch_deg, float(p["cam_roll"]))
+	preview_cam.current = true
+
+
+## SPACE in the panel: the cut take becomes an outtake and the next take starts
+## on the chosen point — place, facing, camera, evidence and world clock.
+## Everything recorded after that point rolls back; the Retake stock does not.
+func _cut_to(p: Dictionary) -> void:
+	var point := p.duplicate(true)
+	var t = GameSession.takes
+	var idx: int = t.resume_after_cut(MarkLedger.label(point), float(point["time"]))
+	if idx < 0:
+		return
+	cut_panel.close()
+	cut_cursor = -1
+	rig.camera.current = true
+
+	GameSession.case_state.evidence = (point["evidence"] as Dictionary).duplicate(true)
+	if str(point["kind"]) == "mark":
+		marks.keep_through(int(point["no"]))
+	else:
+		marks.clear()
+	_sync_beacons()
+	_refresh_evidence()
+
+	var wt := float(point["world_t"])
+	_world_t = wt
+	_world_running = false
+	_clear_ghosts()
+	_spawn_ghosts()
+	for g: Node in ghost_nodes:
+		g.playing = false
+		g.playhead = wt
+		g.global_position = g.track.sample_at(wt)["position"]
+	# NPCs are stepped, not teleported: their own _physics_process at the same
+	# tick rate is the only way to land on the exact pose they had then.
+	var step := 1.0 / float(Engine.physics_ticks_per_second)
+	for n: Node in npcs:
+		n.reset_phase()
+		n.set_active(true)
+		for _i in int(round(wt / step)):
+			n._physics_process(step)
+		n.set_active(false)
+
+	player.teleport(point["pos"], float(point["facing"]))
+	player.set_frozen(true)
+	rig.setup(player)
+	var drv = rig.active()
+	drv.reset(float(point["cam_yaw"]))
+	drv.roll = float(point["cam_roll"])
+	rig.yaw = float(point["cam_yaw"])
+	rig.roll = float(point["cam_roll"])
+
+	_resume_point = point
+	phase = Phase.ROLLING
+	slate.play_roll(idx)
+	_update_hud()
+	hud.set_hint("")
+	Logger.info("cut to %s -> take %d (retakes %d)" % [MarkLedger.label(point), idx, t.retake_stock])
+
+
+## The ROLL slate after a CUT has clapped: world, player and recorder start
+## together on the point's clock.
+func _release_resumed() -> void:
+	var p := _resume_point
+	_resume_point = {}
+	player.set_frozen(false)
+	for n: Node in npcs:
+		n.set_active(true)
+	for g: Node in ghost_nodes:
+		if not g.spent:
+			g.playing = true
+	recorder.resume_from(float(p["rec_t"]), GameSession.takes.take_index)
+	_world_running = true
+	_update_hud()
 
 
 func _on_slate_finished(kind: String) -> void:
 	match kind:
 		"roll":
 			if phase == Phase.ROLLING:
+				if not _resume_point.is_empty():
+					_release_resumed()
+					return
 				player.set_frozen(false)
 				recorder.start()
+				marks.checkpoint = _snapshot()
 				_update_hud()
 		"die":
 			phase = Phase.DEAD
 			hud.set_hint("SPACE — RETAKE")
 		"cut":
-			phase = Phase.CUT
-			hud.set_hint("SPACE — RETAKE")
+			if phase == Phase.CUT:
+				_open_cut_panel()
 		"out":
 			pass
 
 
 func _retake() -> void:
-	if phase != Phase.DEAD and phase != Phase.CUT and phase != Phase.COMPLETE:
+	if phase != Phase.DEAD and phase != Phase.COMPLETE:
 		return
 	for n: Node in npcs:
 		n.set_active(true)
@@ -357,6 +596,11 @@ func _retake() -> void:
 
 
 # --- play loop -----------------------------------------------------------
+
+func _physics_process(dt: float) -> void:
+	if _world_running:
+		_world_t += dt
+
 
 func _process(dt: float) -> void:
 	GameSession.takes.tick(dt)
@@ -587,6 +831,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		GameSession.load_latest()
 		return
 
+	if phase == Phase.CUT:
+		_cut_input(code)
+		return
+
 	if phase == Phase.REPORT:
 		match code:
 			KEY_1:
@@ -615,6 +863,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_pause()
 		KEY_C:
 			_manual_cut()
+		KEY_M:
+			_mark()
 		KEY_E:
 			_interact()
 		KEY_R:
@@ -638,13 +888,18 @@ func _toggle_pause() -> void:
 
 # --- helpers -------------------------------------------------------------
 
+## Props follow the case both ways: a retake or a CUT can un-see and un-take.
 func _refresh_evidence() -> void:
 	for id: String in evidence_props:
 		var prop: Node = evidence_props[id]
-		if GameSession.case_state.is_taken(id):
-			prop.mark_taken()
-		elif GameSession.case_state.is_seen(id):
-			prop.mark_seen()
+		var taken: bool = GameSession.case_state.is_taken(id)
+		var seen: bool = GameSession.case_state.is_seen(id)
+		prop.taken = taken
+		prop.seen = seen
+		prop.visible = not taken
+		var ring: Node3D = prop.get_node_or_null("Marker/Ring")
+		if ring != null:
+			ring.visible = not seen
 
 
 func _commit_state() -> void:
@@ -666,5 +921,6 @@ func _debug_text() -> String:
 		"SPEED %.2f  (intent %.2f)" % [player.speed_now(), player.intent().length()],
 		"TAKE %02d  GHOSTS %d" % [GameSession.takes.take_index, GameSession.ghosts.size()],
 		"PHASE %s" % GameSession.takes.state_name(),
-		"REC %d samples" % recorder.sample_count(),
+		"REC %d samples  %.1f s" % [recorder.sample_count(), recorder.elapsed()],
+		"WORLD T %.1f  MARK %d/%d" % [_world_t, marks.count(), marks.capacity],
 	]))

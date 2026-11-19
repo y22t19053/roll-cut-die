@@ -7,7 +7,7 @@ const GhostTrack = preload("res://scripts/ghost/ghost_track.gd")
 const GhostRecorderScript = preload("res://scripts/ghost/ghost_recorder.gd")
 
 
-static func run(h, _tree = null) -> void:
+static func run(h, tree = null) -> void:
 	h.begin("ghost")
 
 	var t = GhostTrack.new()
@@ -33,16 +33,59 @@ static func run(h, _tree = null) -> void:
 	h.near("after end holds last frame", after["position"].x, 2.0, 0.001)
 	h.ok("after end is finished", after["finished"])
 
-	# --- flags -------------------------------------------------------------
-	# A stationary player is mostly noise, so identical frames are dropped. A new
-	# flag is an event though: it keeps its own timestamp instead of being
-	# attached to the start of the standstill.
-	h.ok("identical frame with no news is dropped",
-		not t.add_sample(0.15, Vector3(2.0, 0.0, 4.0), 0.7, 1.2, 0.05))
-	t.add_sample(0.2, Vector3(2.0, 0.0, 4.0), 0.7, 1.2, 0.05, GhostTrack.FLAG_INTERACT)
-	h.eq("an interact on a still frame keeps its own sample", t.size(), 3)
-	var folded: Dictionary = t.sample_at(0.2)
-	h.ok("folded sample keeps the interact flag", folded["interact"])
+	# --- standstills and flags ---------------------------------------------
+	# A standstill is two samples, first and latest frame, and the latest one's
+	# timestamp follows the clock: standing still must not shorten the take.
+	var still := Vector3(2.0, 0.0, 4.0)
+	h.ok("identical frame is accepted", t.add_sample(0.15, still, 0.7, 1.2, 0.05))
+	h.ok("standstill keeps accepting frames", t.add_sample(0.2, still, 0.7, 1.2, 0.05))
+	h.eq("a standstill costs two samples", t.size(), 3)
+	h.near("the standstill stretches the duration", t.duration(), 0.2)
+	h.near("pose holds across the standstill", t.sample_at(0.18)["position"].x, 2.0, 0.0001)
+	# An interaction is an event with its own timestamp, never folded into the
+	# start of the standstill and never stretched.
+	t.add_sample(0.3, still, 0.7, 1.2, 0.05, GhostTrack.FLAG_INTERACT)
+	h.eq("an interact on a still frame keeps its own sample", t.size(), 4)
+	h.ok("the interact sample carries the flag", t.sample_at(0.3)["interact"])
+	h.ok("the standstill before it does not", not t.sample_at(0.2)["interact"])
+	t.add_sample(0.4, still, 0.7, 1.2, 0.05)
+	h.eq("the frame after an interact is a new sample", t.size(), 5)
+	h.near("interact time survives later frames", GhostTrack.dequant_time(t.times[3]), 0.3)
+
+	# --- recorder clock -----------------------------------------------------
+	# Timestamps come from the physics grid, not from how many samples the track
+	# kept: 3 s of standing still is a 3 s track.
+	var subject := _Subject.new()
+	if tree != null:
+		tree.root.add_child(subject)
+		var r = GhostRecorderScript.new()
+		r.setup(subject, null, 3)
+		r.start()
+		for i in 180:
+			r._physics_process(1.0 / 60.0)
+		h.near("3 s standing still records ~3 s", r.track.duration(), 2.95, 0.06)
+		h.eq("... in two samples", r.track.size(), 2)
+		h.near("elapsed() is physics time", r.elapsed(), 3.0, 0.001)
+		r.mark(GhostTrack.FLAG_INTERACT)
+		var n: int = r.track.size()
+		h.near("mark lands on the current time", r.track.duration(), 3.0, 0.011)
+		h.ok("mark is a new sample", n == 3 and (r.track.flags[n - 1] & GhostTrack.FLAG_INTERACT) != 0)
+		h.ok("mark does not rewrite the standstill",
+			(r.track.flags[0] & GhostTrack.FLAG_INTERACT) == 0 and (r.track.flags[1] & GhostTrack.FLAG_INTERACT) == 0)
+		for i in 60:
+			subject.position.x = float(i + 1) * 0.05
+			r._physics_process(1.0 / 60.0)
+		r.resume_from(3.5, 9)
+		h.at_most("resume keeps only the road up to t", r.track.duration(), 3.5)
+		h.eq("resume retags the track", r.track.take_id, 9)
+		var kept: int = r.track.size()
+		for i in 30:
+			r._physics_process(1.0 / 60.0)
+		h.ok("resumed grid continues after t",
+			r.track.size() > kept and r.track.duration() > 3.5 and r.track.duration() <= 4.05,
+			"%d -> %d samples, %.2f s" % [kept, r.track.size(), r.track.duration()])
+		r.free()
+	subject.free()
 
 	# --- quantisation ------------------------------------------------------
 	# quant_pos/dequant_pos work per component (millimetre ints in flat arrays),
@@ -110,3 +153,8 @@ static func run(h, _tree = null) -> void:
 
 static func _json_bytes(track) -> int:
 	return JSON.stringify(track.to_dict()).length()
+
+
+class _Subject extends Node3D:
+	var facing := 0.0
+	var frozen := false

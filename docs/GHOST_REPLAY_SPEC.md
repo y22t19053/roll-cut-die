@@ -20,7 +20,9 @@
 | 首帧 | `start()` 把累加器预置为 `1/HZ`，所以第一帧就采一个样本 | `ghost_recorder.gd:47` |
 | 采样内容 | 世界坐标、`facing`、`cam_yaw`、`cam_roll`、flag 位 | `ghost_recorder.gd:_emit()` |
 | flag | `FLAG_ALIVE = 1`、`FLAG_INTERACT = 2` | `ghost_track.gd:20-21` |
-| 交互标记 | `recorder.mark(FLAG_INTERACT)`，由拾取/报告等动作调用 | `ghost_recorder.gd:58` |
+| 时间戳 | 第 k 个网格 tick 记为 `k / HZ`，**与轨道是否保留该帧无关**；`elapsed()` 返回累计物理时间 | `ghost_recorder.gd` `_ticks` |
+| 交互标记 | `recorder.mark(FLAG_INTERACT)` 在**当前物理时刻**追加一条新样本；仅当最新样本与当前同一厘秒时才把 flag 并进它。永不改写更早的样本 | `ghost_recorder.gd` `mark()` |
+| 续录 | `recorder.resume_from(t, take_id)`：保留 `t` 之前的样本（通往锚点的路），网格从 `t` 之后继续。CUT 回到 MARK 时使用 | `ghost_recorder.gd` / `ghost_track.gd` `head_until()` |
 
 选 10 Hz 而不是 60 Hz 的理由：幽灵的定位精度需求来自碰撞判定（`DANGER_RADIUS 0.34` + 玩家半径 0.32 ≈ 0.66 m 的安全距离），玩家 3.2 m/s 时 10 Hz 相邻样本间隔 0.32 m，插值后误差远小于判定半径；60 Hz 会把存档体积放大 6 倍。
 
@@ -66,7 +68,12 @@
 ## 7 · 采样与存储的两个已知坑
 
 1. **`start()` 必须清空旧轨道**。2026-11-19 的真 bug：`start()` 只重置计数器不清 `track`，而它可以在没有 `setup()` 的情况下被调用；第二次开拍时时间戳从 0 重新开始、旧样本还在，`add_sample()` 全部按「乱序」拒绝，最后存下来的是**空幽灵**。修法：`start()` 新建 `GhostTrack` 并把 `_take_id` 带过去。`tests/test_ghost.gd` 有五条断言守着（`start clears the previous track` 等）。
-2. **同一姿态同时间的折叠规则**。`add_sample()` 会把「同一帧 + 同一姿态 + 无新 flag」的样本丢弃；但只要这一帧带了**新的 flag 位**（交互），必须单独写一条样本 —— 否则玩家站着不动几秒后交互，交互时刻会被贴到这段静止的开头。比较身份时要连 `cam_roll` 一起比。
+2. **静止段的存储规则（2026-11-20 改）**。旧实现把「同一姿态 + 无新 flag」的样本直接丢弃，而 recorder 用「已接受样本数 / HZ」当时间戳 —— 于是站着不动时**时钟停走**：录 10 s（4 s 静止 + 2 s 行走 + 4 s 静止）只得到 2.1 s 的轨道，幽灵瞬移（`tests/probe_replay_clock.gd`）。现规则：
+   - 时间戳取物理网格 tick（`k / HZ`），不再取样本数；
+   - 静止段存**首帧 + 最新帧**两条样本：若最后两条样本与新帧姿态相同且 flag 相同，只把最后一条的时间戳推到当前时刻。时长因此等于真实时长，插值跨越静止段时姿态不变，长时间静止仍只花两条样本；
+   - 带 `FLAG_INTERACT` 的样本永不被拉伸，它之后的下一帧必定另起一条；
+   - 比较姿态时连 `cam_roll` 一起比。
+   `tests/test_ghost.gd` 的 standstills / recorder clock 两段守着这些规则。
 
 ## 8 · 计数与上限
 

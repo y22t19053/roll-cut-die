@@ -17,7 +17,9 @@ var _player: Node3D
 var _cam: Node3D
 var _take_id := 1
 var _acc := 0.0
-var _samples := 0
+## Grid ticks since start(). Tick k is stamped k / HZ whether or not the track
+## kept that frame, so a standstill cannot stop the clock.
+var _ticks := 0
 var _elapsed := 0.0
 
 
@@ -31,7 +33,7 @@ func setup(player: Node3D, cam: Node3D, take_id: int) -> void:
 	_take_id = take_id
 	track = GhostTrack.new()
 	track.take_id = take_id
-	_samples = 0
+	_ticks = 0
 	_elapsed = 0.0
 	_acc = 0.0
 
@@ -46,7 +48,19 @@ func start() -> void:
 	recording = true
 	_acc = 1.0 / HZ  # take a sample on the first physics tick
 	_elapsed = 0.0
-	_samples = 0
+	_ticks = 0
+
+
+## Continue the current recording from `t` seconds into it: samples up to `t`
+## stay as the road that led there, and the grid carries on after them.
+func resume_from(t: float, take_id: int) -> void:
+	_take_id = take_id
+	track = track.head_until(t)
+	track.take_id = take_id
+	recording = true
+	_elapsed = t
+	_ticks = int(floor(t * HZ + 0.000001)) + 1
+	_acc = 1.0 / HZ
 
 
 func stop() -> Variant:
@@ -54,8 +68,13 @@ func stop() -> Variant:
 	return track
 
 
-## Mark a moment worth remembering (evidence touched, report filed).
+## Mark a moment worth remembering (evidence touched, report filed). The mark is
+## a new sample at the current physics time; it never rewrites an older sample,
+## which may be the start of a standstill seconds ago.
 func mark(flag: int) -> void:
+	if _player != null and _emit_at(_elapsed, flag):
+		return
+	# Refused only when the newest sample shares this centisecond: it is "now".
 	if track.size() > 0:
 		track.flags[track.size() - 1] = track.flags[track.size() - 1] | flag
 
@@ -74,6 +93,11 @@ func _physics_process(dt: float) -> void:
 
 
 func _emit() -> void:
+	_emit_at(float(_ticks) / HZ, 0)
+	_ticks += 1
+
+
+func _emit_at(t: float, extra_flag: int) -> bool:
 	var pos: Vector3 = _player.global_position
 	var facing: float = _player.get("facing")
 	var yaw := 0.0
@@ -84,13 +108,13 @@ func _emit() -> void:
 	var flag := GhostTrack.FLAG_ALIVE
 	if _player.get("frozen") == true:
 		flag = 0
-	if track.add_sample(_samples / HZ, pos, facing, yaw, roll, flag):
-		_samples += 1
+	return track.add_sample(t, pos, facing, yaw, roll, flag | extra_flag)
 
 
 func sample_count() -> int:
 	return track.size()
 
 
+## Physics seconds since start(), standstills included.
 func elapsed() -> float:
-	return _samples / HZ
+	return _elapsed
