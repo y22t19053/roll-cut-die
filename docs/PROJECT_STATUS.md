@@ -69,7 +69,21 @@ godot --headless --path . --script tools/check_plan.gd  # → PLAN CLEAR (0 prob
 2. 轨道比 `WARMUP`（2 s）短的幽灵永远不会 arm —— 录 2.0 s 时 `monitoring` 始终 false。这是设计边界，需要写进 GHOST_REPLAY_SPEC：太短的 Take 不应生成会伤人的幽灵。
 3. 死亡瞬间 HUD 仍显示 `TAKE 01 · 0 GHOSTS · ROLLING`，与 `DIED` 状态自相矛盾；幽灵在画面上是一坨半透明灰块，读不出「这是第几周目的自己」。表现层待修。
 
+### 2.3 · 三套 ROLL 方案并存（2026-11-19 23:40，Claude Opus 5.5 实现）
 
+同一套 Player/CameraRig 里现在有三套实质不同的规则，`F1` 循环、`F5`/`F6`/`F7` 直选，HUD 顶栏中央显示 `ROLL: <MODE>`：
+
+| 模式 | 规则 | 实测（`tests/probe_roll_modes.gd`，60 Hz，两次运行逐字节一致） |
+|---|---|---|
+| 0 CHASE | 追朝向，8° 死区、≤120°/s | hold W 1 s 镜头**零变化**（yaw 0）；hold D 1 s 扫 79° 后锁死，hold 4 s 与 1 s 几乎相同 |
+| 1 SNAP | 每次按新方向转一格 **90°**，之后不动 | hold D 1 s 转 90°，按住期间屏幕方位恒为 0；W/D 连切 4 次扫 270° |
+| 2 ORBIT | 有方向输入就以 45°/s 绕玩家公转 | hold D 4 s yaw +174.8°、同一个键的屏幕含义漂移 **172.5°**、roll 常驻 -9.9° |
+
+结论：只有 ORBIT 不收敛。CHASE 的「走一会儿就和普通游戏一样」被数据证实（`scr_drift` 只在转向后约 1 s 的过渡里出现）。三者的位移完全一致，差别全在画面如何动。详见 `docs/ROLL_SCHEME_STUDY.md`、`docs/ROLL_CAMERA_DESIGN.md` §8；裁决见 D-019。
+
+同轮修好的表现层（真机验证）：死亡时 HUD 三行同时正确 `TAKE 01 · 1 GHOST · DIED — TAKE 01` / `ROLL: CHASE` / 居中 `DIED TO TAKE 01`，幽灵变成冷蓝实心体 + 头顶常显 `TAKE 01` + 地面危险环；接触后 **7 帧**进入 `DIED`，`death_source == "take_01"`。截图 `shots/10_mode_{0,1,2}.png`、`shots/11_died_presentation.png`。
+
+## 3 · 本轮改了什么（都能用 `git diff c3de553` 复核）
 
 1. **ROLL 按圣经重写**：`scripts/camera/camera_math.gd`（纯关系）+ 新文件 `scripts/camera/camera_chase.gd`（有状态积分器）+ `scripts/camera/camera_rig.gd`（有效 yaw = chase yaw + 鼠标 offset；roll 不参与任何判定）。
 2. **移动改为世界轴锚定**：`scripts/player/player.gd` 删掉了相机相对的 `move_dir(ix, cam_yaw())`。原因见 `RCD_DECISION_LOG.md` D-002。
@@ -82,14 +96,14 @@ godot --headless --path . --script tools/check_plan.gd  # → PLAN CLEAR (0 prob
 
 | 缺什么 | 后果 | 依据 |
 |---|---|---|
-| `export_presets.cfg` / `build/` | 从没导出过一次；L5 一条都没做 | TEST_PLAN §0 |
-| 有人在窗口里玩过 | 所有数字都是 headless 数学，不是手感 | 总指令 §21「headless 通过不等于可玩」 |
+| 真人试玩（尤其三种 ROLL 模式） | 所有数字都是 headless 数学 + 单次窗口截图，没有手感、晕动、学习曲线 | 总指令 §21「headless 通过不等于可玩」 |
 | `scene_no` 与周目推进 | `take_index` 一直递增，没有 SCENE 01→02→03，成功后也没有进 Final Cut 的分支 | ROADMAP §5 |
 | `FinalCutController` | 三个结局只有数据里的文本，游戏里没有演出 | ROADMAP §3 Phase 8 |
 | 场记板/时间轴的场景预览 | CUT 界面还没有「当时当地画面」 | `CUT_SLATE_DESIGN.md` |
-| 幽灵数量上限 | `GameSession.add_ghost()` 无上限；圣经默认 2 | 圣经 §8.6 |
+| 幽灵数量上限与性能 | `GameSession.add_ghost()` 无上限；圣经默认 2，同屏 3+ 的帧率与可读性未测 | `GHOST_REPLAY_SPEC.md` §8 |
 | 真实美术与音频 | 全部程序化灰盒 + 合成 CLACK | ROADMAP §6 |
-| 双高阶模型池 | Gemini 未接入、Claude 中转 DEGRADED（详见 `MODEL_ROUTING_POLICY.md`） | 需开发者开补丁/密钥/授权 |
+| Gemini 通道 | 没有任何可用凭据（CLI 未安装、无环境变量、中转只列 Claude 模型） | `MODEL_ROUTING_POLICY.md` |
+
 
 ## 5 · 已定的事实（有实现与文档双重支撑）
 
@@ -102,14 +116,17 @@ godot --headless --path . --script tools/check_plan.gd  # → PLAN CLEAR (0 prob
 
 ## 6 · 未解决的冲突（需要一次明确决策）
 
-1. **`taken ≡ sealed` 的简化。** 实现里第二次按 E 取走即跨 Take 永久保留=封存；但圣经 §7.3 还要求「报告只能挂已封存证物」且封存必须在唯一证物柜，而证物柜不存在。**现状口径：`taken ≡ sealed`。** 要么补证物柜，要么改圣经承认简化。
-2. **幽灵编号与周目脱钩。** `TAKE` 全局递增，没有 `SCENE`；「三周目」在代码里仍不存在。
-3. **世界轴 vs 角色轴**（圣经 V06）。已按硬规则选世界轴并给出实现证明，但仍需 PHASE 2 双版本盲测确认手感。
+1. **ORBIT 与圣经 §4.1 硬规则①冲突（新，最急）。** 三套 ROLL 方案已在同一份代码里并存（`F1` 循环 / `F5`–`F7` 直选）。CHASE 会收敛（按 W 镜头零变化）、SNAP 会停（按住时画面永久静止）、只有 ORBIT 不收敛（4 s 内同一个键的屏幕含义漂移 172.5°）。ORBIT 违反了「镜头必须追随朝向」这条硬规则。裁决见 `RCD_DECISION_LOG.md` D-019，数据见 `docs/ROLL_SCHEME_STUDY.md`。
+2. **短幽灵不伤人（新）。** 轨道短于 `WARMUP 2.0 s` 的幽灵永远不会 arm（真机撞到两次）。要么明说「TOO SHORT TO HAUNT」，要么让 WARMUP 随轨道长度自适应。见 D-020。
+3. **`taken ≡ sealed` 的简化。** 实现里第二次按 E 取走即跨 Take 永久保留=封存；但圣经 §7.3 还要求「报告只能挂已封存证物」且封存必须在唯一证物柜，而证物柜不存在。**现状口径：`taken ≡ sealed`。** 要么补证物柜，要么改圣经承认简化。
+4. **幽灵编号与周目脱钩。** `TAKE` 全局递增，没有 `SCENE`；「三周目」在代码里仍不存在。
+5. **世界轴 vs 角色轴**（圣经 V06）。已按硬规则选世界轴并给出实现证明，但仍需 PHASE 2 双版本盲测确认手感。
 
 ## 7 · 下一步（按顺序）
 
-1. 在窗口里真跑一次（`godot_run_project`），用 `godot_command` 读 rig/player 状态，验证 headless 数字与真实手感一致；截图存档。
-2. `export_presets.cfg` + 第一次 Windows 导出，导出包在新目录启动（L5 的第一半）。
+1. 玩家亲手在窗口里玩一次，分别在三种模式下走完一条路线，记录「哪一刻你按错了方向」——这是唯一能裁决 D-019 的证据。
+2. 关卡几何落地（`docs/LEVEL_ZONES_ROLL.md` 的 B/C 区），让难度来自空间而不是数值。
 3. 补 `scene_no` 与周目推进：成功 → 下一 SCENE；SCENE 03 成功 → Final Cut 占位。
-4. 定冲突 1（证物柜或改圣经）。
-5. 场记板 CUT 界面的「时间轴 + 当时当地预览」最小实现。
+4. 场记板 CUT 界面的「时间轴 + 当时当地预览」最小实现。
+5. 定冲突 2（短幽灵）与冲突 3（证物柜）。
+

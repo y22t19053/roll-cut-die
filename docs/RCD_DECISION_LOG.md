@@ -200,6 +200,27 @@
 - **硬约束**：改几何必须同步改 `tests/test_routes.gd` 的三条 take，并跑 `tools/check_plan.gd` 确认 `PLAN CLEAR`。
 - **实现位置**：`docs/LEVEL_ZONES_ROLL.md`（施工图），几何改动待实施。
 
+## D-019 · ROLL 保留三套可切换方案，默认值待创作者裁决
+
+- **日期**：2026-11-19
+- **来源**：创作者（m00908 要求「至少研究三种实质不同的操控方案并实机比较」）＋ Claude Opus 5.5 实现
+- **状态**：**PROPOSED（需要创作者一句话裁决）**
+- **结论**：同一套 Player/CameraRig 里同时存在 CHASE / SNAP / ORBIT 三种 ROLL 规则，运行时 `F1` 循环、`F5`/`F6`/`F7` 直选，参数集中在 `scripts/camera/roll_modes.gd`。三者位移完全一致（移动始终锚定世界轴），差别只在画面如何动。
+- **实测差别**（`tests/probe_roll_modes.gd`，两次运行逐字节一致）：CHASE 按 W 起步时镜头零变化、按 D 扫 79° 后锁死不再动；SNAP 每次按键转一格 90°、按住期间画面永久静止；ORBIT 按住任何键都在 45°/s 公转，4 s 内同一个键的屏幕含义漂移 172.5°、roll 常驻 -9.9°。
+- **冲突**：ORBIT **违反圣经 §4.1 硬规则①**（镜头必须追随玩家朝向）。这不是实现细节，是设计冲突，必须由创作者裁决：是把这条硬规则改成「镜头可以按输入公转」，还是让 ORBIT 降级为可选实验模式、正式方案仍为 CHASE。
+- **工程默认**：在两轮实现之间保持不擅自改默认值；一旦确定，默认值写进 `GameSession` 并同步 `docs/ROLL_CAMERA_DESIGN.md` §8。
+- **实现位置**：`scripts/camera/{roll_modes,camera_chase,camera_snap,camera_orbit,camera_rig}.gd`、`scripts/main.gd:242 _set_roll_mode`、`docs/ROLL_SCHEME_STUDY.md`、`docs/ROLL_CAMERA_DESIGN.md` §8。
+
+## D-020 · 轨道短于预热（WARMUP 2 s）的幽灵不参与碰撞
+
+- **日期**：2026-11-19
+- **来源**：真机实测两次撞上（录 1.7 s 与 2.0 s 的轨道，`Danger.monitoring` 恒为 false，玩家穿过不死）
+- **状态**：PROPOSED（已实现，待创作者确认是否改成设计意图）
+- **结论**：幽灵的 `Danger` 区域在 `playhead >= WARMUP(2.0 s)` 之前 `monitoring = false`，因此短于 2 s 的历史轨迹永远不会变成危险。这是**边界行为**，目前既没有提示也没有文档说明。
+- **理由**：预热是为了让幽灵「显影」后再开始伤人，避免刚生成就贴着玩家判定。副作用是极短 Take 的幽灵是纯装饰。
+- **待定**：是把它写进规则（短 Take 不产生危险幽灵，HUD 应提示「TOO SHORT TO HAUNT」），还是让 `WARMUP` 随轨道长度自适应（`min(2.0, duration * 0.3)`）。两种都能解释给玩家，不能留着不解释。
+- **实现位置**：`scripts/ghost/ghost_actor.gd`（`WARMUP`、`set_deferred("monitoring", ...)`）。
+
 ## 变更规则
 
 1. 新增决策 → 追加条目，编号连续，不得改写历史条目。
