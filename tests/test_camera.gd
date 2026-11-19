@@ -10,16 +10,22 @@ extends RefCounted
 const CameraMath = preload("res://scripts/camera/camera_math.gd")
 const CameraChase = preload("res://scripts/camera/camera_chase.gd")
 const CameraRigScript = preload("res://scripts/camera/camera_rig.gd")
+const RollModes = preload("res://scripts/camera/roll_modes.gd")
 
 const DT := 1.0 / 60.0
+## _chase and _roll assert the §4.3 chase integrator (CameraChase), which only
+## drives the frame under ROLL mode 0. SNAP and ORBIT have their own rules and
+## are measured by tests/probe_roll_modes.gd. _input, _facing, _geometry and
+## _mouse hold in every mode.
+const CHASE_ONLY := RollModes.CHASE
 
 
 static func run(h, _tree = null) -> void:
 	h.begin("camera")
 	_input(h)
 	_facing(h)
-	_chase(h)
-	_roll(h)
+	_chase(h, CHASE_ONLY)
+	_roll(h, CHASE_ONLY)
 	_geometry(h)
 	_mouse(h)
 
@@ -53,8 +59,10 @@ static func _facing(h) -> void:
 	h.near("facing of zero dir is 0", CameraMath.facing_from_dir(Vector3.ZERO), 0.0)
 
 
-# --- §4.3: the chase rule -----------------------------------------------
-static func _chase(h) -> void:
+# --- §4.3: the chase rule (ROLL mode 0 only) -----------------------------
+static func _chase(h, mode: int) -> void:
+	if mode != RollModes.CHASE:
+		return
 	var dead := CameraMath.DEADZONE
 	var band := CameraMath.BAND
 	var w_max := CameraMath.W_MAX
@@ -141,8 +149,10 @@ static func _chase(h) -> void:
 			h.near("run %d is bit-identical" % run, d.yaw, first, 1e-12)
 
 
-# --- §4.3: roll ---------------------------------------------------------
-static func _roll(h) -> void:
+# --- §4.3: roll (ROLL mode 0 only: SNAP kicks, ORBIT holds a lean) -------
+static func _roll(h, mode: int) -> void:
+	if mode != RollModes.CHASE:
+		return
 	h.near("no yaw speed -> no roll", CameraMath.roll_target(0.0), 0.0)
 	h.near("roll clamps at full speed", CameraMath.roll_target(CameraMath.W_MAX), -CameraMath.ROLL_MAX, 1e-9)
 	h.near("roll clamps on reversal", CameraMath.roll_target(-CameraMath.W_MAX), CameraMath.ROLL_MAX, 1e-9)
@@ -192,6 +202,7 @@ static func _geometry(h) -> void:
 # --- §4.3: the mouse channel is isolated --------------------------------
 static func _mouse(h) -> void:
 	var rig = CameraRigScript.new()
+	h.eq("rig defaults to ROLL mode 0 (CHASE)", rig.roll_mode, RollModes.CHASE)
 	var w_before: float = rig.chase.w
 	var roll_before: float = rig.chase.roll
 	rig.mouse_look(200.0)

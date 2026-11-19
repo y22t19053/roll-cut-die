@@ -23,6 +23,8 @@ var takes
 var case_state
 ## Finished takes in order: [{take: int, track: GhostTrack}]
 var ghosts: Array = []
+## ROLL scheme under comparison: 0 CHASE, 1 SNAP, 2 ORBIT (scripts/camera/roll_modes.gd).
+var roll_mode := 0
 var settings := {
 	"language": "en",
 	"reduce_motion": false,
@@ -66,6 +68,15 @@ func add_ghost(track: Variant) -> void:
 ## How many ghosts the next attempt will have to dodge.
 func ghost_count() -> int:
 	return ghosts.size()
+
+
+func set_roll_mode(m: int) -> int:
+	roll_mode = posmod(m, 3)
+	return roll_mode
+
+
+func get_roll_mode() -> int:
+	return roll_mode
 
 
 func set_language(lang: String) -> void:

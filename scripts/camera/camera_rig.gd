@@ -7,14 +7,21 @@ extends Node3D
 ## the mechanic.
 ##
 ## Two yaw channels, kept strictly apart (§4.3 已决策):
-##   chase.yaw      automatic, chases facing, and is the ONLY source of roll;
+##   active().yaw   automatic (chase / snap / orbit, see RollModes), and the
+##                  ONLY source of roll;
 ##   yaw_offset     mouse correction, decays back to zero, never feeds roll.
 ## `yaw` is the effective view angle the rest of the game records and reads.
 
 const CameraMath = preload("res://scripts/camera/camera_math.gd")
 const CameraChase = preload("res://scripts/camera/camera_chase.gd")
+const CameraSnap = preload("res://scripts/camera/camera_snap.gd")
+const CameraOrbit = preload("res://scripts/camera/camera_orbit.gd")
+const RollModes = preload("res://scripts/camera/roll_modes.gd")
 
 signal roll_changed(roll_deg: float)
+
+## Which ROLL scheme drives the automatic yaw channel (RollModes.CHASE/SNAP/ORBIT).
+var roll_mode := RollModes.CHASE
 
 ## Effective camera orbit angle in radians (chase + mouse offset).
 var yaw := 0.0
@@ -31,6 +38,8 @@ var mouse_sensitivity := 0.0022
 var target: Node3D
 var camera: Camera3D
 var chase = CameraChase.new()
+var snap = CameraSnap.new()
+var orbit = CameraOrbit.new()
 
 ## Mouse correction, radians. It is a view offset, not a gameplay input.
 var yaw_offset := 0.0
@@ -60,7 +69,10 @@ func _ready() -> void:
 func setup(follow: Node3D) -> void:
 	target = follow
 	if target != null:
-		chase.reset(target.get("facing"))
+		var f: float = target.get("facing")
+		chase.reset(f)
+		snap.reset(f)
+		orbit.reset(f)
 		yaw_offset = 0.0
 		yaw = chase.yaw
 		global_position = target.global_position + Vector3.UP * CameraMath.FOCUS_HEIGHT
@@ -82,14 +94,18 @@ func _physics_process(dt: float) -> void:
 		return
 	_t += dt
 
-	chase.step(target.get("facing"), dt)
+	var intent := Vector3.ZERO
+	if target.has_method("intent"):
+		intent = target.call("intent")
+	var drv = active()
+	drv.drive(target.get("facing"), intent, dt)
 
 	yaw_offset *= exp(-dt / CameraMath.MOUSE_TAU)
 	if absf(yaw_offset) < 0.00001:
 		yaw_offset = 0.0
 
-	yaw = CameraMath.wrap_angle(chase.yaw + yaw_offset)
-	roll = 0.0 if reduce_motion else chase.roll * roll_scale
+	yaw = CameraMath.wrap_angle(drv.yaw + yaw_offset)
+	roll = 0.0 if reduce_motion else drv.roll * roll_scale
 
 	if _shake > 0.0:
 		_shake = maxf(0.0, _shake - _shake_decay * dt)
@@ -116,13 +132,37 @@ func _apply() -> void:
 	camera.rotation = CameraMath.camera_euler(pitch_deg, roll_total)
 
 
+## The stepper that owns yaw and roll under the current mode.
+func active():
+	match roll_mode:
+		RollModes.SNAP:
+			return snap
+		RollModes.ORBIT:
+			return orbit
+	return chase
+
+
+## Switch scheme mid-shot. The new stepper starts from the current frame (same
+## yaw, same lean) so the switch itself never jumps the picture.
+func set_roll_mode(m: int) -> void:
+	m = RollModes.clamp_mode(m)
+	if m == roll_mode:
+		return
+	var prev = active()
+	roll_mode = m
+	var next = active()
+	next.reset(prev.yaw)
+	next.roll = prev.roll
+
+
 ## Diagnostics for the debug overlay and for tests.
 func snapshot() -> Dictionary:
 	return {
+		"mode": RollModes.mode_name(roll_mode),
 		"yaw_deg": rad_to_deg(yaw),
 		"chase_yaw_deg": rad_to_deg(chase.yaw),
 		"yaw_offset_deg": rad_to_deg(yaw_offset),
-		"w_deg": rad_to_deg(chase.w),
+		"w_deg": rad_to_deg(active().w),
 		"roll_deg": rad_to_deg(roll),
 		"pitch_deg": pitch_deg,
 		"distance": distance,

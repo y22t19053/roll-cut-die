@@ -14,11 +14,13 @@ extends CharacterBody3D
 ## key do nothing at all.
 
 const CameraMath = preload("res://scripts/camera/camera_math.gd")
+const RollModes = preload("res://scripts/camera/roll_modes.gd")
 
 const SPEED := 3.2
 const ACCEL := 20.0
 const DECEL := 26.0
-const TURN_RATE := 12.0
+## Body turn rule per ROLL mode lives in RollModes.step_facing.
+const TURN_RATE := RollModes.CHASE_TURN_RATE
 const RADIUS := 0.32
 const HEIGHT := 1.7
 const EYE := 1.45
@@ -33,6 +35,8 @@ signal facing_changed(facing: float)
 ## Radians. 0 == world -Z. The camera chases this.
 var facing := 0.0
 var frozen := false
+## RollModes.CHASE / SNAP / ORBIT: decides how the body turns toward the walk.
+var roll_mode := RollModes.CHASE
 ## Optional Vector2 driving the player instead of the keyboard (tests, replays).
 var input_override: Variant = null
 
@@ -148,7 +152,7 @@ func _physics_process(dt: float) -> void:
 	if dir.length_squared() > 0.0001:
 		var want := CameraMath.facing_from_dir(dir)
 		var before := facing
-		facing = lerp_angle(facing, want, clampf(TURN_RATE * dt, 0.0, 1.0))
+		facing = RollModes.step_facing(roll_mode, facing, want, dt)
 		if _visual != null:
 			_visual.rotation.y = facing
 		if not is_equal_approx(before, facing):

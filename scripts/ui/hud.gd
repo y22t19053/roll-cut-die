@@ -11,6 +11,8 @@ var hint_label: Label
 var banner: Label
 var case_label: Label
 var debug_label: Label
+var roll_label: Label
+var death_label: Label
 var screen: Control
 
 var _banner_left := 0.0
@@ -63,6 +65,30 @@ func _ready() -> void:
 	debug_label.offset_bottom = -20.0
 	debug_label.visible = false
 
+	roll_label = _mk("", 0, 0, 400, 30, 20, HORIZONTAL_ALIGNMENT_CENTER)
+	roll_label.anchor_left = 0.5
+	roll_label.anchor_right = 0.5
+	roll_label.offset_left = -200.0
+	roll_label.offset_right = 200.0
+	roll_label.offset_top = 18.0
+	roll_label.offset_bottom = 48.0
+
+	# Stays up from the moment of death until the retake: the cause must not be
+	# only a flash on the slate.
+	death_label = _mk("", 0, 0, 1200, 120, 72, HORIZONTAL_ALIGNMENT_CENTER)
+	death_label.anchor_left = 0.5
+	death_label.anchor_right = 0.5
+	death_label.anchor_top = 0.5
+	death_label.anchor_bottom = 0.5
+	death_label.offset_left = -600.0
+	death_label.offset_right = 600.0
+	death_label.offset_top = -60.0
+	death_label.offset_bottom = 60.0
+	death_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	death_label.add_theme_color_override("font_color", Color(1.0, 0.32, 0.28))
+	death_label.add_theme_constant_override("outline_size", 12)
+	death_label.visible = false
+
 
 func _mk(text: String, x: float, y: float, w: float, h: float, fsize: int, align: int) -> Label:
 	var l := Label.new()
@@ -84,6 +110,20 @@ func set_take(index: int, ghost_count: int, phase: String) -> void:
 	take_label.text = "TAKE %02d   ·   %d GHOST%s   ·   %s" % [
 		index, ghost_count, "" if ghost_count == 1 else "S", phase
 	]
+
+
+func set_roll_mode(mode_name: String) -> void:
+	roll_label.text = "ROLL: " + mode_name
+
+
+func show_death(text: String) -> void:
+	death_label.text = text
+	death_label.visible = true
+
+
+func clear_death() -> void:
+	death_label.text = ""
+	death_label.visible = false
 
 
 func set_hint(text: String) -> void:

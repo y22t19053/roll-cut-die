@@ -6,8 +6,8 @@ extends Node3D
 ## only interaction is the one the design asks for: if the current player walks
 ## into it, the current player dies, and the death names the take.
 ##
-## Bounds: a ghost plays once. When its track runs out it holds the final pose
-## with collision disabled and fades to a stub, so a slow player is not
+## Bounds: a ghost plays once. When its track runs out collision goes off and it
+## fades to nothing within FADE_OUT_S, then hides, so a slow player is not
 ## permanently walled in by a finished recording.
 
 const GhostTrack = preload("res://scripts/ghost/ghost_track.gd")
@@ -23,7 +23,14 @@ const FADE_OUT_S := 1.2
 ## and die on the first frame. So the ghost is visible but harmless while it
 ## materialises, and the danger only comes on after it has walked clear.
 const WARMUP := 2.0
-const ALPHA := 0.42
+## Alpha the body ramps up to while materialising (harmless).
+const WARMUP_ALPHA := 0.30
+## Alpha once armed: readable as a person, not as smoke.
+const ARMED_ALPHA := 0.62
+## The tag never fades with the body while the ghost is alive.
+const LABEL_ALPHA := 0.95
+## Floor ring line width; its outer edge sits exactly on DANGER_RADIUS.
+const RING_WIDTH := 0.035
 
 var track
 var take_id := 0
@@ -35,6 +42,8 @@ var _danger: Area3D
 var _visual: Node3D
 var _label: Label3D
 var _mat: StandardMaterial3D
+var _ring: MeshInstance3D
+var _ring_mat: StandardMaterial3D
 var _alpha := 0.0
 var _armed := false
 
@@ -94,11 +103,32 @@ func _build() -> void:
 	_label.font_size = 40
 	_label.pixel_size = 0.0055
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_label.modulate = Color(c.r, c.g, c.b, 0.9)
+	_label.no_depth_test = true
+	_label.modulate = Color(c.r, c.g, c.b, LABEL_ALPHA)
 	_label.outline_size = 8
 	_label.outline_modulate = Color(0, 0, 0, 0.7)
 	_label.position = Vector3(0.0, BODY_HEIGHT + 0.3, 0.0)
 	add_child(_label)
+
+	# The kill radius drawn on the floor, so "how close is too close" is visible.
+	_ring_mat = StandardMaterial3D.new()
+	_ring_mat.albedo_color = Color(c.r, c.g, c.b, _alpha)
+	_ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_ring_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_ring = MeshInstance3D.new()
+	_ring.name = "DangerRing"
+	var tm := TorusMesh.new()
+	tm.outer_radius = DANGER_RADIUS
+	tm.inner_radius = DANGER_RADIUS - RING_WIDTH
+	tm.rings = 48
+	tm.ring_segments = 4
+	_ring.mesh = tm
+	_ring.scale = Vector3(1.0, 0.15, 1.0)
+	_ring.position = Vector3(0.0, 0.02, 0.0)
+	_ring.material_override = _ring_mat
+	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_ring)
 
 	_danger = Area3D.new()
 	_danger.name = "Danger"
@@ -139,7 +169,9 @@ func _physics_process(dt: float) -> void:
 				_danger.set_deferred("monitoring", true)
 			if _label != null:
 				_label.text = "TAKE %02d" % take_id
-		_set_alpha(ALPHA * clampf(playhead / WARMUP, 0.0, 1.0))
+			_set_alpha(ARMED_ALPHA)
+		else:
+			_set_alpha(WARMUP_ALPHA * clampf(playhead / WARMUP, 0.0, 1.0))
 	if track.duration() > 0.0 and playhead > track.duration():
 		_finish()
 
@@ -149,10 +181,18 @@ func _finish() -> void:
 	spent = true
 	if _danger != null:
 		_danger.set_deferred("monitoring", false)
-	var tw := create_tween()
-	tw.tween_method(_set_alpha, _alpha, 0.10, FADE_OUT_S)
 	if _label != null:
 		_label.text = "TAKE %02d · OUT" % take_id
+	# Fade body, ring and tag together to nothing, then leave the scene graph's
+	# draw list entirely: a finished take is not an obstacle and not a decoy.
+	var a0 := _alpha
+	var tw := create_tween()
+	tw.tween_method(func(k: float) -> void:
+		_set_alpha(a0 * k)
+		if _label != null:
+			_label.modulate.a = LABEL_ALPHA * k
+	, 1.0, 0.0, FADE_OUT_S)
+	tw.tween_callback(func() -> void: visible = false)
 
 
 func _set_alpha(a: float) -> void:
@@ -160,3 +200,6 @@ func _set_alpha(a: float) -> void:
 	if _mat != null:
 		var c := _mat.albedo_color
 		_mat.albedo_color = Color(c.r, c.g, c.b, a)
+	if _ring_mat != null:
+		var rc := _ring_mat.albedo_color
+		_ring_mat.albedo_color = Color(rc.r, rc.g, rc.b, minf(1.0, a * 1.4))

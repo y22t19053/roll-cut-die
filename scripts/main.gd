@@ -11,6 +11,7 @@ const RoomBuilder = preload("res://scripts/world/room_builder.gd")
 const PlayerScript = preload("res://scripts/player/player.gd")
 const CameraRigScript = preload("res://scripts/camera/camera_rig.gd")
 const CameraMath = preload("res://scripts/camera/camera_math.gd")
+const RollModes = preload("res://scripts/camera/roll_modes.gd")
 const NpcScript = preload("res://scripts/npc/npc_patrol.gd")
 const GhostActorScript = preload("res://scripts/ghost/ghost_actor.gd")
 const GhostRecorderScript = preload("res://scripts/ghost/ghost_recorder.gd")
@@ -234,6 +235,17 @@ func _build_ui() -> void:
 	add_child(slate)
 	slate.sequence_finished.connect(_on_slate_finished)
 
+	_set_roll_mode(GameSession.get_roll_mode())
+
+
+## One switch for all three places the mode lives: camera, body, HUD.
+func _set_roll_mode(m: int) -> void:
+	m = GameSession.set_roll_mode(m)
+	rig.set_roll_mode(m)
+	player.roll_mode = m
+	hud.set_roll_mode(RollModes.mode_name(m))
+	Logger.info("roll mode -> %s" % RollModes.mode_name(m))
+
 
 # --- take flow -----------------------------------------------------------
 
@@ -252,6 +264,7 @@ func _begin_take() -> void:
 	recorder.start()
 	slate.play_roll(idx)
 	_update_hud()
+	hud.clear_death()
 	hud.set_hint("")
 
 
@@ -297,6 +310,8 @@ func _die(source_id: String, source_label: String) -> void:
 		n.set_active(false)
 	GameSession.takes.die(source_id)
 	var text := "DIED TO " + source_label if Loc.language == "en" else "死于 " + source_label
+	hud.set_take(GameSession.takes.take_index, GameSession.ghost_count(), "DIED — " + source_label)
+	hud.show_death(text)
 	slate.play_die(text, GameSession.takes.take_index)
 	Logger.info("die: %s (take %d)" % [source_label, GameSession.takes.take_index])
 
@@ -308,6 +323,7 @@ func _manual_cut() -> void:
 	player.set_frozen(true)
 	recorder.recording = false
 	GameSession.takes.manual_cut()
+	hud.set_take(GameSession.takes.take_index, GameSession.ghost_count(), "CUT")
 	slate.play_cut(GameSession.takes.take_index)
 	Logger.info("manual cut (take %d)" % GameSession.takes.take_index)
 
@@ -541,6 +557,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var code := key.physical_keycode
 
+	# F2/F3/F4 already belong to language/debug/load (InputSetup), so the ROLL
+	# scheme gets F1 to cycle and F5/F6/F7 to pick directly.
+	match code:
+		KEY_F1:
+			_set_roll_mode(GameSession.get_roll_mode() + 1)
+			return
+		KEY_F5:
+			_set_roll_mode(RollModes.CHASE)
+			return
+		KEY_F6:
+			_set_roll_mode(RollModes.SNAP)
+			return
+		KEY_F7:
+			_set_roll_mode(RollModes.ORBIT)
+			return
+
 	if code == KEY_F2:
 		GameSession.set_language(Loc.toggle_language())
 		_refresh_evidence()
@@ -626,7 +658,7 @@ func _debug_text() -> String:
 	var snap: Dictionary = rig.snapshot()
 	var v: Vector3 = player.velocity
 	return "\n".join(PackedStringArray([
-		"FPS %d" % Engine.get_frames_per_second(),
+		"FPS %d  ROLL %s" % [Engine.get_frames_per_second(), snap["mode"]],
 		"POS %.2f %.2f" % [player.global_position.x, player.global_position.z],
 		"FACING %.1f  YAW %.1f" % [rad_to_deg(player.facing), snap["yaw_deg"]],
 		"ROLL %.2f  PITCH %.1f  D %.1f" % [snap["roll_deg"], snap["pitch_deg"], snap["distance"]],

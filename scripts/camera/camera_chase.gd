@@ -54,6 +54,11 @@ func step(target_yaw: float, dt: float) -> float:
 	return CameraMath.wrap_angle(yaw - before)
 
 
+## Stepper entry point shared with CameraSnap and CameraOrbit.
+func drive(facing: float, _intent: Vector3, dt: float) -> float:
+	return step(facing, dt)
+
+
 ## Diagnostics for the debug overlay and for tests.
 func snapshot() -> Dictionary:
 	return {
