@@ -54,6 +54,8 @@ static func load_save(path: String = PATH) -> Dictionary:
 	var payload: Dictionary = d.get("data", {}) if d.get("data") is Dictionary else {}
 	if ver != VERSION:
 		return {"ok": false, "reason": "version_%d" % ver, "data": payload}
+	if not (d.get("data") is Dictionary):
+		return {"ok": false, "reason": "corrupt", "data": {}}
 	return {"ok": true, "reason": "", "data": payload}
 
 

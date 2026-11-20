@@ -45,6 +45,16 @@ static func run(h, _tree = null) -> void:
 	h.ok("corrupt save is refused, not crashed", not bool(bad["ok"]))
 	h.eq("corrupt reason", str(bad["reason"]), "corrupt")
 
+	# Valid JSON can still be a damaged current-version envelope.
+	for envelope in [{"version": 1}, {"version": 1, "data": []}, {"version": 1, "data": null}]:
+		var raw := JSON.stringify(envelope)
+		var fixture := FileAccess.open(path, FileAccess.WRITE)
+		fixture.store_string(raw)
+		fixture.close()
+		var malformed := SaveManager.load_save(path)
+		h.ok("refuse malformed envelope " + raw, not malformed.ok and malformed.reason == "corrupt")
+		h.eq("leave malformed envelope untouched", FileAccess.get_file_as_string(path), raw)
+
 	# --- version mismatch --------------------------------------------------
 	var w := FileAccess.open(path, FileAccess.WRITE)
 	if w != null:
