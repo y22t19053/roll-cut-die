@@ -6,6 +6,7 @@ extends "res://scripts/main.gd"
 
 ## Operator walkthrough gives away the observation point. Hide that prompt in first-exposure sessions.
 @export var coach_observation := true
+var report_sign: Label3D
 
 const CROSSING := Vector2(6, 8)
 const OBSERVE := Vector2(6, 9.5)
@@ -53,10 +54,10 @@ func _build_world() -> void:
 	if coach_observation:
 		_sign("M   /   WATCH", OBSERVE)
 	_sign("+", CROSSING)
-	_sign("REPORT   /   R", Vector2(6,2))
+	report_sign = _sign("REPORT   /   R", Vector2(report_pos.x,report_pos.z))
 
 
-func _sign(title: String, at: Vector2) -> void:
+func _sign(title: String, at: Vector2) -> Label3D:
 	var sign := Label3D.new()
 	sign.text = title
 	sign.pixel_size = 0.007
@@ -64,6 +65,7 @@ func _sign(title: String, at: Vector2) -> void:
 	sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	sign.position = Vector3(at.x,0.42,at.y)
 	add_child(sign)
+	return sign
 
 
 ## Observer-only state for acceptance; no track injection or movement shortcuts.

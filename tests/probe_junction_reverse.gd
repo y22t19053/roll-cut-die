@@ -12,6 +12,7 @@ func run() -> void:
 	if not check(lab.phase == lab.Phase.COMPLETE,"north report accepted"): return
 	await tap(KEY_SPACE)
 	if not check(await released() and xz().distance_to(Vector2(6,2)) < 0.1,"second roll begins at former report"): return
+	if not check(lab.report_sign.is_visible_in_tree() and lab.report_sign.global_position.distance_to(Vector3(6,0.42,13)) < 0.01,"visible desk marker follows new report zone south"): return
 	if not check(lab.ghost_nodes.size() == 1 and lab.ghost_nodes[0].track.sample_at(0.0).position.distance_to(lab.SOUTH) < 0.15,"successful track still starts in south"): return
 	await tap(KEY_R)
 	if not check(lab.phase == lab.Phase.ROLLING,"former desk no longer files"): return
