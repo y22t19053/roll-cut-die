@@ -95,6 +95,7 @@ func run() -> void:
 	await tap(KEY_M)
 	if not check(lab.marks.count() == 1,"one personal MARK on B"): return
 	var mark: Dictionary = lab.marks.marks[0]
+	var ghost_near_mark: Vector3 = lab.ghost_nodes[0].global_position
 	var first := await crossing(track)
 	if failed: return
 	var expected := 4.05 + float(actor_wait_ticks()) / Engine.physics_ticks_per_second
@@ -105,7 +106,10 @@ func run() -> void:
 		if lab.cut_panel.is_open(): break
 		await physics_frame
 	if not check(lab.cut_panel.is_open(),"manual CUT opened the timeline"): return
+	var ghost_at_cut: Vector3 = lab.ghost_nodes[0].global_position
 	await tap(KEY_2) # checkpoint is row 1, personal MARK is row 2.
+	var ghost_in_preview: Vector3 = lab.ghost_nodes[0].global_position
+	print("PREVIEW AUDIT: MARK camera current=%s; actor distance from near-MARK %.3fm, from CUT %.3fm" % [lab.preview_cam.current, ghost_in_preview.distance_to(ghost_near_mark), ghost_in_preview.distance_to(ghost_at_cut)])
 	await tap(KEY_SPACE)
 	if not check(await released() and xz().distance_to(lab.OBSERVE) < 0.3 and gs.takes.take_index == 3,"Take 03 resumed at observation MARK"): return
 	if not check(gs.ghost_count() == 1 and lab.ghost_nodes.size() == 1,"CUT added no track or actor"): return
