@@ -11,6 +11,19 @@ def digest(p):
         return 'ABSENT'
 
 
+def isolated_config(original, condition, token):
+    import re
+    old = 'run/main_scene="res://scenes/main/main.tscn"'
+    forbidden = ('McpInteractionServer', 'config/use_custom_user_dir', 'config/custom_user_dir_name')
+    if (condition not in ('A', 'B') or not re.fullmatch('[0-9a-f]{32}', token)
+            or original.splitlines().count(old) != 1 or original.count(old) != 1
+            or any(k in original for k in forbidden)):
+        raise ValueError('Unexpected project configuration; trial not prepared.')
+    replacement = (f'run/main_scene="res://tools/corner_evidence_{condition.lower()}.tscn"\n'
+                   f'config/use_custom_user_dir=true\nconfig/custom_user_dir_name="RCD-Research/isolated/{token}"')
+    return original.replace(old, replacement)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('action', choices=['prepare', 'guard'])
@@ -28,9 +41,8 @@ def main():
             subprocess.run(['git','archive','--format=zip',rev],cwd=src,stdout=tmp,check=True)
             tmp.seek(0)
             with zipfile.ZipFile(tmp) as z: z.extractall(dest)
-        cfg = dest / 'project.godot'; s = cfg.read_text('utf-8'); old = 'run/main_scene="res://scenes/main/main.tscn"'
-        assert s.count(old)==1 and not any(k in s for k in ['McpInteractionServer','config/use_custom_user_dir','config/custom_user_dir_name'])
-        cfg.write_text(s.replace(old,'run/main_scene="res://tools/corner_evidence_'+args.condition.lower()+'.tscn"\nconfig/use_custom_user_dir=true\nconfig/custom_user_dir_name="RCD-Research/isolated/'+unique+'"'),'utf-8')
+        cfg = dest / 'project.godot'
+        cfg.write_text(isolated_config(cfg.read_text('utf-8'), args.condition, unique), 'utf-8')
         receipt = {'status':'PREPARED_NOT_A_PARTICIPANT','source':rev,'condition':args.condition,'expected_user_dir':str(Path(os.environ['APPDATA'])/'RCD-Research'/'isolated'/unique)}
         (dest.parent/'operator.json').write_text(json.dumps(receipt,indent=2),'utf-8'); print(dest); return
     import msvcrt, re
