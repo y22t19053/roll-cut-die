@@ -6,7 +6,7 @@
 
 **保护存档**：用本机已安装的 Python 3 运行 `tools/west_trial_operator.py prepare A`，取得独立工程路径（B 组换 B），只在该副本开测。另开交互终端运行同一解释器 `tools/west_trial_operator.py guard A --participant P001 --order first`（替换条件和编号）；核对它监控的是正式游戏当前的 user:// 路径。守护器仅采样哈希，不改文件；报告异常时主持人立即中止、不恢复，整次作废。游戏关闭后回观察终端按 Q，保存最终摘要。每次单独开一份。正式试玩 EXE 不含实验关，不用它收集 A/B 样本。经同意后使用既有 OBS 窗口捕获，录制几秒回看确认非黑屏后才开始正式计时。去除能识别人的文件名；录像和原始数据仅存本地，不进 Git。
 
-**采集开关（主持人操作）**：`prepare` 只备份当前提交到独立副本并选择 A/B 场景，不代表同意，也不会开始录制。取得输入记录同意后，由主持人在该副本的 Godot 启动配置中传入 `-- --west-trial-consent`：第一个 `--` 分隔游戏自定义参数，分隔符后只给这个开关。运行项目；确认输出 `West trial armed, not recording.`，等开场板结束、角色仍在出生点、窗口有焦点，主持人才按 F8。输出 `West trial recording:` 后记匿名数据编号。未出现该行不得把本轮记作已采集。求助按 F9，停止按 F10；录像另行停止。不愿采输入者不要设置开关，不能用 QA 参数替代同意。仅改临时副本，不改正式工程。
+**采集开关（主持人操作）**：`prepare` 只备份当前提交到独立副本并选择 A/B 场景，不代表同意，也不会开始录制。取得输入记录同意后，由主持人在该副本的 Godot 启动配置中传入 `-- --west-trial-consent`：第一个 `--` 分隔游戏自定义参数，分隔符后只给这个开关。运行项目；确认输出 `West trial armed, not recording.`，让参与者接手前，由主持人核对 HUD 为 `ROLL: ORBIT`（否则按 F7），不要用参与者的首次操作演示模式切换。等开场板结束、角色仍在出生点、窗口有焦点，再按 F8。若出现 `West trial not started: select ORBIT before recording.`，这次按键未开录；切回 ORBIT 后重新按 F8。输出 `West trial recording:` 后记匿名数据编号。未出现该行不得把本轮记作已采集。求助按 F9，停止按 F10；录像另行停止。不愿采输入者不要设置开关，不能用 QA 参数替代同意。仅改临时副本，不改正式工程。
 
 **Windows 切窗验收（主持人自测，不占真人样本）**：用单独的隔离副本和独立数据编号，先开存档守护。用任务管理器确认运行游戏窗口的 PID（不要填 Godot 编辑器的 PID）。在另一终端运行 `python tools/observe_trial_focus.py <游戏PID> --seconds 90`；该工具只观察，不夺焦点。单击游戏，等开场结束后按 F8，确认开始录制，再 Alt+Tab 切到另一应用。观察器须先输出 `game_foreground: true`，再输出 `OBSERVED_GAME_TO_OTHER`；仅看到 `false` 或 `null` 不算。核对同次数据编号的封卷原因为 `focus_lost`，配置指纹匹配准备回执，守护器结束为 `UNCHANGED`。任一缺失记未验证；即使通过，也仅作为主持人现场 QA，不纳入首曝样本。不要为了使其通过而强制抢焦点或更改系统设置。
 
