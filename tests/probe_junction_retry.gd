@@ -106,4 +106,24 @@ func run() -> void:
 	var tick := 1.0/Engine.physics_ticks_per_second
 	if not check(maxf(world_error,head_error) <= tick + 0.0001 and gs.ghost_count() == 1 and lab.phase == lab.Phase.ROLLING,
 		"mark %.3f; crossings world %.3f / %.3f; clock error %.3fs; head error %.3fs (budget %.3fs); tracks 1" % [mark.world_t,first.world,second.world,world_error,head_error,tick]): return
+	# The same decision must change the consequence, not merely replay the clock.
+	# Yield until the ghost is clear, then cross on B with ordinary W input.
+	await ticks(26)
+	if not await walk(Vector2(6, 6)): return
+	if not check(lab.phase == lab.Phase.ROLLING, "yield then cross on B survives"): return
+	await tap(KEY_C)
+	for i in 240:
+		if lab.cut_panel.is_open(): break
+		await physics_frame
+	if not check(lab.cut_panel.is_open(), "can return for the other timing choice"): return
+	await tap(KEY_2)
+	await tap(KEY_SPACE)
+	if not check(await released() and xz().distance_to(lab.OBSERVE) < 0.3, "same observation point for conflict trial"): return
+	# Arrive at the junction while TAKE 01 is crossing instead of yielding.
+	while lab._world_t < float(first.world) - 0.55:
+		await physics_frame
+	key(KEY_W,true)
+	await ticks(65)
+	key(KEY_W,false)
+	if not check(lab.phase == lab.Phase.DEAD and gs.takes.death_source == "take_01", "cross without yielding dies to recorded TAKE 01"): return
 	quit(0)
