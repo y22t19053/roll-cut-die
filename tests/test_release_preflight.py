@@ -62,6 +62,9 @@ class ReleaseGateTest(unittest.TestCase):
                 check_boot()
             else:
                 with self.assertRaisesRegex(ValueError, 'startup'): check_boot()
+        with log.open('a', encoding='utf-8') as stream:
+            stream.write('    0.401  error    invalid json: res://data/case.json\n')
+        with self.assertRaisesRegex(ValueError, 'reported an error'): check_boot()
         with self.assertRaisesRegex(ValueError, 'no longer fresh'): self.check()
 
     def test_changed_binary(self):

@@ -45,7 +45,10 @@ def check(receipt, local, roaming, *, after_boot=False):
         log = isolated / 'rcd' / 'runtime.log'
         if not log.is_file() or log.resolve() != log.absolute():
             raise ValueError('expected isolated runtime log missing or redirected')
-        messages = [line.split(None, 2)[2] for line in log.read_text('utf-8').splitlines()
+        lines = log.read_text('utf-8').splitlines()
+        if any(re.match(r'\s*\d+\.\d+\s+error\b', line) for line in lines):
+            raise ValueError('game reported an error in the isolated runtime log')
+        messages = [line.split(None, 2)[2] for line in lines
                     if re.fullmatch(r'\s*\d+\.\d+\s+info\s+.+', line)]
         required = ['session ready, take 1', 'room built 24x18', 'roll mode -> ORBIT',
                     'main ready: 2 npcs, 4 evidence, ghosts 0']
