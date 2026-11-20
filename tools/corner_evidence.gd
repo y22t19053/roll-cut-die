@@ -10,6 +10,24 @@ const PAINT := [
 ]
 
 @export var route_paint := false
+var trial: Node
+
+func _ready() -> void:
+	super._ready()
+	if OS.get_cmdline_user_args() == PackedStringArray(["--west-trial-consent"]):
+		_install_trial(false)
+
+func _install_trial(synthetic: bool) -> void:
+	if trial != null or (synthetic and DisplayServer.get_name() != "headless"):
+		return
+	trial = preload("res://tools/trial_controller.gd").new()
+	trial.synthetic = synthetic
+	add_child(trial)
+
+func _interact() -> void:
+	super._interact()
+	if trial != null:
+		trial.check_collection()
 
 
 func _map_source() -> Variant:
