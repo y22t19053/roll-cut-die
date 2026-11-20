@@ -48,6 +48,16 @@ class WestTrialTests(unittest.TestCase):
             h['config']['project_config_sha256'] = stored
             self.assertEqual(status, report(h, outcome(), config_sha256='a'*64)['status'])
 
+    def test_two_sessions_from_the_same_prepared_copy_are_not_interchangeable(self):
+        h = header()
+        h['config']['project_config_sha256'] = 'c'*64
+        args = dict(condition='B', source='synthetic_QA', config_sha256='c'*64, expected_session=h['session'])
+        self.assertEqual('ok', report(h, outcome(), **args)['status'])
+        h['session'] = 'de'*16
+        self.assertEqual('invalid', report(h, outcome(), **args)['status'])
+        del h['session']
+        self.assertEqual('unknown', report(h, outcome(), **args)['status'])
+
     def test_independent_first_observations(self):
         r = report(header(), key(9, 'D'), sample(10, False), sample(20, True),
                    key(20, 'D', False), key(21, 'UP'), sample(22, True),

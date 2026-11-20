@@ -37,7 +37,7 @@ def unique_fields(pairs):
     return fields
 
 
-def analyze(path, condition=None, source=None, config_sha256=None):
+def analyze(path, condition=None, source=None, config_sha256=None, expected_session=None):
     r = dict(status='ok', condition=None, source=None, session=None, reason=None,
              script_page_taken=None, first_contact_us=None, first_lateral_key=None,
              contact_to_lateral_us=None, contact_to_release_us=None,
@@ -96,6 +96,8 @@ def analyze(path, condition=None, source=None, config_sha256=None):
                 if kind == 'header':
                     field(row, 'schema', lambda x: x == SCHEMA)
                     r['session'] = field(row, 'session', lambda x: isinstance(x, str) and re.fullmatch('[0-9a-f]{32}', x))
+                    if expected_session is not None and r['session'] is not None and r['session'] != expected_session:
+                        issue('invalid', 'session differs from the ID noted at recording start')
                     c = r['condition'] = field(row, 'condition', lambda x: x in ('A', 'B'))
                     s = r['source'] = field(row, 'source', lambda x: x in SOURCES)
                     if condition and c and c != condition:
@@ -185,10 +187,13 @@ def main():
     p.add_argument('--condition', choices=('A', 'B'), help='expected condition')
     p.add_argument('--source', choices=SOURCES, help='expected recorder label; not identity verification')
     p.add_argument('--config-sha256', help='expected project_config_sha256 from the preparation receipt')
+    p.add_argument('--session', help='expected anonymous ID noted at F8, not the participant code')
     args = p.parse_args()
+    if args.session is not None and not re.fullmatch('[0-9a-f]{32}', args.session):
+        p.error('--session must be the 32 lowercase hexadecimal digits shown at F8')
     if args.config_sha256 is not None and not re.fullmatch('[0-9a-fA-F]{64}', args.config_sha256):
         p.error('--config-sha256 must be a 64-digit hexadecimal digest')
-    report = analyze(args.trial, args.condition, args.source, args.config_sha256.lower() if args.config_sha256 else None)
+    report = analyze(args.trial, args.condition, args.source, args.config_sha256.lower() if args.config_sha256 else None, args.session)
     print(json.dumps(report, indent=2))
     return {'ok': 0, 'unknown': 1, 'invalid': 2}[report['status']]
 
