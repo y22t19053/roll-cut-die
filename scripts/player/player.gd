@@ -119,6 +119,17 @@ func _build_body() -> void:
 	nmat.albedo_color = Color(0.13, 0.14, 0.16)
 	nose.material_override = nmat
 	_visual.add_child(nose)
+	for part in _visual.get_children():
+		part.layers = 1 << 19 # live actor layer excluded by the historical camera
+
+
+func make_still(pos: Vector3, recorded_facing: float) -> Node3D:
+	var still := _visual.duplicate(0) as Node3D
+	for part in still.get_children():
+		part.layers = 1
+	still.position = pos
+	still.rotation.y = recorded_facing
+	return still
 
 
 func _read_input() -> Vector2:

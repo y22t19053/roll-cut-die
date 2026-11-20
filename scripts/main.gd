@@ -50,6 +50,7 @@ var preview_rig: Node3D
 var preview_cam: Camera3D
 var ghost_stills: Array[Node3D] = []
 var npc_stills: Array[Node3D] = []
+var player_still: Node3D
 
 ## Personal anchors and the system checkpoint of the current timeline.
 var marks = MarkLedger.new()
@@ -491,6 +492,10 @@ func _cut_input(code: int) -> void:
 ## Real preview: the camera goes where the point's camera was. Player, world
 ## and case state are not touched.
 func _clear_preview_stills() -> void:
+	if is_instance_valid(player_still):
+		player_still.hide()
+		player_still.queue_free()
+		player_still = null
 	for still in ghost_stills + npc_stills:
 		still.hide()
 		still.queue_free()
@@ -507,6 +512,8 @@ func _select_point(i: int) -> void:
 		rig.camera.current = true
 		return
 	var p: Dictionary = pts[cut_cursor]
+	player_still = player.make_still(to_local(p.pos), p.facing)
+	add_child(player_still)
 	var npc_frames: Dictionary = p.get("npc_frames", {})
 	for actor in npcs:
 		if npc_frames.has(actor.npc_id):

@@ -159,6 +159,9 @@ func _main() -> void:
 	_check("preview camera is live", pv.current and not rig.camera.current)
 	_check("preview sits on the mark", main.preview_rig.global_position.distance_to(want_focus) < 0.001)
 	_check("preview faces the recorded yaw", absf(angle_difference(main.preview_rig.rotation.y, mark_yaw)) < 0.001)
+	var still: Node3D = main.player_still
+	_check("preview player is at MARK and faces its recorded heading", still.global_position.distance_to(mark_pos) < 0.01 and absf(angle_difference(still.rotation.y, mark_facing)) < 0.01)
+	_check("preview draws only the player still and no duplicate collision body", (pv.cull_mask & still.get_node("Body").layers) != 0 and (pv.cull_mask & player.get_node("Visual/Body").layers) == 0 and still.find_children("*", "CollisionObject3D", true, false).is_empty())
 	_check("preview did not move the player", player.global_position.distance_to(cut_from) < 0.001)
 	_check("footer reads the preview", panel.footer_label.text.begins_with("PREVIEW MARK 1"), panel.footer_label.text)
 	await _tap(KEY_ESCAPE)
