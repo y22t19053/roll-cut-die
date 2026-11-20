@@ -105,6 +105,8 @@ func run() -> void:
 		var header: Dictionary = JSON.parse_string(lines[0])
 		var end: Dictionary = JSON.parse_string(lines[-1])
 		check(header.source == "synthetic_QA" and header.condition == cond.to_upper() and header.session == st.session, "labeled header and condition")
+		var project_digest := FileAccess.get_sha256("res://project.godot")
+		check(project_digest.length() == 64 and header.config.project_config_sha256 == project_digest, "stream binds config digest at recording start")
 		var keys: Array = []
 		var contact := false
 		var last_t := -1

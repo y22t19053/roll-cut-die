@@ -35,6 +35,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		var rig = _scene.rig
 		var config := {"protocol":"B3-B/1", "engine":Engine.get_version_info().string,
+			"project_config_sha256":FileAccess.get_sha256("res://project.godot"),
 			"map_sha256":FileAccess.get_sha256(_scene.MAP_PATH), "case_sha256":FileAccess.get_sha256(_scene.CASE_PATH),
 			"physics_hz":Engine.physics_ticks_per_second, "wall_xz":_scene.TURN_WALL,
 			"paint_xz":_scene.PAINT if _scene.route_paint else [], "orbit_deg_s":Modes.ORBIT_W_DEG,
