@@ -1,10 +1,18 @@
 extends "res://tests/probe_junction_retry.gd"
 
+# Observational only: a correct world marker need not be on screen, and
+# camera-frustum membership alone cannot establish readability or attention.
+func report_projection(stage: String) -> void:
+	var cam := root.get_camera_3d()
+	var marker: Vector3 = lab.report_sign.global_position
+	print("REPORT PROJECTION %s viewport=%s center=%s in_frustum=%s behind=%s" % [stage, root.get_visible_rect().size, cam.unproject_position(marker), cam.is_position_in_frustum(marker), cam.is_position_behind(marker)])
+
 func run() -> void:
 	create_timer(45.0).timeout.connect(func(): quit(2))
 	lab = load("res://tools/junction_reverse.tscn").instantiate()
 	root.add_child(lab)
 	if not check(await released(),"initial roll"): return
+	report_projection("first_south_spawn")
 	for p in lab.route_points("A"):
 		if not await walk(p): return
 	await tap(KEY_R)
@@ -12,6 +20,7 @@ func run() -> void:
 	if not check(lab.phase == lab.Phase.COMPLETE,"north report accepted"): return
 	await tap(KEY_SPACE)
 	if not check(await released() and xz().distance_to(Vector2(6,2)) < 0.1,"second roll begins at former report"): return
+	report_projection("second_north_spawn")
 	if not check(lab.report_sign.is_visible_in_tree() and lab.report_sign.global_position.distance_to(Vector3(6,0.42,13)) < 0.01,"visible desk marker follows new report zone south"): return
 	if not check(lab.ghost_nodes.size() == 1 and lab.ghost_nodes[0].track.sample_at(0.0).position.distance_to(lab.SOUTH) < 0.15,"successful track still starts in south"): return
 	await tap(KEY_R)
