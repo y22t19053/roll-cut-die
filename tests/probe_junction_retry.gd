@@ -81,6 +81,7 @@ func run() -> void:
 	await tap(KEY_3)
 	var gs := root.get_node("GameSession")
 	if not check(lab.phase == lab.Phase.COMPLETE and gs.ghost_count() == 1,"R/3 accepted; one successful track"): return
+	var stock_before: int = gs.takes.retake_stock
 	var track = gs.ghosts[0].track
 	await tap(KEY_SPACE)
 	if not check(await released() and lab.ghost_nodes.size() == 1,"Take 02 releases with one replay actor"): return
@@ -119,6 +120,7 @@ func run() -> void:
 	await tap(KEY_2)
 	await tap(KEY_SPACE)
 	if not check(await released() and xz().distance_to(lab.OBSERVE) < 0.3, "same observation point for conflict trial"): return
+	if not check(gs.takes.retake_stock == stock_before, "MARK and both voluntary CUTs preserve stock %d" % stock_before): return
 	# Arrive at the junction while TAKE 01 is crossing instead of yielding.
 	while lab._world_t < float(first.world) - 0.55:
 		await physics_frame
@@ -126,4 +128,5 @@ func run() -> void:
 	await ticks(65)
 	key(KEY_W,false)
 	if not check(lab.phase == lab.Phase.DEAD and gs.takes.death_source == "take_01", "cross without yielding dies to recorded TAKE 01"): return
+	if not check(gs.takes.retake_stock == stock_before - 1 and gs.ghost_count() == 1, "the collision spends exactly one retake (%d -> %d), without creating a success ghost" % [stock_before, gs.takes.retake_stock]): return
 	quit(0)
