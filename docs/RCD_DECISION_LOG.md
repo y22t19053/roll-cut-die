@@ -239,6 +239,13 @@
   - NPC 问话计数不随 CUT 回退（沿用 `on_retake` 的「回答过的人不会忘」）。
 - **实现位置**：`scripts/take/mark_ledger.gd`、`scripts/take/take_manager.gd`（`retake_stock`、`resume_after_cut`）、`scripts/ui/cut_panel.gd`、`scripts/ui/mark_beacon.gd`、`scripts/ui/hud.gd`（`set_marks`）、`scripts/main.gd`（`_mark`、`_manual_cut`、`_open_cut_panel`、`_select_point`、`_cut_to`、`_release_resumed`）；测试 `tests/test_mark.gd`、`tests/test_take.gd`、`tests/probe_mark_cut.gd`。
 
+## D-022 · Corner Lock 保留为隔离实验
+
+- **日期**：2026-11-20；**状态**：待探索（EXPERIMENT）。
+- **结论**：保留 ORBIT30 的现有碰撞与镜头反馈，不把卡角设成机关。凹角和窄道在阻挡时能暴露新增视线，直墙没有额外收益；尚无真人误按率或脱困时间证据。
+- **后续**：用同一几何比较空间引导和无引导，分别衡量转角首键与正常取证路线。零证物 REFRAME 仍可跳过 B/C，暂不封死捷径。
+- **证据**：[Corner Lab](history/CORNER_LAB.md)。
+
 ## 变更规则
 
 1. 新增决策 → 追加条目，编号连续，不得改写历史条目。

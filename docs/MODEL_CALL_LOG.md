@@ -24,5 +24,6 @@
 | RCD-ZONES | 2026-11-19 | `claude-opus-5-5` / Claude Code–XHYAPI | 关卡几何、ORBIT30、幽灵表现，采纳 `a18c90f` | USD 3.358603 |
 | RCD-MARK-CUT | 2026-11-20 | `claude-opus-5-5` / Claude Code–XHYAPI | 回放时钟、MARK/CUT，采纳 `f2a0f62`；API 800.464 s，70 轮 | USD 4.209577 |
 | RCD-A-VERIFY | 2026-11-20 | `ya/gpt-6.2-sol` / DSH 当前会话 | 输入录像、ROLL 探针修正、Corner Lock 基线；无新增 Claude/Gemini 调用 | 未提供 |
+| RCD-CORNER-LAB | 2026-11-20 | `ya/gpt-6.2-sol` / DSH 主会话与独立子代理 | 主会话实现灰盒与实体测试；子代理只读核对发行 QA 隔离；本会话未找到 Gemini 路由，未调用 Gemini 或 Claude | 未提供 |
 
 早期超时记录保留，Claude 的实际工程回执已覆盖早期可用性判断。上表是调用回执，不等于当前账户余额。Codex 登录、候选模型和费用门槛见 [路由策略](MODEL_ROUTING_POLICY.md)。
