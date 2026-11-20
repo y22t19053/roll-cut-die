@@ -80,5 +80,8 @@ static func run(h, _tree = null) -> void:
 		h.ok("previous take remains playable", still.ok and still.data.get("take_index") == 1)
 		h.eq("remove fixture obstruction", DirAccess.remove_absolute(obstruction), OK)
 
+	h.ok("replace existing save after obstruction clears", SaveManager.save({"label": "重拍"}, path))
+	h.eq("replacement round trips UTF-8", SaveManager.load_save(path).data.get("label"), "重拍")
+	h.ok("successful replacement consumes temporary file", not FileAccess.file_exists(path + ".tmp"))
 	SaveManager.clear(path)
 	h.ok("cleared at the end", not SaveManager.exists(path))

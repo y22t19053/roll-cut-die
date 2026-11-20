@@ -25,13 +25,17 @@ static func save(data: Dictionary, path: String = PATH) -> bool:
 	var f := FileAccess.open(path + ".tmp", FileAccess.WRITE)
 	if f == null:
 		return false
-	f.store_string(JSON.stringify(payload, "  "))
+	var text := JSON.stringify(payload, "  ")
+	f.store_string(text)
+	f.flush()
+	var written := f.get_error() == OK and f.get_length() == text.to_utf8_buffer().size()
 	f.close()
+	if not written:
+		return false
 
 	var abs_tmp := ProjectSettings.globalize_path(path + ".tmp")
 	var abs_dst := ProjectSettings.globalize_path(path)
-	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(abs_dst)
+	# Rename handles an existing destination. Never unlink the player's old save first.
 	var err := DirAccess.rename_absolute(abs_tmp, abs_dst)
 	return err == OK
 
