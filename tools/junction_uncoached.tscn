@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://tools/junction_lab.tscn" id="1"]
+
+[node name="JunctionUncoached" instance=ExtResource("1")]
+coach_observation = false

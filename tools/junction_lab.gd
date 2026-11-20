@@ -4,6 +4,9 @@ extends "res://scripts/main.gd"
 ## then CUT back to the MARK to try another decision on the same world clock.
 ## Routes describe floor paint only; they never steer a body or register a track.
 
+## Operator walkthrough gives away the observation point. Hide that prompt in first-exposure sessions.
+@export var coach_observation := true
+
 const CROSSING := Vector2(6, 8)
 const OBSERVE := Vector2(6, 9.5)
 const A := [Vector2(6,13), Vector2(6,12), Vector2(3,12), Vector2(3,8), Vector2(9,8), Vector2(9,4), Vector2(6,4), Vector2(6,2)]
@@ -47,7 +50,8 @@ func _build_world() -> void:
 	super._build_world()
 	_sign("A   /   01", Vector2(3,12))
 	_sign("B   /   02", Vector2(6,11.2))
-	_sign("M   /   WATCH", OBSERVE)
+	if coach_observation:
+		_sign("M   /   WATCH", OBSERVE)
 	_sign("+", CROSSING)
 	_sign("REPORT   /   R", Vector2(6,2))
 
