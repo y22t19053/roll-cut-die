@@ -375,6 +375,7 @@ func _manual_cut() -> void:
 	if phase != Phase.ROLLING or paused or bool(player.get("frozen")):
 		return
 	phase = Phase.CUT
+	rig.set_physics_process(false) # Keep the last live shot fixed while the editor is open.
 	player.set_frozen(true)
 	recorder.recording = false
 	_freeze_world()
@@ -852,7 +853,8 @@ func _finish_take() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
-		rig.mouse_look(event.relative.x)
+		if phase == Phase.ROLLING and not paused and not player.frozen:
+			rig.mouse_look(event.relative.x)
 		return
 
 	if not (event is InputEventKey) or event.echo:

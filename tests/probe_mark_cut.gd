@@ -134,9 +134,12 @@ func _main() -> void:
 	_check("still rolling before C", int(main.phase) == 0, "phase %d" % int(main.phase))
 
 	# --- C: CUT panel ---------------------------------------------------------
+	rig.mouse_look(120.0) # A pending correction would normally decay over the CUT animation.
 	var cut_from := player.global_position
 	await _tap(KEY_C)
 	_check("C enters Phase.CUT", int(main.phase) == 2, "phase %d" % int(main.phase))
+	var cut_motion: Dictionary = rig.mark_motion()
+	var frozen_camera: Transform3D = rig.camera.global_transform
 	var ms: int = await _wait_until(func() -> bool: return panel.is_open(), 4000)
 	_check("panel opens after the CUT slate", panel.is_open(), "%d ms" % ms)
 	var lines: PackedStringArray = panel.lines()
@@ -152,6 +155,7 @@ func _main() -> void:
 	var npc_at := npc.global_position
 	await _hold(KEY_W, 20)
 	_check("no movement in CUT", player.global_position.distance_to(cut_from) < 0.001)
+	_check("CUT holds live camera pose and pending correction", absf(cut_motion.offset) > 0.1 and rig.mark_motion() == cut_motion and frozen_camera.is_equal_approx(rig.camera.global_transform))
 	_check("NPC frozen in CUT", npc.global_position.distance_to(npc_at) < 0.001 and not npc.is_active())
 	await _tap(KEY_E)
 	_check("no interaction in CUT", int(main.phase) == 2)
