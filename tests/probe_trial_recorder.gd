@@ -46,6 +46,9 @@ func run() -> void:
 		var st = trial.stream
 		tap(KEY_F8)
 		check(st.directory.is_empty(), "unfocused start ignored")
+		trial._qa_focused = true
+		tap(KEY_F8)
+		check(main.player.frozen and st.directory.is_empty(), "focused start during opening slate creates no file")
 		while main.player.frozen:
 			await physics_frame
 		trial._qa_focused = true
