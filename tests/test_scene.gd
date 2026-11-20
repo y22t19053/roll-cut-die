@@ -74,5 +74,19 @@ static func run(h, tree = null) -> void:
 	var phase: int = int(inst.get("phase"))
 	h.eq("take is rolling", phase, 0)
 
+	var switch_key := InputEventKey.new()
+	switch_key.keycode = KEY_F2
+	switch_key.physical_keycode = KEY_F2
+	switch_key.pressed = true
+	var original_lang := Loc.language
+	for i in 2:
+		inst.call("_unhandled_input", switch_key)
+		h.eq("F2 selects requested language", Loc.language, original_lang if i == 1 else ("zh" if original_lang == "en" else "en"))
+		for prop in inst.get("evidence_props").values():
+			h.eq("F2 updates " + str(prop.id), prop.get_node("Marker/Name").text, Loc.t(prop.meta.name))
+		for npc in inst.get("npcs"):
+			var meta: Dictionary = tree.root.get_node("GameSession").case_state.npc_meta(npc.npc_id)
+			h.eq("F2 updates " + str(npc.npc_id), npc.get_node("Tag").text, Loc.t(meta.name).to_upper())
+
 	inst.queue_free()
 	await tree.process_frame

@@ -84,6 +84,10 @@ func _build() -> void:
 		part.layers = 1 << 19 # live visuals are excluded from the historical camera
 
 
+func refresh_language() -> void:
+	_label.text = Loc.t(meta.get("name", {}))
+
+
 func still_frame() -> Dictionary:
 	return {"visible": is_visible_in_tree(), "pose": _marker.global_transform,
 		"ring_pose": _ring.transform, "ring_visible": _ring.visible, "label": _label.text}

@@ -19,7 +19,11 @@ const BODY_HEIGHT := 1.75
 const TURN_RATE := 9.0
 
 var npc_id := ""
-var display_name := ""
+var display_name := "":
+	set(value):
+		display_name = value
+		if is_node_ready():
+			get_node("Tag").text = value
 var route: PackedVector3Array = PackedVector3Array()
 var speed := 1.0
 var dwell_s := 0.0
@@ -44,8 +48,6 @@ var _danger: Area3D
 func setup(id: String, label: String, pts: PackedVector3Array, spd: float, dw: float = 0.0, md: String = "loop") -> void:
 	npc_id = id
 	display_name = label
-	if is_node_ready():
-		get_node("Tag").text = display_name
 	route = pts
 	speed = maxf(spd, 0.01)
 	dwell_s = maxf(dw, 0.0)

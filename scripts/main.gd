@@ -881,6 +881,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if code == KEY_F2:
 		GameSession.set_language(Loc.toggle_language())
+		for prop in evidence_props.values():
+			prop.refresh_language()
+		for npc in npcs:
+			var name_text := Loc.t(GameSession.case_state.npc_meta(npc.npc_id).get("name", {})).to_upper()
+			npc.display_name = name_text if not name_text.is_empty() else str(npc.npc_id).to_upper()
 		_refresh_evidence()
 		hud.flash("LANG — " + Loc.language.to_upper())
 		return
