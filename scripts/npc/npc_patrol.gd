@@ -44,6 +44,8 @@ var _danger: Area3D
 func setup(id: String, label: String, pts: PackedVector3Array, spd: float, dw: float = 0.0, md: String = "loop") -> void:
 	npc_id = id
 	display_name = label
+	if is_node_ready():
+		get_node("Tag").text = display_name
 	route = pts
 	speed = maxf(spd, 0.01)
 	dwell_s = maxf(dw, 0.0)

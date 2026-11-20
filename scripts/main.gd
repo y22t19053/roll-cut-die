@@ -240,9 +240,9 @@ func _build_actors() -> void:
 		var pos_arr: Array = ed.get("pos", [0.0, 0.0])
 		var prop = EvidenceScript.new()
 		prop.name = "Evidence_" + eid
-		add_child(prop)
 		prop.setup(eid, Vector3(float(pos_arr[0]), 0.0, float(pos_arr[1])),
 			GameSession.case_state.evidence_meta(eid))
+		add_child(prop) # _ready builds the label from this evidence's metadata.
 		evidence_props[eid] = prop
 
 	recorder = GhostRecorderScript.new()
