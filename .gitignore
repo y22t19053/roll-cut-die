@@ -8,6 +8,9 @@ builds/
 *.pck
 *.zip
 
+# Python test runner bytecode (including research tooling)
+__pycache__/
+
 # Local scratch
 *.tmp
 *.log

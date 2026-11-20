@@ -1,8 +1,8 @@
 # RCD 项目状态（PROJECT STATUS）
 
-最新核对：**2026-11-21；Windows 试玩基线 `6bab995`，研究验收至 `490d537`**。研究场景没有打进既有 EXE；重新计算的 SHA256 为 `A56F2D1622D7D31DE74D4923ADE5AA85B80B114B4C75C3346E0D2A49F1E165BC`。第 2–7 节保留早期记录。
+最新核对：**2026-11-21；Windows 试玩基线 `6bab995`，研究验收至 `4de00bd`**。研究场景没有打进既有 EXE；重新计算的 SHA256 为 `A56F2D1622D7D31DE74D4923ADE5AA85B80B114B4C75C3346E0D2A49F1E165BC`。第 2–7 节保留早期记录。
 
-西侧首测：按[主持卡](history/B3_MODERATOR_CARD.md)准备独立数据目录。真人首曝样本为 0；合成采集通过，真实跨应用失焦封存未验。不能从机器走位推断标线有教学效果。
+西侧首测：按[主持卡](history/B3_MODERATOR_CARD.md)准备独立数据目录。真人首曝样本为 0；合成采集通过，真实跨应用失焦封存未验。不能从机器走位推断标线有教学效果。2026-11-21 合并回归：`python -m unittest discover -s tests -p "test_*.py"` 共 21 项通过，覆盖首测准备、采集结果分析与发行版预检，不含真人或 EXE 操作。四部作品的研究分别见[视角研究](research/B3_PERSPECTIVE.md)与[教学和时间研究](research/B3_TEACHING_TIME.md)。
 
 交口：见[固定端点的时机对照](history/B3_JUNCTION_PACKET.md)。在[换端探针](../tests/probe_junction_reverse.gd)中，TAKE 02 从北端直返死于 TAKE 01；消耗一次重拍后仍从北端出发，面对同一条成功轨道，走西侧可到南端提交。只在成功后换端，失败不生成危险幽灵。这是隔离灰盒的机械验收；下一项真人观察是不给路线提示时，玩家能否先辨认新报告端，再预判相遇。
 
