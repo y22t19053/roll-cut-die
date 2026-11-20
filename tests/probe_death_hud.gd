@@ -30,6 +30,12 @@ func _main() -> void:
 	gs.add_ghost(tr)
 
 	var inst: Node = (load("res://scenes/main/main.tscn") as PackedScene).instantiate()
+	var fixture := load("res://tests/main_without_persistence.gd") as Script
+	if fixture == null or not fixture.can_instantiate():
+		inst.free()
+		quit(2)
+		return
+	inst.set_script(fixture)
 	root.add_child(inst)
 	var hud: Node = inst.get_node("Hud")
 	var rig: Node = inst.get_node("CameraRig")
