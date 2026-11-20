@@ -17,4 +17,6 @@
 
 资源映射（取自已有本机审计 §11，未重扫设备）：Godot bridge→两条件场景和探针→物理检查已跑；Python 3→Git 已提交版本→LOCALAPPDATA/RCD-Research 独立副本，已生成；OBS 窗口捕获→同意后的游戏画面→匿名录像，真人未执行；FFmpeg→核对录像帧数和重复帧，先前连续 Take 工程录像用过；游戏美术和音频不在本次变量内，不启动 ComfyUI 或新增资源。
 
+窗口 QA 追验（65b89b8）：从 prepare A 的独立工程经 bridge 启动 Windows 游戏，实读 `OS.get_user_data_dir()` 与准备回执的隔离目录一致；无同意参数时 recorder 不存在。测试夹具单独打开 synthetic_QA 流；子 Window 接焦时该流以 focus_lost 封卷，但两个 Window 均报告 ID 0，不是跨应用证明。另用 2 秒外部弹窗尝试夺焦，弹窗结束后流仍 active，未证明前台转移，亦未证明真实 Alt+Tab 可封卷。已关闭托管实例。下次人工 Alt+Tab 前后需同时记录 Windows 前台进程、游戏 has_focus 和封卷结果，不能以弹窗出现代替失焦证据。未创建参与者记录。
+
 下一轮：合格新人各玩一个首曝条件；另开隔离灰盒测试同一交叉口在两次 Take 中的观察与让行，不向首测提前泄露。未验收：真人学习效果、正式 EXE 连续 Take、循环走廊与起终点交换灰盒。正式玩法不受本轮改动影响。
