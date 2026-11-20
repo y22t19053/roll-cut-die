@@ -43,7 +43,7 @@ def main():
             with zipfile.ZipFile(tmp) as z: z.extractall(dest)
         cfg = dest / 'project.godot'
         cfg.write_text(isolated_config(cfg.read_text('utf-8'), args.condition, unique), 'utf-8')
-        receipt = {'status':'PREPARED_NOT_A_PARTICIPANT','source':rev,'condition':args.condition,'expected_user_dir':str(Path(os.environ['APPDATA'])/'RCD-Research'/'isolated'/unique)}
+        receipt = {'status':'PREPARED_NOT_A_PARTICIPANT','source':rev,'project_config_sha256':digest(cfg),'condition':args.condition,'expected_user_dir':str(Path(os.environ['APPDATA'])/'RCD-Research'/'isolated'/unique)}
         (dest.parent/'operator.json').write_text(json.dumps(receipt,indent=2),'utf-8'); print(dest); return
     import msvcrt, re
     if not re.fullmatch(r'P[0-9]{3,5}',args.participant or ''): ap.error('guard requires an anonymous --participant code')
