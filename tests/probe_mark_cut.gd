@@ -81,6 +81,16 @@ func _main() -> void:
 	await _wait_until(func() -> bool: return not bool(player.get("frozen")), 5000)
 	_check("released after ROLL", not bool(player.get("frozen")))
 	_check("HUD shows MARK 0/3", hud.mark_label.text == "MARK 0/3", hud.mark_label.text)
+	await _tap(KEY_ESCAPE)
+	var stopped_time: float = main._world_t
+	var stopped_rec: float = main.recorder.elapsed()
+	var stopped_npc: Vector3 = main.npcs[0].global_position
+	await _hold(KEY_W, 18)
+	await _tap(KEY_C)
+	_check("ESC freezes world, recorder and NPC; C cannot abandon paused take", paused and main._world_t == stopped_time and main.recorder.elapsed() == stopped_rec and main.npcs[0].global_position == stopped_npc and main.phase == 0)
+	await _tap(KEY_ESCAPE)
+	for i in 4: await physics_frame
+	_check("second ESC resumes the same take clock", not paused and main._world_t > stopped_time and takes.take_index == 1)
 	var stock0: int = takes.retake_stock
 	var take0: int = takes.take_index
 

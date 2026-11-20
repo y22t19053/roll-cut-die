@@ -89,6 +89,9 @@ func _ready() -> void:
 	_build_world()
 	_build_actors()
 	_build_ui()
+	var pause_input := preload("res://scripts/ui/pause_input.gd").new()
+	add_child(pause_input)
+	pause_input.resume_requested.connect(_toggle_pause)
 
 	GameSession.takes.start_take(1)
 	_begin_take()
@@ -941,10 +944,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _toggle_pause() -> void:
-	if phase != Phase.ROLLING and not paused:
+	if not paused and (phase != Phase.ROLLING or player.frozen):
 		return
 	paused = not paused
-	player.set_frozen(paused)
+	get_tree().paused = paused
 	if paused:
 		hud.flash("PAUSED", 9999.0)
 		hud.set_hint("ESC — RESUME")
