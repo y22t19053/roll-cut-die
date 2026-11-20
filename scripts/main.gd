@@ -417,6 +417,7 @@ func _snapshot() -> Dictionary:
 		"facing": float(player.facing),
 		"cam_yaw": float(rig.yaw),
 		"cam_roll": float(rig.roll),
+		"cam_motion": rig.mark_motion(),
 		"evidence": GameSession.case_state.evidence.duplicate(true),
 		"time": GameSession.takes.elapsed,
 		"world_t": _world_t,
@@ -595,11 +596,8 @@ func _cut_to(p: Dictionary) -> void:
 	player.teleport(point["pos"], float(point["facing"]))
 	player.set_frozen(true)
 	rig.setup(player)
-	var drv = rig.active()
-	drv.reset(float(point["cam_yaw"]))
-	drv.roll = float(point["cam_roll"])
-	rig.yaw = float(point["cam_yaw"])
-	rig.roll = float(point["cam_roll"])
+	rig.restore_mark_motion(point)
+	rig.set_physics_process(false) # Do not consume the saved momentum behind the slate.
 
 	_resume_point = point
 	phase = Phase.ROLLING
@@ -614,6 +612,7 @@ func _cut_to(p: Dictionary) -> void:
 func _release_resumed() -> void:
 	var p := _resume_point
 	_resume_point = {}
+	rig.set_physics_process(true)
 	player.set_frozen(false)
 	for n: Node in npcs:
 		n.set_active(true)

@@ -155,6 +155,37 @@ func set_roll_mode(m: int) -> void:
 	next.roll = prev.roll
 
 
+## Simulation state, distinct from the effective angles shown by the preview.
+func mark_motion() -> Dictionary:
+	var drv = active()
+	var state := {"mode": roll_mode, "offset": yaw_offset, "yaw": drv.yaw, "roll": drv.roll, "w": drv.w}
+	for k in _mode_fields():
+		state[k] = drv.get(k)
+	return state
+
+func _mode_fields() -> Array:
+	match roll_mode:
+		RollModes.ORBIT: return ["sense", "_heading", "_has_heading"]
+		RollModes.SNAP: return ["target", "presses", "_from", "_t", "_heading", "_has_heading"]
+	return []
+
+func restore_mark_motion(point: Dictionary) -> void:
+	var state: Dictionary = point.get("cam_motion", {})
+	var drv = active()
+	drv.reset(float(point.cam_yaw))
+	yaw_offset = 0.0
+	if state.get("mode", -1) == roll_mode:
+		for k in ["yaw", "w", "roll"] + _mode_fields():
+			drv.set(k, state[k])
+		yaw_offset = state.offset
+	else:
+		# Older snapshots / a different selected mode: match pose without borrowing incompatible momentum.
+		drv.roll = point.cam_roll / roll_scale if not is_zero_approx(roll_scale) else 0.0
+	yaw = CameraMath.wrap_angle(drv.yaw + yaw_offset)
+	roll = 0.0 if reduce_motion else drv.roll * roll_scale
+	rotation.y = yaw
+	_apply()
+
 ## Diagnostics for the debug overlay and for tests.
 func snapshot() -> Dictionary:
 	return {
