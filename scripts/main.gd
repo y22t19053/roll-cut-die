@@ -418,6 +418,7 @@ func _snapshot() -> Dictionary:
 		"no": 0,
 		"take": GameSession.takes.take_index,
 		"pos": player.global_position,
+		"velocity": player.velocity,
 		"facing": float(player.facing),
 		"cam_yaw": float(rig.yaw),
 		"cam_roll": float(rig.roll),
@@ -618,6 +619,7 @@ func _release_resumed() -> void:
 	_resume_point = {}
 	rig.set_physics_process(true)
 	player.set_frozen(false)
+	player.velocity = p.get("velocity", Vector3.ZERO) # Restore on release, never during the slate.
 	for n: Node in npcs:
 		n.set_active(true)
 	for g: Node in ghost_nodes:

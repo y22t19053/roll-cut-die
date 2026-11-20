@@ -218,7 +218,12 @@ func _main() -> void:
 	_check("control returns after ROLL", not bool(player.get("frozen")) and npc.is_active())
 	_check("recorder resumed on the mark's clock",
 		main.recorder.recording and main.recorder.elapsed() >= float(main.marks.marks[0]["rec_t"]))
-	_check("still on the mark after release", _flat(player.global_position).distance_to(_flat(mark_pos)) < 0.05)
+	_check("moving MARK records rightward velocity", point.velocity.x > 3.0)
+	# Input is now released: the stored velocity must brake under normal physics.
+	for i in 12:
+		await physics_frame
+	var slide: Vector3 = player.global_position - mark_pos
+	_check("released body coasts from the MARK then stops", slide.x > 0.12 and slide.x < 0.24 and absf(slide.z) < 0.01 and player.velocity.length() < 0.01, str(slide))
 
 	for i in 5:
 		await physics_frame
