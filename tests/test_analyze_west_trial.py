@@ -55,6 +55,15 @@ class WestTrialTests(unittest.TestCase):
         for bad in [row('sample', 2), sample(2, 1), row('key', -1)]:
             self.assertIsNone(report(header(), sample(1, True), bad, outcome())['observed_wall_recontacts'])
 
+    def test_only_confirm_orbit30_on_known_samples_and_rate(self):
+        for rate, modes, expected in [(30,[2,2],'matched_samples'), (30,[2,1,2],'off_protocol'),
+                (45,[2],'off_protocol'), (30,[],'unknown'), (None,[2],'unknown'),
+                (30,[2,None],'unknown'), (30,[True],'unknown')]:
+            h = header(); h['config']['orbit_deg_s'] = rate
+            rows = [dict(sample(i, False), roll_mode=m) for i,m in enumerate(modes)]
+            r = report(h, *rows, outcome())
+            self.assertEqual((r['status'], r['orbit30_observation']), ('ok', expected))
+
     def test_ties_frame_and_file_order(self):
         for name in ('A', 'D', 'LEFT', 'RIGHT'):
             r = report(header('A'), key(10, 'W'), key(10, 'D'), sample(10, True), key(10, name), sample(10, False), outcome())

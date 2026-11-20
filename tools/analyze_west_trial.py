@@ -49,6 +49,9 @@ def analyze(path, condition=None, source=None):
     previous_contact = None
     recontacts = 0
     contact_series_complete = True
+    # Preserve off-protocol trials; do not pool them with confirmed ORBIT30.
+    orbit_rate = None
+    saw_mode = missing_mode = non_orbit = False
     ended = False
     n = 0
 
@@ -100,10 +103,17 @@ def analyze(path, condition=None, source=None):
                     cfg = field(row, 'config', lambda x: isinstance(x, dict))
                     if cfg is not None:
                         field(cfg, 'protocol', lambda x: x == 'B3-B/1')
+                        orbit_rate = cfg.get('orbit_deg_s')
                         field(cfg, 'wall_xz', lambda x: matches(x, WALL))
                         if c:
                             field(cfg, 'paint_xz', lambda x: matches(x, PAINT if c == 'B' else []))
                 elif kind == 'sample':
+                    mode = row.get('roll_mode')
+                    if type(mode) is not int or mode not in (0, 1, 2):
+                        missing_mode = True
+                    else:
+                        saw_mode = True
+                        non_orbit |= mode != 2
                     hit = field(row, 'wall_contact', lambda x: type(x) is bool)
                     if hit is None:
                         contact_series_complete = False
@@ -147,6 +157,10 @@ def analyze(path, condition=None, source=None):
             r[k] = None
     r['observed_wall_recontacts'] = (recontacts if r['status'] != 'invalid' and clock_ok
                                      and contact_series_complete and r['first_contact_us'] is not None else None)
+    rate_known = type(orbit_rate) in (int, float)
+    r['orbit30_observation'] = ('unknown' if r['status'] == 'invalid' else
+                                'off_protocol' if non_orbit or (rate_known and orbit_rate != 30) else
+                                'matched_samples' if saw_mode and not missing_mode and rate_known else 'unknown')
     return r
 
 
