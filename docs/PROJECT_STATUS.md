@@ -1,6 +1,8 @@
 # RCD 项目状态（PROJECT STATUS）
 
 最新快照：**2026-11-20，运行基线 `6bab995`**。第 2–7 节保留早期研发记录；当前结论以下节为准。
+研究交接 `4ef147f`：[首次试验记录](history/B3_FIRST_SPRINT.md)。真人首曝样本为 0；采集实现已有合成 QA，窗口失焦终止尚未经真实窗口手测。不得将合成样本计入学习效果。
+
 工程根：`C:\Users\11ee11\Documents\deepseek-harness\default-workspace\roll-cut-die`
 版本控制：本地 Git，基线 `c3de553`（2026-11-19 22:0x，现有原型入库）
 
