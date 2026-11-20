@@ -70,6 +70,10 @@ func crossing(track) -> Dictionary:
 	check(false,"eastbound projection did not cross within 480 ticks")
 	return {}
 
+## A second run can delay the original performer, not the replay actor.
+func actor_wait_ticks() -> int:
+	return 0
+
 func run() -> void:
 	create_timer(45.0).timeout.connect(func(): print("FAIL junction: watchdog"); quit(2))
 	lab = load("res://tools/junction_lab.tscn").instantiate()
@@ -77,6 +81,8 @@ func run() -> void:
 	if not check(await released(),"Take 01 releases"): return
 	for p in lab.route_points("A"):
 		if not await walk(p): return
+		if p == Vector2(3,8) and actor_wait_ticks() > 0:
+			await ticks(actor_wait_ticks())
 	await tap(KEY_R)
 	await tap(KEY_3)
 	var gs := root.get_node("GameSession")
@@ -91,6 +97,9 @@ func run() -> void:
 	var mark: Dictionary = lab.marks.marks[0]
 	var first := await crossing(track)
 	if failed: return
+	var expected := 4.05 + float(actor_wait_ticks()) / Engine.physics_ticks_per_second
+	if not check(absf(float(first.world) - expected) <= 1.1 / Engine.physics_ticks_per_second,
+		"crossing follows original performance: expected %.3fs, observed %.3fs" % [expected,first.world]): return
 	await tap(KEY_C)
 	for i in 240:
 		if lab.cut_panel.is_open(): break
