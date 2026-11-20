@@ -67,17 +67,18 @@ static func run(h, _tree = null) -> void:
 	# --- a failed write must not destroy the previous good save -----------
 	SaveManager.clear(path)
 	h.ok("saved once", SaveManager.save({"take_index": 1}, path))
-	# Saving a value JSON cannot serialise (a Node) must fail without eating
-	# the file we already have.
-	var hostile := {"take_index": 2, "bad": Node.new()}
-	var ok_write: bool = SaveManager.save(hostile, path)
-	if not ok_write:
-		var still: Dictionary = SaveManager.load_save(path)
-		h.ok("old save survives a failed write",
-			bool(still["ok"]) and int(still["data"]["take_index"]) == 1)
-	else:
-		h.note("engine serialised a Node into the save; skip the rollback check")
-	hostile["bad"].free()
+	# A directory at the scratch filename makes opening the temporary file fail
+	# on Windows without permissions changes. Only touch this unique fixture.
+	var obstruction := ProjectSettings.globalize_path(path + ".tmp")
+	var before := FileAccess.get_sha256(path)
+	var created := DirAccess.make_dir_absolute(obstruction)
+	h.eq("obstruct temporary write", created, OK)
+	if created == OK:
+		h.ok("blocked temporary write reports failure", not SaveManager.save({"take_index": 2}, path))
+		h.eq("old save bytes survive temporary write failure", FileAccess.get_sha256(path), before)
+		var still := SaveManager.load_save(path)
+		h.ok("previous take remains playable", still.ok and still.data.get("take_index") == 1)
+		h.eq("remove fixture obstruction", DirAccess.remove_absolute(obstruction), OK)
 
 	SaveManager.clear(path)
 	h.ok("cleared at the end", not SaveManager.exists(path))
