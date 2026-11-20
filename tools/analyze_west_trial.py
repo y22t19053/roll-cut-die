@@ -45,6 +45,10 @@ def analyze(path, condition=None, source=None):
     clock_ok = True
     first_contact_possible = lateral_possible = release_possible = True
     last = {'frame': -1, 't_us': -1}
+    # Count observed recontacts only, not failed attempts or inferred intent.
+    previous_contact = None
+    recontacts = 0
+    contact_series_complete = True
     ended = False
     n = 0
 
@@ -101,6 +105,11 @@ def analyze(path, condition=None, source=None):
                             field(cfg, 'paint_xz', lambda x: matches(x, PAINT if c == 'B' else []))
                 elif kind == 'sample':
                     hit = field(row, 'wall_contact', lambda x: type(x) is bool)
+                    if hit is None:
+                        contact_series_complete = False
+                    elif hit and previous_contact is False and r['first_contact_us'] is not None:
+                        recontacts += 1
+                    previous_contact = hit
                     if r['first_contact_us'] is None:
                         if hit is None:
                             first_contact_possible = False
@@ -136,6 +145,8 @@ def analyze(path, condition=None, source=None):
     if r['status'] == 'invalid' or not clock_ok:
         for k in ('first_contact_us', 'first_lateral_key', 'contact_to_lateral_us', 'contact_to_release_us'):
             r[k] = None
+    r['observed_wall_recontacts'] = (recontacts if r['status'] != 'invalid' and clock_ok
+                                     and contact_series_complete and r['first_contact_us'] is not None else None)
     return r
 
 

@@ -47,6 +47,14 @@ class WestTrialTests(unittest.TestCase):
         self.assertEqual(('ok', 20, 'RIGHT', 15, 9), tuple(r[k] for k in
                          ('status', 'first_contact_us', 'first_lateral_key', 'contact_to_lateral_us', 'contact_to_release_us')))
 
+    def test_observed_recontacts_not_inferred_attempts(self):
+        for hits, expected in [([], None), ([False], None), ([True, True], 0),
+                               ([False, True, False, False, True, True, False, True], 2)]:
+            r = report(header(), *(sample(i, hit) for i, hit in enumerate(hits)), outcome())
+            self.assertEqual(expected, r['observed_wall_recontacts'])
+        for bad in [row('sample', 2), sample(2, 1), row('key', -1)]:
+            self.assertIsNone(report(header(), sample(1, True), bad, outcome())['observed_wall_recontacts'])
+
     def test_ties_frame_and_file_order(self):
         for name in ('A', 'D', 'LEFT', 'RIGHT'):
             r = report(header('A'), key(10, 'W'), key(10, 'D'), sample(10, True), key(10, name), sample(10, False), outcome())
