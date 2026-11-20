@@ -19,8 +19,18 @@ static func valid_session(s: String) -> bool:
 			return false
 	return true
 
+static func isolated_operator_dir(custom: bool, configured: String, actual: String) -> bool:
+	var prefix := "RCD-Research/isolated/"
+	if not custom or not configured.begins_with(prefix):
+		return false
+	var run_id := configured.trim_prefix(prefix)
+	return valid_session(run_id) and actual.replace("\\", "/").ends_with("/" + configured)
+
 func begin(args: PackedStringArray, condition: String, config: Dictionary, synthetic := false) -> bool:
 	if not session.is_empty() or args != PackedStringArray([CONSENT]) or condition not in ["A", "B"]:
+		return false
+	if not synthetic and not isolated_operator_dir(ProjectSettings.get_setting("application/config/use_custom_user_dir", false), ProjectSettings.get_setting("application/config/custom_user_dir_name", ""), OS.get_user_data_dir()):
+		push_warning("West trial refused: prepare an isolated A/B project before recording.")
 		return false
 	var base := "user://west_trials_qa" if synthetic else "user://west_trials"
 	if DirAccess.make_dir_recursive_absolute(base) != OK:

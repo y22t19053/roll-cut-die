@@ -33,6 +33,10 @@ func run() -> void:
 	create_timer(35.0).timeout.connect(func(): quit(3))
 	var save := "user://rcd/save.json"
 	var before := FileAccess.get_sha256(save) if FileAccess.file_exists(save) else "absent"
+	var cfg := "RCD-Research/isolated/0123456789abcdef0123456789abcdef"
+	var actual := "C:/AppData/Roaming/" + cfg
+	check(Stream.isolated_operator_dir(true,cfg,actual) and Stream.isolated_operator_dir(true,cfg,actual.replace("/","\\")), "accept prepared folder with either path separator")
+	check(not Stream.isolated_operator_dir(false,cfg,actual) and not Stream.isolated_operator_dir(true,cfg,actual+"0") and not Stream.isolated_operator_dir(true,cfg+"/..",actual+"/.."), "reject disabled, mismatched or malformed isolation")
 	var rejected := Stream.new()
 	check(not rejected.begin([], "A", {},true) and rejected.directory.is_empty(), "no consent is inert")
 	check(not Stream.valid_session("../1234") and not Stream.valid_session("someone@example.com"), "rejects path/name")
