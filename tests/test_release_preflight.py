@@ -40,6 +40,15 @@ class ReleaseGateTest(unittest.TestCase):
         self.check()
         self.assertFalse(self.roaming.exists())
 
+    def test_prepare_new_receipt_without_changing_old_receipt_or_user_data(self):
+        from tools.prepare_release_trial import prepare
+        original = self.receipt.read_bytes()
+        fresh = prepare(self.exe, self.local, self.roaming)
+        self.assertNotEqual(self.receipt.parent, fresh.parent)
+        gate.check(fresh, self.local, self.roaming)
+        self.assertEqual(original, self.receipt.read_bytes())
+        self.assertFalse(self.roaming.exists())
+
     def test_changed_binary(self):
         self.exe.write_bytes(b'other build')
         with self.assertRaisesRegex(ValueError, 'binary changed'): self.check()

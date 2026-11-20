@@ -1,6 +1,8 @@
 # 原版 EXE 连续 Take 验收（主持人卡）
 
-状态：**STOP（旧回执失效；未启动本次独立验收）**。2026-11-21 只读复检退出码 1：`production save changed since preparation; do not restore`。不能由指纹差异断定原因或恢复旧数据；禁止用本回执启动，也不修改它来消除差异。下次现场验收需用新的随机目录和准备回执记录届时基线，再独立通过预检。目标是证明交付给玩家的原始 `6bab995` 二进制可完成连续操作；不以工程窗口录像替代。单文件交付不变；旁置 override.cfg 只用于 QA 存档隔离，正式 EXE 无需这个文件。
+当前：**新副本通过静态预检，尚未启动**。新回执 `%LOCALAPPDATA%/RCD-Research/release/4adfceea506c4da2abde6bcf00dd331d/receipt.json`。可运行 `python tools/prepare_release_trial.py` 从固定 SHA 的本地 EXE 准备新场次；不要复用失效场次。现场仍须按下文在启动前再次预检。
+
+历史：**STOP（旧回执失效）**。2026-11-21 只读复检退出码 1：`production save changed since preparation; do not restore`。不能由指纹差异断定原因或恢复旧数据；禁止用本回执启动，也不修改它来消除差异。下次现场验收需用新的随机目录和准备回执记录届时基线，再独立通过预检。目标是证明交付给玩家的原始 `6bab995` 二进制可完成连续操作；不以工程窗口录像替代。单文件交付不变；旁置 override.cfg 只用于 QA 存档隔离，正式 EXE 无需这个文件。
 
 准备回执：`%LOCALAPPDATA%/RCD-Research/release/d5220d26d62749f6852c0ae3eab8c9e1/receipt.json`。其 `directory` 内仅有 EXE 与隔离配置；校验源与副本 SHA256 均为 `A56F2D1622D7D31DE74D4923ADE5AA85B80B114B4C75C3346E0D2A49F1E165BC`。准备时 expected_user_dir 不存在。准备不证明运行时采纳配置。
 
