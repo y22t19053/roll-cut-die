@@ -96,11 +96,17 @@ func _main() -> void:
 	await physics_frame
 	await _tap(KEY_E)
 	_check("E saw %s" % seen_id, cs.is_seen(seen_id) and not cs.is_taken(seen_id))
-	await _hold(KEY_D, 12)
+	await _key(KEY_D, true)
+	for i in 12:
+		await physics_frame
 	_check("body turned before the mark", absf(float(player.facing)) > 0.05, "%.3f rad" % float(player.facing))
 	await _tap(KEY_M)
-	var mark_pos := player.global_position
-	var mark_facing: float = player.facing
+	await _key(KEY_D, false)
+	var point: Dictionary = main.marks.marks[0]
+	var mark_pos: Vector3 = point.pos
+	var mark_facing: float = point.facing
+	var marked_w: float = point.cam_motion.w
+	_check("M captured the moving orbit", absf(rad_to_deg(marked_w)) > 28.0, "%.2f deg/s" % rad_to_deg(marked_w))
 	var mark_yaw: float = main.marks.marks[0]["cam_yaw"] if main.marks.count() > 0 else 0.0
 	var mark_ev: Vector2i = MarkLedger.evidence_counts(cs.evidence)
 	_check("M stored one anchor", main.marks.count() == 1)
@@ -179,6 +185,9 @@ func _main() -> void:
 		"%.3f m" % player.global_position.distance_to(mark_pos))
 	_check("facing restored", absf(angle_difference(float(player.facing), mark_facing)) < 0.001)
 	_check("camera yaw restored", absf(angle_difference(float(rig.yaw), mark_yaw)) < 0.001)
+	for i in 15:
+		await physics_frame
+	_check("retake slate preserves marked angular speed without advancing yaw", player.frozen and not rig.is_physics_processing() and is_equal_approx(rig.active().w, marked_w) and absf(angle_difference(rig.yaw, mark_yaw)) < 0.001)
 	var ev_now := MarkLedger.evidence_counts(cs.evidence)
 	_check("evidence count restored", ev_now == mark_ev, "%s vs %s" % [ev_now, mark_ev])
 	_check("seized item rolled back", not cs.is_taken(ev_id) and not cs.is_seen(ev_id) and prop.visible)
@@ -197,6 +206,9 @@ func _main() -> void:
 		main.recorder.recording and main.recorder.elapsed() >= float(main.marks.marks[0]["rec_t"]))
 	_check("still on the mark after release", _flat(player.global_position).distance_to(_flat(mark_pos)) < 0.05)
 
+	for i in 5:
+		await physics_frame
+	_check("on release camera coasts in the recorded direction", rig.is_physics_processing() and signf(angle_difference(mark_yaw, rig.yaw)) == signf(marked_w) and absf(rig.active().w) < absf(marked_w))
 	_check("production save requests intercepted", main.intercepted_writes > 0, str(main.intercepted_writes))
 	main.queue_free()
 	await process_frame
