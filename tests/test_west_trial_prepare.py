@@ -40,6 +40,22 @@ class Prepare(unittest.TestCase):
                 seen_dirs.add(expected)
                 self.assertIn(f'corner_evidence_{arm.lower()}.tscn"', cfg.decode('utf-8'))
 
+    def test_existing_user_namespace_is_not_reused_or_modified(self):
+        from unittest.mock import patch
+        import west_trial_operator as op
+        import uuid
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            user = base / 'roaming' / 'RCD-Research' / 'isolated' / self.token
+            user.mkdir(parents=True)
+            marker = user / 'sentinel'
+            marker.write_bytes(b'prior data')
+            with patch.dict(os.environ, LOCALAPPDATA=str(base/'local'), APPDATA=str(base/'roaming')), patch.object(op.uuid, 'uuid4', return_value=uuid.UUID(self.token)), patch.object(sys, 'argv', ['operator', 'prepare', 'A']), self.assertRaises(SystemExit) as refused:
+                op.main()
+            self.assertEqual(refused.exception.code, 2)
+            self.assertEqual(marker.read_bytes(), b'prior data')
+            self.assertFalse((base/'local').exists())
+
     def test_production_template(self):
         for arm in ('A', 'B'):
             cfg = isolated_config(self.original, arm, self.token)
