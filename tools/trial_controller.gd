@@ -10,6 +10,8 @@ var _scene
 var _west_body: Node
 
 func _ready() -> void:
+	# The operator must be able to stop recording even when gameplay is paused.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_scene = get_parent()
 	# RoomBuilder emits floor, then walls in map order. TURN_WALL was appended last.
 	_west_body = _scene.get_node("Layout").get_child(_scene.map_data.walls.size()).get_node("Body")
@@ -27,6 +29,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not focused() or not event is InputEventKey or event.echo:
 		return
 	var e := event as InputEventKey
+	if get_tree().paused and e.physical_keycode not in [KEY_F9, KEY_F10]:
+		return
 	if e.physical_keycode == KEY_F8 and e.pressed and stream.session.is_empty():
 		# A first exposure must start at spawn, after the opening slate, on Take 01.
 		var pos: Vector3 = _scene.player.global_position
@@ -63,6 +67,9 @@ func _physics_process(_delta: float) -> void:
 		return
 	if not focused():
 		_focus_lost()
+		return
+	if get_tree().paused:
+		stream.check_deadline()
 		return
 	var body: CharacterBody3D = _scene.player
 	var west := false

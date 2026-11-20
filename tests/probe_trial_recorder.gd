@@ -73,6 +73,15 @@ func run() -> void:
 		var dest: String = st.directory.path_join("trial.jsonl")
 		check(not FileAccess.file_exists(dest) and st.session != previous and Stream.valid_session(st.session), "unique anonymous session, no premature publication")
 		previous = st.session
+		tap(KEY_ESCAPE)
+		await ticks(2)
+		var paused_bytes: int = st._bytes
+		tap(KEY_S)
+		await ticks(3)
+		check(paused and st.active() and st._bytes == paused_bytes, "pause writes no gameplay keys or position samples")
+		tap(KEY_ESCAPE)
+		await ticks(1)
+		check(not paused, "resume after trial pause")
 		tap(KEY_Q)
 		key(KEY_D,true)
 		await ticks(16)

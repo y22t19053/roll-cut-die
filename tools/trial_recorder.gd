@@ -55,6 +55,10 @@ func begin(args: PackedStringArray, condition: String, config: Dictionary, synth
 func active() -> bool:
 	return _file != null
 
+func check_deadline() -> void:
+	if active() and Time.get_ticks_usec() - _start_us >= LIMIT_US:
+		finish("time_limit", false)
+
 func append(kind: String, fields: Dictionary) -> void:
 	if not active():
 		return
