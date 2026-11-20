@@ -163,6 +163,8 @@ func _main() -> void:
 	_check("preview player is at MARK and faces its recorded heading", still.global_position.distance_to(mark_pos) < 0.01 and absf(angle_difference(still.rotation.y, mark_facing)) < 0.01)
 	_check("preview draws only the player still and no duplicate collision body", (pv.cull_mask & still.get_node("Body").layers) != 0 and (pv.cull_mask & player.get_node("Visual/Body").layers) == 0 and still.find_children("*", "CollisionObject3D", true, false).is_empty())
 	_check("preview did not move the player", player.global_position.distance_to(cut_from) < 0.001)
+	_check("later pickup is visible only as a historical marker", main.evidence_stills.has(ev_id) and main.evidence_stills[ev_id].is_visible_in_tree() and main.evidence_stills[ev_id].get_node("Ring").visible and not prop.visible and cs.is_taken(ev_id))
+	_check("previously inspected marker has no uninspected ring", main.evidence_stills.has(seen_id) and not main.evidence_stills[seen_id].get_node("Ring").visible)
 	_check("footer reads the preview", panel.footer_label.text.begins_with("PREVIEW MARK 1"), panel.footer_label.text)
 	await _tap(KEY_ESCAPE)
 	_check("ESC clears the selection", main.cut_cursor == -1 and rig.camera.current and panel.is_open())

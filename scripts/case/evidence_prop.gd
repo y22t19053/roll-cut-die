@@ -80,6 +80,23 @@ func _build() -> void:
 	_label.modulate = Color(1.0, 0.95, 0.8, 0.9)
 	_label.position = Vector3(0.0, 0.55, 0.0)
 	_marker.add_child(_label)
+	for part in _marker.get_children():
+		part.layers = 1 << 19 # live visuals are excluded from the historical camera
+
+
+func still_frame() -> Dictionary:
+	return {"visible": is_visible_in_tree(), "pose": _marker.global_transform,
+		"ring_pose": _ring.transform, "ring_visible": _ring.visible, "label": _label.text}
+
+
+func make_still(frame: Dictionary) -> Node3D:
+	var still := _marker.duplicate(0) as Node3D
+	for part in still.get_children():
+		part.layers = 1
+	still.get_node("Ring").transform = frame.ring_pose
+	still.get_node("Ring").visible = frame.ring_visible
+	still.get_node("Name").text = frame.label
+	return still
 
 
 func _process(dt: float) -> void:

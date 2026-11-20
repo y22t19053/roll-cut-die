@@ -50,6 +50,7 @@ var preview_rig: Node3D
 var preview_cam: Camera3D
 var ghost_stills: Array[Node3D] = []
 var npc_stills: Array[Node3D] = []
+var evidence_stills := {}
 var player_still: Node3D
 
 ## Personal anchors and the system checkpoint of the current timeline.
@@ -402,7 +403,11 @@ func _snapshot() -> Dictionary:
 	var npc_frames := {}
 	for actor in npcs:
 		npc_frames[actor.npc_id] = actor.still_frame()
+	var evidence_frames := {}
+	for id in evidence_props:
+		evidence_frames[id] = evidence_props[id].still_frame()
 	return {
+		"evidence_frames": evidence_frames,
 		"npc_frames": npc_frames,
 		"ghost_frames": frames,
 		"kind": "checkpoint",
@@ -496,11 +501,12 @@ func _clear_preview_stills() -> void:
 		player_still.hide()
 		player_still.queue_free()
 		player_still = null
-	for still in ghost_stills + npc_stills:
+	for still in ghost_stills + npc_stills + evidence_stills.values():
 		still.hide()
 		still.queue_free()
 	ghost_stills.clear()
 	npc_stills.clear()
+	evidence_stills.clear()
 
 func _select_point(i: int) -> void:
 	_clear_preview_stills()
@@ -514,6 +520,14 @@ func _select_point(i: int) -> void:
 	var p: Dictionary = pts[cut_cursor]
 	player_still = player.make_still(to_local(p.pos), p.facing)
 	add_child(player_still)
+	var ev_frames: Dictionary = p.get("evidence_frames", {})
+	for id in ev_frames:
+		var frame: Dictionary = ev_frames[id]
+		if frame.visible and evidence_props.has(id):
+			var still: Node3D = evidence_props[id].make_still(frame)
+			add_child(still)
+			still.global_transform = frame.pose
+			evidence_stills[id] = still
 	var npc_frames: Dictionary = p.get("npc_frames", {})
 	for actor in npcs:
 		if npc_frames.has(actor.npc_id):
