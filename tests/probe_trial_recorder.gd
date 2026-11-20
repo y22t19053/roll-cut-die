@@ -138,6 +138,28 @@ func run() -> void:
 		main.queue_free()
 		await process_frame
 		await physics_frame
+	# Separate session: stop from an actual paused tree without resuming to flush.
+	var stop_scene = load("res://tools/corner_evidence_a.tscn").instantiate()
+	root.add_child(stop_scene)
+	stop_scene._install_trial(true)
+	stop_scene.trial._qa_focused = true
+	while stop_scene.player.frozen:
+		await physics_frame
+	tap(KEY_F8)
+	var stop_stream = stop_scene.trial.stream
+	tap(KEY_ESCAPE)
+	await ticks(2)
+	check(paused and stop_stream.active(), "paused operator stop begins with open stream")
+	tap(KEY_F10)
+	var sealed: String = stop_stream.directory.path_join("trial.jsonl")
+	if FileAccess.file_exists(sealed):
+		var rows := FileAccess.get_file_as_string(sealed).strip_edges().split("\n")
+		check(paused and not stop_stream.active() and JSON.parse_string(rows[-1]).reason == "operator_stop", "F10 finalizes operator_stop before gameplay resumes")
+	else:
+		check(false, "paused F10 failed to publish trial.jsonl")
+	tap(KEY_ESCAPE)
+	stop_scene.queue_free()
+	await process_frame
 	var after := FileAccess.get_sha256(save) if FileAccess.file_exists(save) else "absent"
 	check(before == after, "production save existence/hash unchanged")
 	quit(1 if failures else 0)
