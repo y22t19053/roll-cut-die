@@ -110,6 +110,13 @@ func run() -> void:
 	await tap(KEY_2) # checkpoint is row 1, personal MARK is row 2.
 	var ghost_in_preview: Vector3 = lab.ghost_nodes[0].global_position
 	print("PREVIEW AUDIT: MARK camera current=%s; actor distance from near-MARK %.3fm, from CUT %.3fm" % [lab.preview_cam.current, ghost_in_preview.distance_to(ghost_near_mark), ghost_in_preview.distance_to(ghost_at_cut)])
+	if not check(lab.preview_cam.current and lab.ghost_stills.size() == 1, "historical camera has one visual still"): return
+	var still: Node3D = lab.ghost_stills[0]
+	if not check(still.global_position.distance_to(ghost_near_mark) < 0.25 and still.global_position.distance_to(ghost_at_cut) > 1.0 and still.find_children("*", "CollisionObject3D", true, false).is_empty(), "still shows near-MARK pose without a collision object"): return
+	if not check(ghost_in_preview.is_equal_approx(ghost_at_cut) and (lab.preview_cam.cull_mask & lab.ghost_nodes[0].get_node("Visual/Body").layers) == 0, "live body stays at CUT and is excluded from historical camera"): return
+	await tap(KEY_ESCAPE)
+	if not check(lab.ghost_stills.is_empty() and lab.rig.camera.current and lab.ghost_nodes[0].global_position.is_equal_approx(ghost_at_cut), "ESC clears still without moving live body"): return
+	await tap(KEY_2)
 	await tap(KEY_SPACE)
 	if not check(await released() and xz().distance_to(lab.OBSERVE) < 0.3 and gs.takes.take_index == 3,"Take 03 resumed at observation MARK"): return
 	if not check(gs.ghost_count() == 1 and lab.ghost_nodes.size() == 1,"CUT added no track or actor"): return

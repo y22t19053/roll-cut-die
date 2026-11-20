@@ -17,6 +17,7 @@ signal caught_player(take_id: int)
 const DANGER_RADIUS := 0.34
 const BODY_RADIUS := 0.32
 const BODY_HEIGHT := 1.7
+const LIVE_LAYER := 1 << 19 # Preview camera omits live ghosts, draws visual-only stills on layer 1.
 const FADE_OUT_S := 1.2
 ## The projection needs a moment to come up, and every take starts on the same
 ## mark as the ghosts do: without this window take 2 would begin inside take 1
@@ -130,6 +131,9 @@ func _build() -> void:
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_ring)
 
+	mesh.layers = LIVE_LAYER
+	_ring.layers = LIVE_LAYER
+	_label.layers = LIVE_LAYER
 	_danger = Area3D.new()
 	_danger.name = "Danger"
 	_danger.collision_layer = 8
@@ -146,6 +150,37 @@ func _build() -> void:
 	add_child(_danger)
 	_danger.body_entered.connect(_on_body_entered)
 
+
+## Capture only render state. Never rewind the live Area or playback clock to browse a MARK.
+func still_frame() -> Dictionary:
+	return {"pose": global_transform, "facing": _visual.rotation.y, "shown": visible,
+		"body": _mat.albedo_color, "ring": _ring_mat.albedo_color,
+		"tag": _label.text, "ink": _label.modulate}
+
+func make_still(frame: Dictionary) -> Node3D:
+	var still := Node3D.new()
+	still.name = "Still_%02d" % take_id
+	var visual := _visual.duplicate(0) as Node3D
+	visual.rotation.y = frame.facing
+	still.add_child(visual)
+	var body := visual.get_node("Body") as MeshInstance3D
+	var mat := _mat.duplicate() as StandardMaterial3D
+	mat.albedo_color = frame.body
+	body.material_override = mat
+	var ring := _ring.duplicate(0) as MeshInstance3D
+	var ring_mat := _ring_mat.duplicate() as StandardMaterial3D
+	ring_mat.albedo_color = frame.ring
+	ring.material_override = ring_mat
+	still.add_child(ring)
+	var tag := _label.duplicate(0) as Label3D
+	tag.text = frame.tag
+	tag.modulate = frame.ink
+	still.add_child(tag)
+	body.layers = 1
+	ring.layers = 1
+	tag.layers = 1
+	still.visible = frame.shown
+	return still
 
 func _on_body_entered(body: Node3D) -> void:
 	if spent or not playing or not _armed:

@@ -48,6 +48,7 @@ var hud: CanvasLayer
 var cut_panel: CanvasLayer
 var preview_rig: Node3D
 var preview_cam: Camera3D
+var ghost_stills: Array[Node3D] = []
 
 ## Personal anchors and the system checkpoint of the current timeline.
 var marks = MarkLedger.new()
@@ -271,6 +272,7 @@ func _build_ui() -> void:
 	preview_cam.fov = CameraMath.FOV
 	preview_cam.near = 0.05
 	preview_cam.far = 250.0
+	preview_cam.cull_mask &= ~GhostActorScript.LIVE_LAYER
 	preview_cam.current = false
 	preview_rig.add_child(preview_cam)
 	GameSession.ghosts_changed.connect(hud.set_ghost_count)
@@ -392,7 +394,11 @@ func _freeze_world() -> void:
 
 ## Everything a CUT needs to put the take back on this instant.
 func _snapshot() -> Dictionary:
+	var frames := {}
+	for actor in ghost_nodes:
+		frames[actor.take_id] = actor.still_frame()
 	return {
+		"ghost_frames": frames,
 		"kind": "checkpoint",
 		"no": 0,
 		"take": GameSession.takes.take_index,
@@ -479,7 +485,14 @@ func _cut_input(code: int) -> void:
 
 ## Real preview: the camera goes where the point's camera was. Player, world
 ## and case state are not touched.
+func _clear_ghost_stills() -> void:
+	for still in ghost_stills:
+		still.hide()
+		still.queue_free()
+	ghost_stills.clear()
+
 func _select_point(i: int) -> void:
+	_clear_ghost_stills()
 	var pts: Array = marks.points()
 	cut_cursor = i if i >= 0 and i < pts.size() else -1
 	cut_panel.set_selected(cut_cursor)
@@ -488,6 +501,14 @@ func _select_point(i: int) -> void:
 		rig.camera.current = true
 		return
 	var p: Dictionary = pts[cut_cursor]
+	var frames: Dictionary = p.get("ghost_frames", {})
+	for actor in ghost_nodes:
+		if frames.has(actor.take_id):
+			var frame: Dictionary = frames[actor.take_id]
+			var still: Node3D = actor.make_still(frame)
+			add_child(still)
+			still.global_transform = frame.pose
+			ghost_stills.append(still)
 	preview_rig.global_position = (p["pos"] as Vector3) + Vector3.UP * CameraMath.FOCUS_HEIGHT
 	preview_rig.rotation = Vector3(0.0, float(p["cam_yaw"]), 0.0)
 	preview_cam.position = CameraMath.camera_offset(rig.pitch_deg, rig.distance)
@@ -504,6 +525,7 @@ func _cut_to(p: Dictionary) -> void:
 	var idx: int = t.resume_after_cut(MarkLedger.label(point), float(point["time"]))
 	if idx < 0:
 		return
+	_clear_ghost_stills()
 	cut_panel.close()
 	cut_cursor = -1
 	rig.camera.current = true
