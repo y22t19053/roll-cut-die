@@ -28,6 +28,32 @@ static func run(h, _tree = null) -> void:
 	_roll(h, CHASE_ONLY)
 	_geometry(h)
 	_mouse(h)
+	_mid_snap_restore(h)
+
+
+static func _mid_snap_restore(h) -> void:
+	var live := CameraRigScript.new()
+	var retry := CameraRigScript.new()
+	live.set_roll_mode(RollModes.SNAP)
+	retry.set_roll_mode(RollModes.SNAP)
+	var a = live.active()
+	var b = retry.active()
+	for i in 5:
+		a.drive(0.0, Vector3.RIGHT, DT)
+	h.ok("MARK occurs inside the quarter turn", absf(a.yaw) > 0.1 and absf(a.yaw) < PI/2 - 0.1 and a.presses == 1)
+	retry.restore_mark_motion({"cam_motion": live.mark_motion(), "cam_yaw": a.yaw, "cam_roll": a.roll})
+	var peak_error := 0.0
+	var presses_match := true
+	for i in 30:
+		var intent := Vector3.RIGHT if i < 8 else (Vector3.ZERO if i < 12 else Vector3.FORWARD)
+		a.drive(0.0, intent, DT)
+		b.drive(0.0, intent, DT)
+		peak_error = maxf(peak_error, maxf(absf(angle_difference(a.yaw,b.yaw)), maxf(absf(a.roll-b.roll),absf(a.w-b.w))))
+		presses_match = presses_match and a.presses == b.presses
+	h.near("same SNAP yaw, tilt and rate throughout continuation", peak_error, 0.0, 0.000001)
+	h.ok("held direction not counted again; later turn recognized", presses_match and b.presses == 2)
+	live.free()
+	retry.free()
 
 
 # --- §4.2: movement is anchored to world axes ----------------------------
