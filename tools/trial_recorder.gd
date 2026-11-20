@@ -3,6 +3,7 @@ extends RefCounted
 const CONSENT := "--west-trial-consent"
 const KEYS := {KEY_W:"W", KEY_A:"A", KEY_S:"S", KEY_D:"D", KEY_UP:"UP", KEY_DOWN:"DOWN", KEY_LEFT:"LEFT", KEY_RIGHT:"RIGHT", KEY_E:"E"}
 const SCHEMA := "west-corner-v1"
+const LIMIT_US := 300_000_000 # Five real minutes; independent of pause, FPS and timescale.
 var session := ""
 var directory := ""
 var _file: FileAccess
@@ -47,9 +48,15 @@ func active() -> bool:
 func append(kind: String, fields: Dictionary) -> void:
 	if not active():
 		return
+	var elapsed := Time.get_ticks_usec() - _start_us
+	if elapsed >= LIMIT_US:
+		if kind != "outcome":
+			finish("time_limit", false)
+			return
+		fields = {"reason":"time_limit", "script_page_taken":false}
 	var row := fields.duplicate()
 	row.type = kind
-	row.t_us = Time.get_ticks_usec() - _start_us
+	row.t_us = elapsed
 	row.frame = Engine.get_physics_frames() - _frame
 	var line := JSON.stringify(row) + "\n"
 	_file.store_string(line)

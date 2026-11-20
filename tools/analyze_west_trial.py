@@ -17,7 +17,7 @@ SCHEMA = 'west-corner-v1'
 SOURCES = ('synthetic_QA', 'operator_opt_in')
 LATERAL = {'A', 'D', 'LEFT', 'RIGHT'}
 KEYS = LATERAL | {'W', 'S', 'UP', 'DOWN', 'E'}
-REASONS = ('hint_required', 'operator_stop', 'collected', 'focus_lost', 'scene_exit')
+REASONS = ('hint_required', 'operator_stop', 'collected', 'focus_lost', 'scene_exit', 'time_limit')
 # B3-B/1, tools/corner_evidence.gd: A and B share a wall, B adds three marks.
 WALL = [0.4, 6.0, 3.35, 6.35]
 PAINT = [[2.66, 6.90, 2.74, 7.55], [2.70, 6.86, 4.04, 6.94], [4.00, 5.65, 4.08, 6.90]]

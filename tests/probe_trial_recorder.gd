@@ -36,6 +36,15 @@ func run() -> void:
 	var rejected := Stream.new()
 	check(not rejected.begin([], "A", {},true) and rejected.directory.is_empty(), "no consent is inert")
 	check(not Stream.valid_session("../1234") and not Stream.valid_session("someone@example.com"), "rejects path/name")
+	# Advance only the synthetic recorder's time origin; no five-minute sleep.
+	var cap := Stream.new()
+	if not cap.begin([Stream.CONSENT], "A", {}, true):
+		quit(1)
+		return
+	cap._start_us -= Stream.LIMIT_US
+	cap.append("sample", {"wall_contact":true})
+	var capped := FileAccess.get_file_as_string(cap.directory.path_join("trial.jsonl")).strip_edges().split("\n")
+	check(not cap.active() and capped.size() == 2 and JSON.parse_string(capped[-1]).reason == "time_limit", "deadline seals outcome without collecting the expired sample")
 	var previous := ""
 	for cond in ["a", "b"]:
 		var main = load("res://tools/corner_evidence_%s.tscn" % cond).instantiate()
