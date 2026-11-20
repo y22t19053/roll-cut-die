@@ -32,11 +32,27 @@ func check(ok: bool, message: String) -> void:
 func run() -> void:
 	create_timer(50.0).timeout.connect(func(): quit(3))
 	var results: Array[Vector3] = []
+	var baseline: Dictionary = {}
 	var save_path := "user://rcd/save.json"
 	var before := FileAccess.get_sha256(save_path) if FileAccess.file_exists(save_path) else ""
 	for path in Scenes:
 		var main = load(path).instantiate()
 		root.add_child(main)
+		var map: Dictionary = main.map_data.duplicate(true)
+		var other_props := []
+		var paint := []
+		for prop in map.props:
+			if str(prop.id).begins_with("trial_paint_"):
+				paint.append(prop)
+			else:
+				other_props.append(prop)
+		map.props = other_props
+		if path == Scenes[0]:
+			baseline = map
+			check(paint.is_empty(), "A contains no trial paint")
+		else:
+			check(paint.size() == 3 and paint.all(func(p): return p.get("solid") == false), "B contains three non-colliding paint strips")
+			check(map == baseline, "entire map matches A once paint is removed, including NPCs, evidence and report")
 		for i in 360:
 			if not main.player.frozen:
 				break
