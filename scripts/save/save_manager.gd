@@ -11,36 +11,36 @@ const TMP := "user://rcd/save.json.tmp"
 const VERSION := 1
 
 
-static func exists() -> bool:
-	return FileAccess.file_exists(PATH)
+static func exists(path: String = PATH) -> bool:
+	return FileAccess.file_exists(path)
 
 
-static func save(data: Dictionary) -> bool:
-	DirAccess.make_dir_recursive_absolute(DIR)
+static func save(data: Dictionary, path: String = PATH) -> bool:
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var payload := {
 		"version": VERSION,
 		"saved_at": Time.get_datetime_string_from_system(true),
 		"data": data,
 	}
-	var f := FileAccess.open(TMP, FileAccess.WRITE)
+	var f := FileAccess.open(path + ".tmp", FileAccess.WRITE)
 	if f == null:
 		return false
 	f.store_string(JSON.stringify(payload, "  "))
 	f.close()
 
-	var abs_tmp := ProjectSettings.globalize_path(TMP)
-	var abs_dst := ProjectSettings.globalize_path(PATH)
-	if FileAccess.file_exists(PATH):
+	var abs_tmp := ProjectSettings.globalize_path(path + ".tmp")
+	var abs_dst := ProjectSettings.globalize_path(path)
+	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(abs_dst)
 	var err := DirAccess.rename_absolute(abs_tmp, abs_dst)
 	return err == OK
 
 
 ## Returns {"ok": bool, "reason": String, "data": Dictionary}.
-static func load_save() -> Dictionary:
-	if not FileAccess.file_exists(PATH):
+static func load_save(path: String = PATH) -> Dictionary:
+	if not FileAccess.file_exists(path):
 		return {"ok": false, "reason": "missing", "data": {}}
-	var txt := FileAccess.get_file_as_string(PATH)
+	var txt := FileAccess.get_file_as_string(path)
 	# JSON.new().parse() reports failure to us instead of printing an engine
 	# error: a broken save is an expected state we handle, not a crash log line.
 	var json := JSON.new()
@@ -57,8 +57,8 @@ static func load_save() -> Dictionary:
 	return {"ok": true, "reason": "", "data": payload}
 
 
-static func clear() -> void:
-	if FileAccess.file_exists(PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(PATH))
-	if FileAccess.file_exists(TMP):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP))
+static func clear(path: String = PATH) -> void:
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	if FileAccess.file_exists(path + ".tmp"):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path + ".tmp"))
