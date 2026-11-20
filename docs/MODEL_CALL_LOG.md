@@ -16,14 +16,13 @@
 | RCD-M00 环境审计 | 2026-11-19 22:25 | Claude CLI | `claude-fable-5-1` | 连通性 | 超时 | — | >40 s | 无任何输出 | 标记 DEGRADED |
 | RCD-M00 环境审计 | 2026-11-19 22:26 | DSH 路由 | `deepseek-account` | 连通性 | 成功 | — | — | `list_subagent_models` 只返回 deepseek-account；`amazon-bedrock` 返回 not allowed | 双高阶池暂缓 |
 
-## 结论
+## 后续实绩与当前分工
 
-- VERIFIED：deepseek-account/deepseek-flash、Ollama 本地。
-- DEGRADED：Claude via XHYAPI（鉴权通、大模型补全超时）。
-- UNAVAILABLE：Gemini、amazon-bedrock、ant-ling。
-- UNVERIFIED：Kimi/Tabbit（仅浏览器入口，未做真实调用）。
+| 任务 | 日期 | 实际模型与通道 | 结果与采纳 | CLI 成本 |
+|---|---|---|---|---|
+| RCD-ROLL-MODES | 2026-11-19 | `claude-opus-5-5` / Claude Code–XHYAPI | 三模式与死亡 HUD，采纳 `684483c` | USD 2.7525648 |
+| RCD-ZONES | 2026-11-19 | `claude-opus-5-5` / Claude Code–XHYAPI | 关卡几何、ORBIT30、幽灵表现，采纳 `a18c90f` | USD 3.358603 |
+| RCD-MARK-CUT | 2026-11-20 | `claude-opus-5-5` / Claude Code–XHYAPI | 回放时钟、MARK/CUT，采纳 `f2a0f62`；API 800.464 s，70 轮 | USD 4.209577 |
+| RCD-A-VERIFY | 2026-11-20 | `ya/gpt-6.2-sol` / DSH 当前会话 | 输入录像、ROLL 探针修正、Corner Lock 基线；无新增 Claude/Gemini 调用 | 未提供 |
 
-## 待办
-
-- 若开发者恢复了 XHYAPI 分组或换了通道，重跑本文件末尾的探针序列（3 条 CLI 调用，成本可忽略），把结果补进表格并更新 `docs/MODEL_ROUTING_POLICY.md` §1。
-- 每次 Gemini／Claude 真实完成任务后，补一行记录：任务 ID、承担模型、产出摘要、是否采用。
+早期超时记录保留，Claude 的实际工程回执已覆盖早期可用性判断。上表是调用回执，不等于当前账户余额。Codex 登录、候选模型和费用门槛见 [路由策略](MODEL_ROUTING_POLICY.md)。

@@ -186,8 +186,13 @@ func _checks() -> void:
 		_sum[RollModes.SNAP][w]["yaw_path"] < 0.01)
 	_check("ORBIT: hold W still turns the frame",
 		_sum[RollModes.ORBIT][w]["yaw_path"] > 20.0)
-	_check("ORBIT: held key drifts on screen more than CHASE",
-		_sum[RollModes.ORBIT][sw]["scr_drift"] > _sum[RollModes.CHASE][sw]["scr_drift"])
+	# Sustained pressure is an ORBIT contract; rapid switching can make CHASE
+	# sweep farther and is measured separately above, not ranked here.
+	var held := "hold D 4s"
+	_check("ORBIT: sustained D drifts on screen more than CHASE",
+		_sum[RollModes.ORBIT][held]["scr_drift"] > _sum[RollModes.CHASE][held]["scr_drift"])
+	_check("ORBIT: sustained D keeps turning after the first second",
+		_sum[RollModes.ORBIT][held]["yaw_path"] - _sum[RollModes.ORBIT][d]["yaw_path"] > 80.0)
 	_check("the three modes end on three different yaws after the switch run",
 		absf(_sum[0][sw]["yaw"] - _sum[1][sw]["yaw"]) > 1.0
 		and absf(_sum[1][sw]["yaw"] - _sum[2][sw]["yaw"]) > 1.0
