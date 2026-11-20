@@ -145,6 +145,10 @@ func run() -> void:
 	stop_scene.trial._qa_focused = true
 	while stop_scene.player.frozen:
 		await physics_frame
+	tap(KEY_F6)
+	tap(KEY_F8)
+	check(stop_scene.trial.stream.session.is_empty() and not stop_scene.trial.stream.active(), "SNAP at spawn cannot start an ORBIT trial")
+	tap(KEY_F7)
 	tap(KEY_F8)
 	var stop_stream = stop_scene.trial.stream
 	tap(KEY_ESCAPE)

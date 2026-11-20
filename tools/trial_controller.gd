@@ -38,6 +38,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _scene.player.frozen or GameSession.takes.take_index != 1 or Vector2(pos.x - spawn.x, pos.z - spawn.z).length() > 0.05:
 			return
 		var rig = _scene.rig
+		if rig.roll_mode != Modes.ORBIT:
+			print("West trial not started: select ORBIT before recording.")
+			return
 		var config := {"protocol":"B3-B/1", "engine":Engine.get_version_info().string,
 			"project_config_sha256":FileAccess.get_sha256("res://project.godot"),
 			"map_sha256":FileAccess.get_sha256(_scene.MAP_PATH), "case_sha256":FileAccess.get_sha256(_scene.CASE_PATH),
