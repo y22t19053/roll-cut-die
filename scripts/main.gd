@@ -105,8 +105,12 @@ func _read_json(path: String) -> Variant:
 	return parsed
 
 
+func _map_source() -> Variant:
+	return _read_json(MAP_PATH)
+
+
 func _load_map() -> bool:
-	var parsed: Variant = _read_json(MAP_PATH)
+	var parsed: Variant = _map_source()
 	if not (parsed is Dictionary):
 		Logger.error("map: not a dictionary")
 		return false
@@ -785,7 +789,7 @@ func _finish_take() -> void:
 	if track != null and track.size() >= 2:
 		track.take_id = GameSession.takes.take_index
 		GameSession.add_ghost(track)
-	GameSession.save()
+	_commit_state()
 
 
 # --- buttons -------------------------------------------------------------
@@ -828,7 +832,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.toggle_debug()
 		return
 	if code == KEY_F4:
-		GameSession.load_latest()
+		_load_latest_state()
 		return
 
 	if phase == Phase.CUT:
@@ -904,6 +908,10 @@ func _refresh_evidence() -> void:
 
 func _commit_state() -> void:
 	GameSession.save()
+
+
+func _load_latest_state() -> void:
+	GameSession.load_latest()
 
 
 func _update_hud() -> void:
