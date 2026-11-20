@@ -49,6 +49,21 @@ class ReleaseGateTest(unittest.TestCase):
         self.assertEqual(original, self.receipt.read_bytes())
         self.assertFalse(self.roaming.exists())
 
+    def test_after_boot_requires_single_complete_isolated_start(self):
+        check_boot = lambda: gate.check(self.receipt, self.local, self.roaming, after_boot=True)
+        with self.assertRaisesRegex(ValueError, 'missing'): check_boot()
+        log = self.isolated / 'rcd/runtime.log'
+        log.parent.mkdir(parents=True)
+        lines = ['session ready, take 1', 'room built 24x18', 'roll mode -> ORBIT',
+                 'main ready: 2 npcs, 4 evidence, ghosts 0']
+        for messages in (lines[:-1], lines + lines, lines):
+            log.write_text(''.join('    0.300  info     '+m+'\n' for m in messages), 'utf-8')
+            if messages == lines:
+                check_boot()
+            else:
+                with self.assertRaisesRegex(ValueError, 'startup'): check_boot()
+        with self.assertRaisesRegex(ValueError, 'no longer fresh'): self.check()
+
     def test_changed_binary(self):
         self.exe.write_bytes(b'other build')
         with self.assertRaisesRegex(ValueError, 'binary changed'): self.check()

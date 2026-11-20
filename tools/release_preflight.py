@@ -19,7 +19,7 @@ def digest(path):
     return h.hexdigest().upper()
 
 
-def check(receipt, local, roaming):
+def check(receipt, local, roaming, *, after_boot=False):
     r = json.loads(receipt.read_text(encoding='utf-8-sig'))
     token = receipt.parent.name
     if not re.fullmatch('[0-9a-f]{32}', token):
@@ -41,7 +41,17 @@ def check(receipt, local, roaming):
                 f'config/custom_user_dir_name="RCD-Research/release/{token}"']
     if (game / 'override.cfg').read_text('utf-8').splitlines() != expected:
         raise ValueError('override does not match this run')
-    if isolated.exists():
+    if after_boot:
+        log = isolated / 'rcd' / 'runtime.log'
+        if not log.is_file() or log.resolve() != log.absolute():
+            raise ValueError('expected isolated runtime log missing or redirected')
+        messages = [line.split(None, 2)[2] for line in log.read_text('utf-8').splitlines()
+                    if re.fullmatch(r'\s*\d+\.\d+\s+info\s+.+', line)]
+        required = ['session ready, take 1', 'room built 24x18', 'roll mode -> ORBIT',
+                    'main ready: 2 npcs, 4 evidence, ghosts 0']
+        if messages[:4] != required or messages.count(required[0]) != 1:
+            raise ValueError('isolated log lacks the expected single release startup')
+    elif os.path.lexists(isolated):
         raise ValueError('expected user directory is no longer fresh; do not reuse this run')
     save = roaming / 'Godot' / 'app_userdata' / 'roll cut die' / 'rcd' / 'save.json'
     if digest(save) != r['production_save_before'].upper():
@@ -51,9 +61,11 @@ def check(receipt, local, roaming):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('receipt', type=Path)
+    ap.add_argument('--after-boot', action='store_true', help='check isolated log after manual launch, before playing')
     args = ap.parse_args()
     try:
-        check(args.receipt, Path(os.environ['LOCALAPPDATA']), Path(os.environ['APPDATA']))
+        check(args.receipt, Path(os.environ['LOCALAPPDATA']), Path(os.environ['APPDATA']), after_boot=args.after_boot)
     except (ValueError, OSError, KeyError, TypeError, AttributeError) as exc:
         ap.exit(1, f'STOP: {exc}\n')
-    print('PREFLIGHT OK — not launched; runtime isolation still unverified')
+    print('ISOLATED STARTUP LOG OK — no input or playthrough verified' if args.after_boot else
+          'PREFLIGHT OK — not launched; runtime isolation still unverified')
