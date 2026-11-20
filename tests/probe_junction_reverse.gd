@@ -57,4 +57,15 @@ func run() -> void:
 		origins[actor.track.take_id] = actor.track.sample_at(0.0).position
 	if not check(origins.size() == 2 and origins.has(1) and origins.has(3) and not origins.has(2), "only successful Take 01 and retry Take 03 are replayed"): return
 	if not check(origins[1].distance_to(lab.SOUTH) < 0.15 and origins[3].distance_to(lab.NORTH) < 0.15, "both recordings keep their own world-space origins after swapping ends twice"): return
+	# START follows the current filming direction, not the previous north checkpoint.
+	if not await walk(Vector2(8,13)): return
+	await tap(KEY_C)
+	for i in 240:
+		if lab.cut_panel.is_open(): break
+		await physics_frame
+	if not check(lab.cut_panel.is_open(), "timeline opens after returning to the south assignment"): return
+	await tap(KEY_1)
+	await tap(KEY_SPACE)
+	if not check(await released() and xz().distance_to(Vector2(6,13)) < 0.1 and lab.report_pos == lab.NORTH, "CUT to START restores the current south start and north destination"): return
+	if not check(gs.takes.retake_stock == stock - 1 and gs.ghost_count() == 2 and lab.ghost_nodes.size() == 2, "voluntary CUT keeps stock and both histories intact"): return
 	quit(0)
