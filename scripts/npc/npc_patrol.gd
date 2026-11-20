@@ -106,6 +106,9 @@ func _build() -> void:
 	tag.position = Vector3(0.0, BODY_HEIGHT + 0.32, 0.0)
 	add_child(tag)
 
+	# Layer 20 holds live actors; the historical camera renders stills instead.
+	for part in [mesh, head, tag]:
+		part.layers = 1 << 19
 	_danger = Area3D.new()
 	_danger.name = "Danger"
 	_danger.collision_layer = 4
@@ -122,6 +125,22 @@ func _build() -> void:
 	add_child(_danger)
 	_danger.body_entered.connect(_on_body_entered)
 
+
+func still_frame() -> Dictionary:
+	return {"pose": global_transform, "visual_pose": _visual.transform, "name": display_name}
+
+func make_still(frame: Dictionary) -> Node3D:
+	var still := Node3D.new()
+	var visual := _visual.duplicate(0) as Node3D
+	visual.transform = frame.visual_pose
+	for mesh in visual.find_children("*", "MeshInstance3D", true, false):
+		mesh.layers = 1
+	still.add_child(visual)
+	var tag := get_node("Tag").duplicate(0) as Label3D
+	tag.layers = 1
+	tag.text = frame.name
+	still.add_child(tag)
+	return still
 
 func _tint() -> Color:
 	match npc_id:

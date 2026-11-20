@@ -49,6 +49,7 @@ var cut_panel: CanvasLayer
 var preview_rig: Node3D
 var preview_cam: Camera3D
 var ghost_stills: Array[Node3D] = []
+var npc_stills: Array[Node3D] = []
 
 ## Personal anchors and the system checkpoint of the current timeline.
 var marks = MarkLedger.new()
@@ -397,7 +398,11 @@ func _snapshot() -> Dictionary:
 	var frames := {}
 	for actor in ghost_nodes:
 		frames[actor.take_id] = actor.still_frame()
+	var npc_frames := {}
+	for actor in npcs:
+		npc_frames[actor.npc_id] = actor.still_frame()
 	return {
+		"npc_frames": npc_frames,
 		"ghost_frames": frames,
 		"kind": "checkpoint",
 		"no": 0,
@@ -485,14 +490,15 @@ func _cut_input(code: int) -> void:
 
 ## Real preview: the camera goes where the point's camera was. Player, world
 ## and case state are not touched.
-func _clear_ghost_stills() -> void:
-	for still in ghost_stills:
+func _clear_preview_stills() -> void:
+	for still in ghost_stills + npc_stills:
 		still.hide()
 		still.queue_free()
 	ghost_stills.clear()
+	npc_stills.clear()
 
 func _select_point(i: int) -> void:
-	_clear_ghost_stills()
+	_clear_preview_stills()
 	var pts: Array = marks.points()
 	cut_cursor = i if i >= 0 and i < pts.size() else -1
 	cut_panel.set_selected(cut_cursor)
@@ -501,6 +507,14 @@ func _select_point(i: int) -> void:
 		rig.camera.current = true
 		return
 	var p: Dictionary = pts[cut_cursor]
+	var npc_frames: Dictionary = p.get("npc_frames", {})
+	for actor in npcs:
+		if npc_frames.has(actor.npc_id):
+			var frame: Dictionary = npc_frames[actor.npc_id]
+			var still: Node3D = actor.make_still(frame)
+			add_child(still)
+			still.global_transform = frame.pose
+			npc_stills.append(still)
 	var frames: Dictionary = p.get("ghost_frames", {})
 	for actor in ghost_nodes:
 		if frames.has(actor.take_id):
@@ -525,7 +539,7 @@ func _cut_to(p: Dictionary) -> void:
 	var idx: int = t.resume_after_cut(MarkLedger.label(point), float(point["time"]))
 	if idx < 0:
 		return
-	_clear_ghost_stills()
+	_clear_preview_stills()
 	cut_panel.close()
 	cut_cursor = -1
 	rig.camera.current = true

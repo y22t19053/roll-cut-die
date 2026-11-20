@@ -106,6 +106,7 @@ func run() -> void:
 		if lab.cut_panel.is_open(): break
 		await physics_frame
 	if not check(lab.cut_panel.is_open(),"manual CUT opened the timeline"): return
+	var npc_at_cut: Vector3 = lab.npcs[0].global_position
 	var ghost_at_cut: Vector3 = lab.ghost_nodes[0].global_position
 	await tap(KEY_2) # checkpoint is row 1, personal MARK is row 2.
 	var ghost_in_preview: Vector3 = lab.ghost_nodes[0].global_position
@@ -114,7 +115,11 @@ func run() -> void:
 	var still: Node3D = lab.ghost_stills[0]
 	if not check(still.global_position.distance_to(ghost_near_mark) < 0.25 and still.global_position.distance_to(ghost_at_cut) > 1.0 and still.find_children("*", "CollisionObject3D", true, false).is_empty(), "still shows near-MARK pose without a collision object"): return
 	if not check(ghost_in_preview.is_equal_approx(ghost_at_cut) and (lab.preview_cam.cull_mask & lab.ghost_nodes[0].get_node("Visual/Body").layers) == 0, "live body stays at CUT and is excluded from historical camera"): return
+	var npc_pose: Transform3D = mark.npc_frames[lab.npcs[0].npc_id].pose
+	if not check(lab.npc_stills.size() == 1 and lab.npc_stills[0].global_transform.is_equal_approx(npc_pose) and npc_pose.origin.distance_to(npc_at_cut) > 0.3 and lab.npcs[0].global_position.is_equal_approx(npc_at_cut), "preview shows the earlier NPC pose without rewinding patrol"): return
+	if not check(lab.npc_stills[0].find_children("*", "CollisionObject3D", true, false).is_empty(), "NPC preview has no danger area"): return
 	await tap(KEY_ESCAPE)
+	if not check(lab.npc_stills.is_empty(), "ESC clears NPC stills"): return
 	if not check(lab.ghost_stills.is_empty() and lab.rig.camera.current and lab.ghost_nodes[0].global_position.is_equal_approx(ghost_at_cut), "ESC clears still without moving live body"): return
 	await tap(KEY_2)
 	await tap(KEY_SPACE)
