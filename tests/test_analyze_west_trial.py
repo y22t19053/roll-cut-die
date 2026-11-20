@@ -69,6 +69,14 @@ class WestTrialTests(unittest.TestCase):
             r = report(header('A'), key(10, 'W'), key(10, 'D'), sample(10, True), key(10, name), sample(10, False), outcome())
             self.assertEqual((name, 0, 0), (r['first_lateral_key'], r['contact_to_lateral_us'], r['contact_to_release_us']))
 
+    def test_lateral_order_is_not_recovery_attribution(self):
+        for events, expected in [([key(10,'D'), sample(10,False)], True),
+                                 ([sample(10,False), key(10,'D')], False),
+                                 ([key(10,'D')], None), ([sample(10,False)], None),
+                                 ([key(10,'D'), sample(10,False), key(3,'A')], None)]:
+            r = report(header(), sample(9,True), *events, outcome())
+            self.assertIs(expected, r['first_lateral_before_observed_release'])
+
     def test_unobserved_and_censored(self):
         for samples in [[], [sample(5, False)], [sample(5, True)]]:
             r = report(header(), *samples, outcome())

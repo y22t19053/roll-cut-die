@@ -41,6 +41,7 @@ def analyze(path, condition=None, source=None):
     r = dict(status='ok', condition=None, source=None, session=None, reason=None,
              script_page_taken=None, first_contact_us=None, first_lateral_key=None,
              contact_to_lateral_us=None, contact_to_release_us=None,
+             first_lateral_before_observed_release=None,
              participant_identity=None, comprehension=None, issues=[])
     clock_ok = True
     first_contact_possible = lateral_possible = release_possible = True
@@ -52,6 +53,7 @@ def analyze(path, condition=None, source=None):
     # Preserve off-protocol trials; do not pool them with confirmed ORBIT30.
     orbit_rate = None
     saw_mode = missing_mode = non_orbit = False
+    lateral_line = release_line = None
     ended = False
     n = 0
 
@@ -130,6 +132,7 @@ def analyze(path, condition=None, source=None):
                             release_possible = False
                         elif release_possible and not hit and t is not None:
                             r['contact_to_release_us'] = t - r['first_contact_us']
+                            release_line = n
                 elif kind == 'key':
                     key = field(row, 'key', lambda x: isinstance(x, str) and x in KEYS)
                     down = field(row, 'pressed', lambda x: type(x) is bool)
@@ -138,6 +141,7 @@ def analyze(path, condition=None, source=None):
                             if key is None or down is None:
                                 lateral_possible = False
                             elif lateral_possible and t is not None:
+                                lateral_line = n
                                 r['first_lateral_key'] = key
                                 r['contact_to_lateral_us'] = t - r['first_contact_us']
                 elif kind == 'outcome':
@@ -155,6 +159,9 @@ def analyze(path, condition=None, source=None):
     if r['status'] == 'invalid' or not clock_ok:
         for k in ('first_contact_us', 'first_lateral_key', 'contact_to_lateral_us', 'contact_to_release_us'):
             r[k] = None
+    elif lateral_line is not None and release_line is not None:
+        # File order disambiguates equal clocks; this is observation order, not causation.
+        r['first_lateral_before_observed_release'] = lateral_line < release_line
     r['observed_wall_recontacts'] = (recontacts if r['status'] != 'invalid' and clock_ok
                                      and contact_series_complete and r['first_contact_us'] is not None else None)
     rate_known = type(orbit_rate) in (int, float)
