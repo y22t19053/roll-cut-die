@@ -5,6 +5,7 @@ extends RefCounted
 ## shallow about behaviour: L0/L1/L2 tests own the rules, this one owns the
 ## wiring — nodes exist, the slate runs, the player is released onto the floor.
 
+const Loc = preload("res://scripts/core/loc.gd")
 const SlateUi = preload("res://scripts/ui/slate_ui.gd")
 
 
@@ -36,8 +37,14 @@ static func run(h, tree = null) -> void:
 			var path := str(child.get_script().resource_path)
 			if path.ends_with("npc_patrol.gd"):
 				npcs += 1
+				var tag := child.get_node_or_null("Tag") as Label3D
+				var expected := str(child.get("display_name"))
+				h.ok("%s tag initialized on scene entry" % child.name, tag != null and not expected.is_empty() and tag.text == expected)
 			elif path.ends_with("evidence_prop.gd"):
 				evidence += 1
+				var label := child.get_node_or_null("Marker/Name") as Label3D
+				var expected_label := Loc.t(child.get("meta").get("name", {}))
+				h.ok("%s label initialized on scene entry" % child.name, label != null and not expected_label.is_empty() and label.text == expected_label)
 	h.eq("two npcs in the room", npcs, 2)
 	h.eq("four evidence props in the room", evidence, 4)
 
