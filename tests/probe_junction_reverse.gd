@@ -8,6 +8,10 @@ func report_projection(stage: String) -> void:
 	print("REPORT PROJECTION %s viewport=%s center=%s in_frustum=%s behind=%s" % [stage, root.get_visible_rect().size, cam.unproject_position(marker), cam.is_position_in_frustum(marker), cam.is_position_behind(marker)])
 
 func run() -> void:
+	# Headless defaults to a square window; compare the two starts at the playtest aspect.
+	root.size = Vector2i(1600, 900)
+	await process_frame
+	if not check(root.get_visible_rect().size.is_equal_approx(Vector2(1600, 900)), "projection viewport matches playtest dimensions"): return
 	create_timer(45.0).timeout.connect(func(): quit(2))
 	lab = load("res://tools/junction_reverse.tscn").instantiate()
 	root.add_child(lab)
