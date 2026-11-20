@@ -63,6 +63,13 @@ func _flat(v: Vector3) -> Vector2:
 func _main() -> void:
 	var gs: Node = root.get_node("GameSession")
 	var main: Node = (load("res://scenes/main/main.tscn") as PackedScene).instantiate()
+	# Runtime load: the standalone SceneTree script compiles before autoloads exist.
+	var fixture := load("res://tests/main_without_persistence.gd") as Script
+	if fixture == null or not fixture.can_instantiate():
+		main.free()
+		quit(2)
+		return
+	main.set_script(fixture)
 	root.add_child(main)
 	var player: Node3D = main.get_node("Player")
 	var hud: Node = main.get_node("Hud")
@@ -185,6 +192,7 @@ func _main() -> void:
 		main.recorder.recording and main.recorder.elapsed() >= float(main.marks.marks[0]["rec_t"]))
 	_check("still on the mark after release", _flat(player.global_position).distance_to(_flat(mark_pos)) < 0.05)
 
+	_check("production save requests intercepted", main.intercepted_writes > 0, str(main.intercepted_writes))
 	main.queue_free()
 	await process_frame
 	print("")
