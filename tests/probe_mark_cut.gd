@@ -223,7 +223,14 @@ func _main() -> void:
 	for i in 12:
 		await physics_frame
 	var slide: Vector3 = player.global_position - mark_pos
-	_check("released body coasts from the MARK then stops", slide.x > 0.12 and slide.x < 0.24 and absf(slide.z) < 0.01 and player.velocity.length() < 0.01, str(slide))
+	# Sum the unobstructed braking distance at the configured physics rate.
+	var step_s := 1.0 / Engine.physics_ticks_per_second
+	var speed_x: float = point.velocity.x
+	var braking_distance := 0.0
+	while speed_x > 0.0:
+		speed_x = maxf(0.0, speed_x - player.DECEL * step_s)
+		braking_distance += speed_x * step_s
+	_check("released body matches uninterrupted braking distance", absf(slide.x - braking_distance) < 0.002 and absf(slide.z) < 0.002 and player.velocity.length() < 0.01, "expected %.6f m, observed %.6f m" % [braking_distance, slide.x])
 
 	for i in 5:
 		await physics_frame
