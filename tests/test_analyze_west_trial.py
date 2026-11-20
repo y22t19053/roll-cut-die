@@ -40,6 +40,14 @@ def report(*rows, **kwargs):
 
 
 class WestTrialTests(unittest.TestCase):
+    def test_receipt_digest_is_optional_for_archives_but_never_inferred(self):
+        h = header()
+        self.assertEqual('ok', report(h, outcome())['status'])
+        self.assertEqual('unknown', report(h, outcome(), config_sha256='a'*64)['status'])
+        for stored, status in [('a'*64, 'ok'), ('b'*64, 'invalid'), ('bad', 'invalid')]:
+            h['config']['project_config_sha256'] = stored
+            self.assertEqual(status, report(h, outcome(), config_sha256='a'*64)['status'])
+
     def test_independent_first_observations(self):
         r = report(header(), key(9, 'D'), sample(10, False), sample(20, True),
                    key(20, 'D', False), key(21, 'UP'), sample(22, True),

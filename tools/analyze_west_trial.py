@@ -37,7 +37,7 @@ def unique_fields(pairs):
     return fields
 
 
-def analyze(path, condition=None, source=None):
+def analyze(path, condition=None, source=None, config_sha256=None):
     r = dict(status='ok', condition=None, source=None, session=None, reason=None,
              script_page_taken=None, first_contact_us=None, first_lateral_key=None,
              contact_to_lateral_us=None, contact_to_release_us=None,
@@ -105,6 +105,10 @@ def analyze(path, condition=None, source=None):
                     cfg = field(row, 'config', lambda x: isinstance(x, dict))
                     if cfg is not None:
                         field(cfg, 'protocol', lambda x: x == 'B3-B/1')
+                        if config_sha256 is not None or 'project_config_sha256' in cfg:
+                            digest = field(cfg, 'project_config_sha256', lambda v: isinstance(v, str) and re.fullmatch('[0-9a-f]{64}', v))
+                            if digest and config_sha256 is not None and digest != config_sha256:
+                                issue('invalid', 'project configuration differs from preparation receipt')
                         orbit_rate = cfg.get('orbit_deg_s')
                         field(cfg, 'wall_xz', lambda x: matches(x, WALL))
                         if c:
@@ -180,8 +184,11 @@ def main():
     p.add_argument('trial', type=Path)
     p.add_argument('--condition', choices=('A', 'B'), help='expected condition')
     p.add_argument('--source', choices=SOURCES, help='expected recorder label; not identity verification')
+    p.add_argument('--config-sha256', help='expected project_config_sha256 from the preparation receipt')
     args = p.parse_args()
-    report = analyze(args.trial, args.condition, args.source)
+    if args.config_sha256 is not None and not re.fullmatch('[0-9a-fA-F]{64}', args.config_sha256):
+        p.error('--config-sha256 must be a 64-digit hexadecimal digest')
+    report = analyze(args.trial, args.condition, args.source, args.config_sha256.lower() if args.config_sha256 else None)
     print(json.dumps(report, indent=2))
     return {'ok': 0, 'unknown': 1, 'invalid': 2}[report['status']]
 
