@@ -52,4 +52,9 @@ func run() -> void:
 	if not check(lab.phase == lab.Phase.COMPLETE,"south report accepted"): return
 	await tap(KEY_SPACE)
 	if not check(await released() and xz().distance_to(Vector2(6,13)) < 0.1 and lab.ghost_nodes.size() == 2,"after two successful reports the south start returns with both histories"): return
+	var origins := {}
+	for actor in lab.ghost_nodes:
+		origins[actor.track.take_id] = actor.track.sample_at(0.0).position
+	if not check(origins.size() == 2 and origins.has(1) and origins.has(3) and not origins.has(2), "only successful Take 01 and retry Take 03 are replayed"): return
+	if not check(origins[1].distance_to(lab.SOUTH) < 0.15 and origins[3].distance_to(lab.NORTH) < 0.15, "both recordings keep their own world-space origins after swapping ends twice"): return
 	quit(0)
