@@ -39,6 +39,11 @@ signal lot_hatch_changed(open: bool)
 var hatch := preload("res://scripts/studiolot/lot_hatch.gd").new()
 var hatch_open := false
 var hatch_cam := Camera3D.new()
+const ONER_DOOR := Vector3(46,0.05,19)
+var oner
+var on_soundstage := false
+var oner_print := false
+var _return_pose := {}
 var green_stage: Node3D
 var drop_elapsed := -1.0
 var locked := false
@@ -51,6 +56,43 @@ func _ready() -> void:
 	GameSession.reset_run()
 	super._ready()
 	add_child(_score)
+	var stage := load("res://scripts/studiolot/oner_run.gd") as GDScript
+	if stage != null and stage.can_instantiate():
+		oner = stage.new()
+		oner.position = Vector3(58,0,17)
+		add_child(oner)
+		oner.visible = false
+		oner.leg_banked.connect(func(n: int): hud.flash(_words("过片 %d / 8", "PRINT %d / 8") % n, 0.8, "pickup"))
+		oner.near_miss.connect(func(n: int): hud.flash(_words("擦过第 %02d 条", "CLEARED TAKE %02d") % n, 0.7, "mark"))
+		oner.leg_failed.connect(func(n: int): hud.flash(_words("重拍第 %d 趟", "RETAKE LEG %d") % n, 1.0, "deny"))
+		oner.completed.connect(func(): _leave_oner.call_deferred(true))
+		_sign("一镜到底 · 八趟", "THE ONER · EIGHT LEGS", ONER_DOOR + Vector3.UP * 1.35)
+		_retext_signs()
+
+func _enter_oner() -> void:
+	_return_pose = {"pos":player.global_position, "facing":player.facing, "cam_yaw":rig.yaw,"cam_roll":rig.roll,"cam_motion":rig.mark_motion()}
+	oner.visible = true
+	if not oner.start(player,rig):
+		oner.visible = false
+		return
+	on_soundstage = true
+	_freeze_world()
+	recorder.recording = false
+
+func _leave_oner(won: bool) -> void:
+	if not on_soundstage: return
+	if not won: oner.abort()
+	oner_print = oner_print or won
+	on_soundstage = false
+	oner.visible = false
+	player.teleport(_return_pose.pos, _return_pose.facing)
+	rig.setup(player)
+	rig.restore_mark_motion(_return_pose)
+	_world_running = true
+	recorder.recording = true
+	for n in npcs: n.set_active(true)
+	for g in ghost_nodes: g.playing = not g.spent
+	if won: hud.flash(_words("一镜到底 · 留片", "THE ONER · PRINT IT"), 2.2, "pickup")
 
 func _load_map() -> bool:
 	variation = Plan.variation(production)
@@ -258,6 +300,7 @@ func _near(id: String) -> bool:
 
 ## What E would do here: [action, argument], or [] when nothing is in reach.
 func _target() -> Array:
+	if oner != null and player.global_position.distance_to(ONER_DOOR) <= 0.82: return ["oner", ""]
 	for g: String in ["a", "b"]:
 		if not gates.has(g) and _near("latch_" + g):
 			return ["latch", g]
@@ -281,6 +324,7 @@ func _cue_text() -> String:
 	var t := _target()
 	if not t.is_empty():
 		match str(t[0]):
+			"oner": return _words("E　进棚：八趟一镜到底", "E   Enter stage: eight-leg oner")
 			"latch": return _words("E　松开脚刹，把布景车推到一旁", "E   Release the brake and strike the scenery wagon")
 			"standby": return _words("看替身的脚。站上白叉，再按 E 收镜　·　M 留接点，错过可用 C 剪回", "Watch the stand-in. Press E on the white cross · M to mark, C to retry a missed cue")
 			"image": return _words("E　取下母版画面：%s", "E   Lift master picture: %s") % _site(t[1])
@@ -309,6 +353,9 @@ func _interact() -> void:
 	recorder.mark(GhostTrack.FLAG_INTERACT)
 	var arg := str(t[1])
 	match str(t[0]):
+		"oner":
+			_enter_oner()
+			return
 		"latch":
 			open_gate(arg)
 			_flash(func() -> String: return _words("布景撤了，回程可以走这里", "Set struck. This way back stays open."), 3.0)
@@ -506,6 +553,8 @@ func ending_lines() -> PackedStringArray:
 		lines.append(_words("一部默片。只有放映机在响。", "A silent picture. Only the projector speaks."))
 	else:
 		lines.append(_words("有的声音对不上嘴。它还是放完了。", "Some of the sound drifts off the lips. It still plays to the end."))
+	if oner_print:
+		lines.append(_words("加映 · 八趟一镜到底", "Bonus reel · The Eight-Leg Oner"))
 	var t = GameSession.takes
 	lines.append(_words("银幕上是你真实走过的 %d 条，共 %s；废片 %d 条。", "On screen: your %d recorded takes, %s in all; %d outtakes.")
 		% [_reels.size(), MarkLedger.clock(_screen_total), t.outtakes.size()])
@@ -527,6 +576,9 @@ func _render_ending() -> void:
 	_set_hint(_idle_hint)
 
 func _process(dt: float) -> void:
+	if on_soundstage:
+		_show_hint(_words("走向亮灯的一端　%d / 8　·　Q 回片场", "Cross to the lit end   %d / 8   ·   Q: leave stage") % clampi(oner.leg,1,8))
+		return
 	super._process(dt)
 	if not screened or paused:
 		return
@@ -575,6 +627,11 @@ func new_production() -> void:
 		queue_free()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if on_soundstage:
+		if event is InputEventKey and event.pressed and not event.echo:
+			if event.physical_keycode == KEY_Q: _leave_oner(false)
+			elif event.physical_keycode == KEY_ESCAPE: super._unhandled_input(event)
+		return
 	if screened and phase == Phase.COMPLETE and not paused and event is InputEventKey and event.pressed and not event.echo:
 		match (event as InputEventKey).physical_keycode:
 			KEY_B:
