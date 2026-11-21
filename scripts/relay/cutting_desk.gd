@@ -74,6 +74,13 @@ func show_call_sheet(title:String, lines:Array, won:bool, zh:bool) -> void:
 func hide_draw() -> void:
 	_cards.clear(); _hover=-1; _refresh()
 
+
+## The call sheet belongs to a finished run. Once the next set is on, it is gone:
+## a page from the last run lying over the next one reads as a bug, not a memory.
+func clear_sheet() -> void:
+	if _sheet_title == "" and _sheet_lines.is_empty(): return
+	_sheet_title=""; _sheet_lines=[]; _refresh()
+
 func _process(delta:float) -> void:
 	if _remaining>0:
 		_remaining-=delta

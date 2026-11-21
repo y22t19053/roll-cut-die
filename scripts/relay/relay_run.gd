@@ -195,6 +195,7 @@ func _start_leg(back: bool) -> void:
 	_sample()
 	_restart_actors()
 	_arm_mercy()
+	desk.clear_sheet()
 	grace = GRACE
 	_checkpoint(false)
 	_show_target()
@@ -364,6 +365,7 @@ func _restore(i: int) -> void:
 	last_anchor = i
 	_restart_actors()
 	_arm_mercy()
+	desk.clear_sheet()
 	grace = GRACE
 	_arrival_locked = player.global_position.distance_to(route[cursor]) <= TOUCH
 	_show_target()
@@ -580,6 +582,9 @@ func _hit(source: int) -> bool:
 ## The call sheet. Win or lose, a run ends with one page that says what it was:
 ## how far, how many takes, how many deaths, and the seed to replay it.
 func _show_sheet(won: bool) -> void:
+	# The run is over, so the board gets out of the way instead of printing the
+	# DIE. card over the page that explains what the run was.
+	if slate.is_running(): slate.hide_slate()
 	var lines: Array = [
 		_w("棚 %d / %d　条 %d　死 %d", "SETS %d / %d   TAKES %d   DEATHS %d") % [segments.size(),MODULES,tracks.size(),deaths],
 		_w("标记 %d　剪 %d　种子 %06X", "MARKS %d   CUTS %d   SEED %06X") % [mark_stock,cut_stock,run_seed],
