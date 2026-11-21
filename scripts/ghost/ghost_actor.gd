@@ -24,6 +24,7 @@ const FADE_OUT_S := 1.2
 ## and die on the first frame. So the ghost is visible but harmless while it
 ## materialises, and the danger only comes on after it has walked clear.
 const WARMUP := 2.0
+var warmup_seconds := WARMUP # Compact relay uses its shorter entry guard.
 ## Alpha the body ramps up to while materialising (harmless).
 const WARMUP_ALPHA := 0.30
 ## Alpha once armed: readable as a person, not as smoke.
@@ -198,7 +199,7 @@ func _physics_process(dt: float) -> void:
 	if _visual != null:
 		_visual.rotation.y = s["facing"]
 	if not _armed:
-		if playhead >= WARMUP:
+		if playhead >= warmup_seconds:
 			_armed = true
 			if _danger != null:
 				_danger.set_deferred("monitoring", true)
@@ -206,7 +207,7 @@ func _physics_process(dt: float) -> void:
 				_label.text = "TAKE %02d" % take_id
 			_set_alpha(ARMED_ALPHA)
 		else:
-			_set_alpha(WARMUP_ALPHA * clampf(playhead / WARMUP, 0.0, 1.0))
+			_set_alpha(WARMUP_ALPHA * clampf(playhead / maxf(warmup_seconds,0.001), 0.0, 1.0))
 	if track.duration() > 0.0 and playhead > track.duration():
 		_finish()
 

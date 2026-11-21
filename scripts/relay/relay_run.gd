@@ -12,7 +12,13 @@ const Loc = preload("res://scripts/core/loc.gd")
 const MODULES := 7
 const KINDS := ["tee", "cross", "zig"]
 const TOUCH := 0.77
-const GRACE := 2.5
+const GRACE := 0.75
+const PASSES := 4
+var room_pass := 0
+var room_track_start := 0
+var cards: Array = []
+var desk: CanvasLayer
+var score: Node
 
 enum Mode { PLAY, PICK, CUT, DONE, LOST }
 var phase := Mode.PLAY
@@ -50,6 +56,11 @@ var _foley := preload("res://scripts/ui/foley.gd").new()
 
 func _ready() -> void:
 	add_child(_foley)
+	desk = load("res://scripts/relay/cutting_desk.gd").new()
+	add_child(desk)
+	desk.picked.connect(_pick_card)
+	score = load("res://scripts/relay/relay_sound.gd").new()
+	add_child(score)
 	preload("res://scripts/core/input_setup.gd").ensure_actions()
 	_rng.randomize()
 	segments.append($Rooms.append_room("straight",0))
@@ -76,23 +87,21 @@ func _ready() -> void:
 	sun.rotation_degrees = Vector3(-54,-28,0)
 	sun.shadow_enabled = true
 	add_child(sun)
-	var ring := TorusMesh.new()
-	ring.inner_radius = 0.58
-	ring.outer_radius = 0.84
-	_lamp.mesh = ring
-	_lamp.scale.y = 0.22
+	var tape := BoxMesh.new()
+	tape.size = Vector3(0.15,0.035,2.7)
+	_lamp.mesh = tape
 	var ink := StandardMaterial3D.new()
 	ink.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	ink.albedo_color = Color("ffdf63")
+	ink.albedo_color = Color("ffde79")
 	_lamp.material_override = ink
 	add_child(_lamp)
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	layer.add_child(_hud)
-	_hud.position = Vector2(22,18)
-	_hud.add_theme_font_size_override("font_size",21)
-	_hud.add_theme_constant_override("outline_size",7)
-	_hud.add_theme_color_override("font_outline_color",Color("16202aff"))
+	_hud.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_hud.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hud.add_theme_font_size_override("font_size",24)
+	_hud.add_theme_constant_override("outline_size",8)
 	# Sample after the actual player and camera have stepped.
 	process_physics_priority = 5
 	_start_leg(false)
@@ -103,13 +112,8 @@ func _w(zh: String, en: String) -> String:
 func _start_leg(back: bool) -> void:
 	returning = back
 	route.clear()
-	for room in segments:
-		for stop: Vector3 in room.stops:
-			route.append(stop)
-	if back:
-		route.remove_at(route.size()-1) # Already standing at the turnaround.
-		route.reverse()
-		route.append(segments[0].start)
+	var room := segments.back() as Dictionary
+	route.append(room.start if back else room.end)
 	cursor = 0
 	_arrival_locked = false
 	phase = Mode.PLAY
@@ -131,10 +135,11 @@ func _restart_actors() -> void:
 		old.hide()
 		old.queue_free()
 	_actors.clear()
-	for tr in tracks:
+	for tr in tracks.slice(room_track_start):
 		if elapsed >= tr.duration(): continue
 		var g := Ghost.new()
 		add_child(g)
+		g.warmup_seconds = GRACE
 		g.setup(tr,tr.take_id)
 		g.playhead = elapsed
 		g.global_position = tr.sample_at(elapsed).position
@@ -187,13 +192,39 @@ func _show_target() -> void:
 func _finish_leg() -> void:
 	_sample()
 	tracks.append(live)
-	if not returning:
-		_start_leg(true)
+	room_pass += 1
+	if room_pass < PASSES:
+		score.cue("line")
+		_start_leg(not returning)
 		return
 	phase = Mode.DONE if segments.size() == MODULES else Mode.PICK
-	if phase == Mode.DONE and Rules.unlocked(difficulty): Rules.record_clear(difficulty)
 	_freeze()
 	_show_target()
+	if phase == Mode.DONE:
+		if Rules.unlocked(difficulty): Rules.record_clear(difficulty)
+		score.cue("win")
+		desk.show_result(true, Loc.language == "zh")
+	else:
+		cards.clear()
+		var deck := ["straight","tee","cross","zig"]
+		var reward_slot := _rng.randi_range(0,2)
+		for i in 3:
+			cards.append({"kind":deck.pop_at(_rng.randi_range(0,deck.size()-1)),"variant":_rng.randi_range(0,1),"splice":i==reward_slot})
+		score.cue("clear")
+		desk.show_draw(cards, Loc.language == "zh")
+
+func _pick_card(i: int) -> void:
+	if phase != Mode.PICK or i < 0 or i >= cards.size(): return
+	var c: Dictionary = cards[i]
+	var room: Dictionary = $Rooms.append_room(c.kind,c.variant)
+	segments.append(room)
+	if c.splice: splice.offer()
+	score.cue("pickup" if c.splice else "choose")
+	room_track_start = tracks.size()
+	room_pass = 0
+	player.teleport(room.start,player.facing)
+	desk.hide_draw()
+	_start_leg(false)
 
 func _freeze() -> void:
 	_cut_velocity = player.velocity
@@ -218,29 +249,15 @@ func _physics_process(dt: float) -> void:
 	if elapsed >= _next_sample:
 		_sample()
 		_next_sample = elapsed + 0.10
+	$Rooms.set_clock(segments.size()-1,elapsed)
 	if grace <= 0:
 		for g in _actors:
-			if not g.spent and g.playhead >= Ghost.WARMUP and g.global_position.distance_to(player.global_position) < Ghost.DANGER_RADIUS + Player.RADIUS:
-				var was_held := splice.has_splice()
-				if splice.protect(active_clock):
-					if was_held and not splice.has_splice():
-						_foley.play("splice")
-						_notice = _w("保险片接上 · 继续跑", "Spliced · keep rolling")
-						_notice_left = 1.5
-					break
-				deaths += 1
-				if difficulty > 0:
-					forced_cut = cut_stock > 0
-					phase = Mode.CUT if forced_cut else Mode.LOST
-					_selected = last_anchor
-					_freeze()
-					_show_target()
-					return
-				_notice = _w("撞上第 %02d 条，已返回上次落点。", "Hit TAKE %02d. Back at your last anchor.") % g.take_id
-				_notice_left = 3.5
-				_restore(last_anchor)
-				return
-	var inside := player.global_position.distance_to(route[cursor]) <= TOUCH
+			if not g.spent and g.playhead >= GRACE and g.global_position.distance_to(player.global_position) < Ghost.DANGER_RADIUS + Player.RADIUS:
+				if _hit(g.take_id): return
+				break
+		if $Rooms.hazard_at(player.global_position,segments.size()-1,elapsed):
+			if _hit(0): return
+	var inside := player.position.x <= route[cursor].x + 0.1 if returning else player.position.x >= route[cursor].x - 0.1
 	if not inside: _arrival_locked = false
 	if inside and not _arrival_locked:
 		cursor += 1
@@ -251,15 +268,34 @@ func _physics_process(dt: float) -> void:
 		_show_target()
 	_refresh()
 
+func _hit(source: int) -> bool:
+	var held := splice.has_splice()
+	if splice.protect(active_clock):
+		if held and not splice.has_splice():
+			_foley.play("splice")
+			desk.show_message(_w("接片续拍", "SPLICED"))
+		return false
+	deaths += 1
+	score.cue("trap" if source == 0 else "hit")
+	if difficulty > 0:
+		forced_cut = cut_stock > 0
+		phase = Mode.CUT if forced_cut else Mode.LOST
+		_selected = last_anchor
+		_freeze()
+		_show_target()
+		if phase == Mode.LOST: desk.show_result(false,Loc.language == "zh")
+	else:
+		_restore(last_anchor)
+		desk.show_message(_w("撞到摄影车", "CAMERA DOLLY") if source == 0 else "TAKE %02d" % source)
+	return true
+
 func _unhandled_key_input(e: InputEvent) -> void:
 	if not e is InputEventKey or not e.pressed or e.echo: return
 	var key: int = e.physical_keycode
 	if key == KEY_F2:
 		Loc.set_language("en" if Loc.language == "zh" else "zh")
 	elif phase == Mode.PICK and key >= KEY_1 and key <= KEY_3:
-		segments.append($Rooms.append_room(KINDS[key-KEY_1],_rng.randi_range(0,1)))
-		if key == KEY_3: splice.offer()
-		_start_leg(false)
+		_pick_card(key-KEY_1)
 	elif phase in [Mode.DONE,Mode.LOST] and key == KEY_SPACE:
 		get_tree().reload_current_scene()
 	elif phase == Mode.CUT:
@@ -290,32 +326,12 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	_refresh()
 
 func _refresh() -> void:
-	var lines := PackedStringArray()
-	lines.append(_w("接力片场   %d/%d 间   ·   已录 %d 条", "RELAY   %d/%d rooms   ·   %d takes banked") % [segments.size(),MODULES,tracks.size()])
-	match phase:
-		Mode.PICK:
-			lines.append(_w("选下一间，接在旧片场尽头：", "Extend the far end of the set:"))
-			lines.append(_w("[1] 丁字支线    [2] 十字交叉    [3] 折线 + 保险片", "[1] T junction    [2] Crossroads    [3] Switchback + safety splice"))
-		Mode.LOST:
-			lines.append(_w("没有 CUT 可重拍。本局结束。 [空格] 重开", "Out of CUTs. Run over. [SPACE] Restart"))
-		Mode.DONE:
-			lines.append(_w("七间全部往返完成。收工！  [空格] 重新开拍", "Seven rooms, out and back. That's a wrap!  [SPACE] New run"))
-		Mode.CUT:
-			var p := anchors[_selected]
-			if not forced_cut: lines.append(_w("[C] 原地继续", "[C] Resume here"))
-			if forced_cut: lines.append(_w("失手：必须选点重拍。", "Caught: choose an anchor to retake."))
-			lines.append(_w("剪辑台  ↑↓ 翻看 %d/%d", "CUT desk  ↑↓ Browse %d/%d") % [_selected+1,anchors.size()])
-			lines.append(("MARK" if p.manual else _w("系统落点","Set anchor")) + "   TAKE %02d   %.1f s   (%.1f, %.1f)" % [p.leg,p.time,p.pos.x,p.pos.z])
-			lines.append(_w("同趟恢复到当时；跨趟只移位置，目标仍要亲自踩。", "This leg: rewind. Older leg: move only; you must still reach the target."))
-			lines.append(_w("[空格] 消耗 1 CUT；预览免费。", "[SPACE] Spend 1 CUT. Browsing is free.") if cut_stock > 0 else _w("CUT 已用完；按 C 继续。", "No CUTs left; C to resume."))
-		Mode.PLAY:
-			var delta := route[cursor]-player.global_position
-			var direction := ("D" if delta.x>0 else "A") if absf(delta.x)>absf(delta.z) else ("S" if delta.z>0 else "W")
-			var leg := _w("回程","RETURN") if returning else _w("去程","OUTBOUND")
-			lines.append(leg + _w("：走进金环   %d/%d   ·   %s 方向 %.0f m", ": walk into the gold ring   %d/%d   ·   %s direction %.0f m") % [cursor+1,route.size(),direction,delta.length()])
-			lines.append(_w("WASD 移动；键位不随镜头转。避开旧条里的人。", "WASD moves on fixed axes. Dodge the cast of earlier takes."))
-			if _notice_left > 0: lines.append(_notice)
-	lines.append(_w("[M] 标记 %d   [C] 剪辑 %d", "[M] MARK %d   [C] CUT %d") % [mark_stock,cut_stock])
-	lines.append(_w("新手 · 失手自动重来，不限次", "NOVICE · Unlimited automatic retries") if difficulty == 0 else _w("失手必须剪辑；没有 CUT 就收工。","Collision requires a CUT; none left ends the run."))
-	if splice.has_splice(): lines.append(_w("保险片在手 · 下次相撞原地续拍", "Safety splice loaded · protects the next hit"))
-	_hud.text = "\n".join(lines)
+	var zh := Loc.language == "zh"
+	desk.update_run(segments.size(),MODULES,mini(room_pass+1,PASSES),PASSES,mark_stock,cut_stock,splice.has_splice(),zh)
+	_hud.visible = phase == Mode.CUT
+	if _hud.visible:
+		var p := anchors[_selected]
+		_hud.text = _w("剪辑台　↑ ↓　%02d / %02d", "CUT DESK   ↑ ↓   %02d / %02d") % [_selected+1, anchors.size()] + "\nTAKE %02d · %.1fs\n" % [p.leg,p.time] + _w("空格：剪回　−1 CUT", "SPACE: splice   −1 CUT")
+	if _notice_left > 0:
+		desk.show_message(_notice)
+		_notice_left = 0
