@@ -28,6 +28,7 @@ static func run(h, _tree = null) -> void:
 	_roll(h, CHASE_ONLY)
 	_geometry(h)
 	_mouse(h)
+	_tilt(h)
 	_mid_snap_restore(h)
 
 
@@ -240,4 +241,28 @@ static func _mouse(h) -> void:
 	h.near("mouse never touches chase speed", rig.chase.w, w_before, 0.0)
 	h.near("mouse never touches chase roll", rig.chase.roll, roll_before, 0.0)
 	h.near("mouse decay constant is 1.2s", CameraMath.MOUSE_TAU, 1.2)
+	rig.free()
+
+
+# --- §4.5: the handheld bank follows the input, not the rules -----------
+static func _tilt(h) -> void:
+	var right := Vector3(1.0, 0.0, 0.0)
+	var forward := Vector3(0.0, 0.0, -1.0)
+	var idle: float = CameraRigScript.lean_target(Vector3.ZERO, 0.0, 0.0)
+	h.near("no input -> no bank", idle, 0.0)
+	var strafing: float = CameraRigScript.lean_target(right, 0.0, 0.0)
+	h.ok("a screen-right step banks the frame", strafing < -0.05)
+	h.near("bank is the mirror image on the other side",
+		CameraRigScript.lean_target(-right, 0.0, 0.0), -strafing, 1e-9)
+	var ahead: float = CameraRigScript.lean_target(forward, 0.0, 0.0)
+	h.at_most("walking straight ahead barely banks", absf(ahead), 0.02)
+	h.near("the cap holds under a big sidestep",
+		CameraRigScript.lean_target(right * 4.0, 0.0, 0.0),
+		-CameraRigScript.LEAN_MAX, 1e-9)
+	h.at_most("spinning up banks into the turn",
+		CameraRigScript.lean_target(Vector3.ZERO, 0.0, 2.0), -0.2)
+	var rig = CameraRigScript.new()
+	h.ok("tilt is on by default", rig.tilt_enabled)
+	rig.tilt_enabled = false
+	h.near("switching tilt off zeroes the bank", rig.lean, 0.0)
 	rig.free()

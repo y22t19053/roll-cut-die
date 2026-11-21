@@ -670,6 +670,13 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	if key == KEY_F2:
 		Loc.set_language("en" if Loc.language == "zh" else "zh")
 		return
+	if key == KEY_F3:
+		# A/B switch for the handheld bank: F3 must give the old picture back.
+		rig.tilt_enabled = not rig.tilt_enabled
+		_notice = _w("镜头横倾：开" if rig.tilt_enabled else "镜头横倾：关",
+			"LENS TILT: ON" if rig.tilt_enabled else "LENS TILT: OFF")
+		_notice_left = 2.0
+		return
 	# The board is talking. Nothing else gets a say until the clack has landed.
 	if slate.is_running(): return
 	if phase in [Mode.ITEM, Mode.PICK] and key >= KEY_1 and key <= KEY_3:

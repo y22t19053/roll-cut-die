@@ -41,6 +41,26 @@ var chase = CameraChase.new()
 var snap = CameraSnap.new()
 var orbit = CameraOrbit.new()
 
+## Handheld bank (§4.5 "your input carves the lens"). The modes lean the frame by
+## the camera's own yaw speed; this adds a second, presentation-only lean that
+## follows the *input itself* through a slightly underdamped spring, so a hard
+## sidestep banks the shot and letting go settles it instead of snapping level.
+## It never touches yaw, position, facing or any collision check.
+const LEAN_CARVE := 0.30        ## radians of bank per unit of strafe
+const LEAN_ACCEL := 0.18        ## bank per rad/s of orbit acceleration
+const LEAN_STIFF := 46.0
+const LEAN_DAMP := 12.0
+## Kept well under the 12 deg roll cap: the modes already lean the frame, and
+## this is meant to deepen their lean, not to double it.
+const LEAN_MAX := deg_to_rad(7.5)
+
+## A/B switch for the bank: off restores the pre-tilt picture exactly.
+var tilt_enabled := true
+var lean := 0.0
+
+var _lean_vel := 0.0
+var _prev_w := 0.0
+
 ## Mouse correction, radians. It is a view offset, not a gameplay input.
 var yaw_offset := 0.0
 ## How far the mouse may push the frame away from the chase before it is
@@ -109,7 +129,8 @@ func _physics_process(dt: float) -> void:
 		yaw_offset = 0.0
 
 	yaw = CameraMath.wrap_angle(drv.yaw + yaw_offset)
-	roll = 0.0 if reduce_motion else drv.roll * roll_scale
+	_update_lean(intent, drv, dt)
+	roll = 0.0 if reduce_motion else drv.roll * roll_scale + lean
 
 	if _shake > 0.0:
 		_shake = maxf(0.0, _shake - _shake_decay * dt)
@@ -118,6 +139,33 @@ func _physics_process(dt: float) -> void:
 	rotation.y = yaw
 	_apply()
 	roll_changed.emit(rad_to_deg(roll))
+
+
+## Presentation-only bank toward the input. Sign matches the modes' roll
+## convention (roll_target is negative for positive yaw speed), so a sidestep
+## deepens the lean the room is already giving instead of fighting it.
+func _update_lean(intent: Vector3, drv, dt: float) -> void:
+	var dw: float = (drv.w - _prev_w) / dt
+	_prev_w = drv.w
+	if not tilt_enabled or reduce_motion:
+		lean = 0.0
+		_lean_vel = 0.0
+		return
+	var want := lean_target(intent, yaw, dw)
+	var accel := (want - lean) * LEAN_STIFF - _lean_vel * LEAN_DAMP
+	_lean_vel += accel * dt
+	lean = clampf(lean + _lean_vel * dt, -LEAN_MAX, LEAN_MAX)
+
+
+## Pure: what bank this frame's input asks for, before the spring.
+static func lean_target(intent: Vector3, cam_yaw: float, dw: float) -> float:
+	var want := 0.0
+	var mag := intent.length()
+	if mag > 0.01:
+		var lateral := RollModes.screen_lateral(intent / mag, cam_yaw)
+		want -= LEAN_CARVE * clampf(lateral, -1.0, 1.0) * minf(mag, 1.0)
+	want -= clampf(LEAN_ACCEL * dw, -1.0, 1.0)
+	return clampf(want, -LEAN_MAX, LEAN_MAX)
 
 
 func _apply() -> void:
@@ -157,6 +205,8 @@ func set_roll_mode(m: int) -> void:
 	var next = active()
 	next.reset(prev.yaw)
 	next.roll = prev.roll
+	_prev_w = next.w
+	_lean_vel = 0.0
 
 
 ## Simulation state, distinct from the effective angles shown by the preview.
@@ -186,6 +236,9 @@ func restore_mark_motion(point: Dictionary) -> void:
 		# Older snapshots / a different selected mode: match pose without borrowing incompatible momentum.
 		drv.roll = point.cam_roll / roll_scale if not is_zero_approx(roll_scale) else 0.0
 	yaw = CameraMath.wrap_angle(drv.yaw + yaw_offset)
+	lean = 0.0
+	_lean_vel = 0.0
+	_prev_w = drv.w
 	roll = 0.0 if reduce_motion else drv.roll * roll_scale
 	rotation.y = yaw
 	_apply()
