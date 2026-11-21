@@ -14,7 +14,7 @@ var trial: Node
 
 func _ready() -> void:
 	super._ready()
-	if OS.get_cmdline_user_args() == PackedStringArray(["--west-trial-consent"]):
+	if preload("res://tools/trial_build.gd").enabled() or OS.get_cmdline_user_args() == PackedStringArray(["--west-trial-consent"]):
 		_install_trial(false)
 
 func _install_trial(synthetic: bool) -> void:
@@ -43,6 +43,11 @@ func _map_source() -> Variant:
 				"solid": false,
 			})
 	return map
+
+
+func _quit_to_title() -> void:
+	# The trial executable has no route into the production game/title save flow.
+	get_tree().quit()
 
 
 func _commit_state() -> void:

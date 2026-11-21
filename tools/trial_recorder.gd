@@ -26,7 +26,7 @@ static func isolated_operator_dir(custom: bool, configured: String, actual: Stri
 	var run_id := configured.trim_prefix(prefix)
 	return valid_session(run_id) and actual.replace("\\", "/").ends_with("/" + configured)
 
-func begin(args: PackedStringArray, condition: String, config: Dictionary, synthetic := false) -> bool:
+func begin(args: PackedStringArray, condition: String, config: Dictionary, synthetic := false, pending_id := "") -> bool:
 	if not session.is_empty() or args != PackedStringArray([CONSENT]) or condition not in ["A", "B"]:
 		return false
 	if not synthetic and not isolated_operator_dir(ProjectSettings.get_setting("application/config/use_custom_user_dir", false), ProjectSettings.get_setting("application/config/custom_user_dir_name", ""), OS.get_user_data_dir()):
@@ -37,7 +37,9 @@ func begin(args: PackedStringArray, condition: String, config: Dictionary, synth
 		push_error("Cannot create west trial output directory")
 		return false
 	# mkdir (nonrecursive) reserves a fresh private namespace even across processes.
-	session = Crypto.new().generate_random_bytes(16).hex_encode()
+	session = Crypto.new().generate_random_bytes(16).hex_encode() if pending_id.is_empty() else pending_id
+	if not valid_session(session):
+		return false
 	directory = base.path_join(session)
 	if not valid_session(session) or DirAccess.dir_exists_absolute(directory) or DirAccess.make_dir_absolute(directory) != OK:
 		push_error("Cannot reserve new west trial session; no retry or overwrite")
