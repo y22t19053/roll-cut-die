@@ -35,6 +35,16 @@ var _screen_t := 0.0
 var _screen_total := 0.0
 var _slips := {} # Projectionist's delivery slips, keyed by actual completed take ID.
 var _new_armed_ms := -100000
+signal lot_hatch_changed(open: bool)
+var hatch := preload("res://scripts/studiolot/lot_hatch.gd").new()
+var hatch_open := false
+var hatch_cam := Camera3D.new()
+var green_stage: Node3D
+var drop_elapsed := -1.0
+var locked := false
+var lock_prompt := false
+var _landing_clock := 0.0 # offset between current take and the previous performances
+const DROP_TIME := 0.52
 
 
 func _ready() -> void:
@@ -94,6 +104,18 @@ func _build_world() -> void:
 		_shelf["snd_" + site] = _spool(self, Vector3(2.7 + i * 1.3, 1.22, 33.6), 0.24, Color("59c7e2"))
 	_shelf["print"] = _spool(self, Vector3(12.5, 1.5, 6.5), 0.42, Color("f2f2ea"))
 	_build_screen()
+	hatch.name = "LotHatch"
+	hatch.position = Vector3(4,0.08,30)
+	add_child(hatch)
+	hatch.build(map_data)
+	add_child(hatch_cam)
+	hatch_cam.position = Vector3(4,7.5,32.8)
+	hatch_cam.look_at(hatch.position,Vector3.UP)
+	var stage_path := "res://scripts/studiolot/green_stage.gd"
+	if ResourceLoader.exists(stage_path):
+		green_stage = load(stage_path).new()
+		green_stage.position = Vector3(37.4,0,15.6)
+		add_child(green_stage)
 	_retext_signs()
 
 func _build_actors() -> void:
@@ -185,6 +207,7 @@ func _build_screen() -> void:
 # --- take flow -----------------------------------------------------------
 
 func _begin_take() -> void:
+	_landing_clock = 0
 	hand_image = ""
 	hand_sound = ""
 	has_print = false
@@ -300,6 +323,13 @@ func _interact() -> void:
 			hand_image = ""
 			hand_sound = ""
 			_complete_leg("deliver")
+			hatch.begin(GameSession.ghosts)
+			hatch_open = true
+			hatch_cam.current = true
+			lot_hatch_changed.emit(true)
+			player.set_frozen(false)
+			rig.set_physics_process(true)
+			_set_hint(_idle_hint)
 			return
 		"print":
 			has_print = true
@@ -335,10 +365,61 @@ func _idle_hint() -> String:
 	if phase == Phase.DEAD:
 		return Loc.ui("hint.retake")
 	if screened:
-		return _words("空格：重放　B：回剪辑塔继续　N：开一部新片", "SPACE: run it again   B: back to editing   N: new production")
-	return _words("素材入库，这一条留在片场。空格：下一条", "Banked. This take stays on the lot. SPACE: next take")
+		if locked: return _words("已锁片。空格：重放　N：新片", "Final print locked. SPACE: replay   N: new film")
+		if lock_prompt: return _words("锁片后不能再补拍。Enter：确认锁片　B：取消并回片场", "No pickups after locking. Enter: confirm lock   B: cancel and return")
+		return _words("样片。空格：重放　B：回去补拍　L：锁片…", "Workprint. SPACE: replay   B: shoot more   L: lock picture…")
+	return _words("剪辑台前的洞开了。黄圈是落点。看人走开，再跨沿下去。", "Hatch open. You land on the gold ring. Watch the cast, then step over the lip.")
+
+func _physics_process(dt: float) -> void:
+	if not hatch_open:
+		super._physics_process(dt)
+		if green_stage != null: green_stage.call("set_take_time",_world_t)
+		return
+	hatch.advance(dt)
+	if drop_elapsed < 0:
+		var d: Vector3 = player.position - hatch.position
+		if absf(d.x) > 1.15 or absf(d.z) > 1.15: return
+		drop_elapsed = 0.0
+		player.set_frozen(true)
+		player.set_physics_process(false)
+	drop_elapsed += dt
+	player.position.y = 0.05 - 8.0 * drop_elapsed * drop_elapsed
+	if drop_elapsed < DROP_TIME: return
+	hatch_open = false
+	hatch.close()
+	lot_hatch_changed.emit(false)
+	drop_elapsed = -1
+	GameSession.takes.retake()
+	# No ROLL slate or time reset between the observed frame and live danger.
+	phase = Phase.ROLLING
+	spawn_pos = hatch.landing
+	player.teleport(spawn_pos,0)
+	player.set_physics_process(true)
+	player.set_frozen(false)
+	rig.setup(player)
+	rig.camera.current = true
+	_landing_clock = hatch.clock
+	_world_t = _landing_clock
+	_world_running = true
+	_clear_ghosts()
+	_spawn_ghosts()
+	for g in ghost_nodes:
+		g.playhead = _landing_clock
+		g.global_position = g.track.sample_at(g.playhead).position
+	for n in npcs:
+		n.reset_phase()
+		n.set_active(true)
+	recorder.setup(player,rig,GameSession.takes.take_index)
+	recorder.start()
+	marks.clear()
+	_resume_point = {}
+	marks.checkpoint = _snapshot()
+	_sync_beacons()
+	_set_hint(Callable())
+	_update_hud()
 
 func _retake() -> void:
+	if hatch_open: return
 	if screened and phase == Phase.COMPLETE:
 		_screen_t = 0.0
 		return
@@ -464,9 +545,10 @@ func _process(dt: float) -> void:
 
 ## B at the ending: the print goes back; everything banked and recorded stays.
 func return_to_editing() -> bool:
-	if not screened or phase != Phase.COMPLETE or paused:
+	if locked or not screened or phase != Phase.COMPLETE or paused:
 		return false
 	screened = false
+	lock_prompt = false
 	_score.set_screening(false)
 	_screen_root.visible = false
 	rig.camera.current = true
@@ -494,7 +576,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_B:
 				return_to_editing()
 				return
+			KEY_L:
+				if not locked:
+					lock_prompt = true
+					_set_hint(_idle_hint)
+				return
+			KEY_ENTER:
+				if lock_prompt and not locked:
+					lock_prompt = false
+					locked = true
+					_render_ending()
+				return
 			KEY_N:
+				if not locked: return
 				if Time.get_ticks_msec() - _new_armed_ms < 4000:
 					new_production()
 				else:
