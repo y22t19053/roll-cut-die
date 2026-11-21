@@ -132,7 +132,9 @@ func _ready() -> void:
 		_apply_run(pending_resume)
 		pending_resume = {}
 	else:
-		segments.append($Rooms.append_room("straight",0))
+		# The first set is the tutorial: the same dolly, running slow enough that
+		# a player can watch it cross once and then walk through the gap.
+		segments.append($Rooms.append_room("straight",0,"",false,"",0.72))
 		Save.clear() # A new run throws away the one that was left open.
 	player.name = "Player"
 	add_child(player)
