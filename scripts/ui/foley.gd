@@ -27,13 +27,14 @@ const MARK := "mark"
 const DENY := "deny"
 const DEATH := "death"
 const MESSAGE := "message"
-const KINDS := [INSPECT, PICKUP, MARK, DENY, DEATH, MESSAGE]
+const SPLICE := "splice"
+const KINDS := [INSPECT, PICKUP, MARK, DENY, DEATH, MESSAGE, SPLICE]
 
 const _LENGTH := {
-	INSPECT: 0.13, PICKUP: 0.19, MARK: 0.24, DENY: 0.20, DEATH: 0.55, MESSAGE: 0.06,
+	INSPECT: 0.13, PICKUP: 0.19, MARK: 0.24, DENY: 0.20, DEATH: 0.55, MESSAGE: 0.06, SPLICE: 0.22,
 }
 const _VOLUME_DB := {
-	INSPECT: -13.0, PICKUP: -9.0, MARK: -8.0, DENY: -11.0, DEATH: -6.0, MESSAGE: -16.0,
+	INSPECT: -13.0, PICKUP: -9.0, MARK: -8.0, DENY: -11.0, DEATH: -6.0, MESSAGE: -16.0, SPLICE: -10.0,
 }
 
 ## False silences every cue without touching the bus.
@@ -117,6 +118,11 @@ static func make_stream(kind: String) -> AudioStreamWAV:
 				var sub := (sin(ph) + sin(ph * 2.0) * 0.18) * exp(-t * 7.5) * 0.9
 				var dust := noise * exp(-t * 90.0) * 0.16
 				s = sub + dust
+			SPLICE:
+				# Film tears, the splicer closes, then the sprockets catch again.
+				s = noise * exp(-t * 92.0) * 0.58 + _tap(t, 0.052, noise, 0.95)
+				for j in 4:
+					s += _tap(t, 0.104 + 0.023 * j, noise, 0.30 - j * 0.045)
 			MESSAGE:
 				s = sin(TAU * 988.0 * t) * exp(-t * 85.0) * 0.6
 		# 2 ms in, 6 ms out: no click at either end of the buffer.

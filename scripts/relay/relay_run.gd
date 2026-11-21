@@ -46,7 +46,10 @@ var _notice_left := 0.0
 var _cut_velocity := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
 
+var _foley := preload("res://scripts/ui/foley.gd").new()
+
 func _ready() -> void:
+	add_child(_foley)
 	preload("res://scripts/core/input_setup.gd").ensure_actions()
 	_rng.randomize()
 	segments.append($Rooms.append_room("straight",0))
@@ -218,9 +221,12 @@ func _physics_process(dt: float) -> void:
 	if grace <= 0:
 		for g in _actors:
 			if not g.spent and g.playhead >= Ghost.WARMUP and g.global_position.distance_to(player.global_position) < Ghost.DANGER_RADIUS + Player.RADIUS:
+				var was_held := splice.has_splice()
 				if splice.protect(active_clock):
-					_notice = _w("保险片接上！原地续拍 1.5 秒。", "Spliced! Keep moving for 1.5 s.")
-					_notice_left = 1.5
+					if was_held and not splice.has_splice():
+						_foley.play("splice")
+						_notice = _w("保险片接上 · 继续跑", "Spliced · keep rolling")
+						_notice_left = 1.5
 					break
 				deaths += 1
 				if difficulty > 0:
