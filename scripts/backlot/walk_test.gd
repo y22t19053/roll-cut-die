@@ -28,7 +28,12 @@ func run() -> void:
 	studio = load("res://scenes/backlot/backlot.tscn").instantiate()
 	root.add_child(studio)
 	await live()
-	for p in [Vector2(1.2,28), Vector2(1.2,4), Vector2(28,4)]:
+	var opening_yaw: float = studio.rig.yaw
+	await walk(Vector2(12,28)) # Go through both dock doorways in one held direction.
+	var sweep := absf(rad_to_deg(angle_difference(opening_yaw, studio.rig.yaw)))
+	print("DOCK DOORS: crossed both, orbit sweep %.1f degrees" % sweep)
+	if sweep < 50 or failed: quit(1); return
+	for p in [Vector2(12,25.8), Vector2(10,25.8), Vector2(10,4), Vector2(28,4)]:
 		await walk(p)
 	studio._interact()
 	if studio.power_cut: push_error("breaker operated from walkway"); quit(1); return
