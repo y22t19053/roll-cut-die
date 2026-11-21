@@ -12,12 +12,14 @@ signal sequence_finished(kind: String)
 
 const BoardScript = preload("res://scripts/ui/slate_board.gd")
 const SlateAudio = preload("res://scripts/ui/slate_audio.gd")
+const Loc = preload("res://scripts/core/loc.gd")
 
 const OPEN := -BoardScript.OPEN_MAX
 
 var board: Control
 var enabled := true
 
+var _take := 0
 var _audio: AudioStreamPlayer
 var _clack: AudioStreamWAV
 var _kind := ""
@@ -55,12 +57,14 @@ func is_running() -> bool:
 
 
 ## First take of a session: the board opens, shuts, clacks, says ROLL.
+## Headlines ROLL./CUT!/DIE. are the game's name and stay as written; the
+## corner and subline follow the language and re-render on a switch.
 func play_roll(take_index: int) -> void:
+	_take = take_index
 	_run("roll", 1.95, [
 		{"at": 0.0, "fn": func() -> void:
 			board.headline = "ROLL."
-			board.corner = "SCENE 12 · TAKE %02d" % take_index
-			board.subline = "ROLL CUT DIE"},
+			_apply_text()},
 		{"at": 0.34, "fn": func() -> void:
 			_animate_stick(0.0, 0.07)
 			_clack_now(-3.0)},
@@ -69,11 +73,11 @@ func play_roll(take_index: int) -> void:
 
 ## Deliberate cut: no death wording, the player did this.
 func play_cut(take_index: int) -> void:
+	_take = take_index
 	_run("cut", 1.35, [
 		{"at": 0.0, "fn": func() -> void:
 			board.headline = "CUT!"
-			board.corner = "ABANDONED · TAKE %02d" % take_index
-			board.subline = ""},
+			_apply_text()},
 		{"at": 0.02, "fn": func() -> void:
 			_animate_stick(0.0, 0.06)
 			_clack_now(-2.0)},
@@ -83,16 +87,38 @@ func play_cut(take_index: int) -> void:
 ## Death: DIE first, then the slate shuts on it. The cause is the HUD's line,
 ## not the board's: two copies of it on screen at once read as two events.
 func play_die(take_index: int) -> void:
+	_take = take_index
 	_run("die", 2.05, [
 		{"at": 0.0, "fn": func() -> void:
 			board.headline = "DIE."
-			board.subline = ""
-			board.corner = "TAKE %02d" % take_index},
+			_apply_text()},
 		{"at": 0.62, "fn": func() -> void:
 			board.headline = "CUT!"
 			_animate_stick(0.0, 0.06)
 			_clack_now(0.0)},
 	])
+
+
+## Re-render the language-dependent lines of a board that is up right now.
+func relocalize() -> void:
+	if _running and board != null and _next > 0:
+		_apply_text()
+		board.queue_redraw()
+
+
+func _apply_text() -> void:
+	if board == null:
+		return
+	match _kind:
+		"roll":
+			board.corner = Loc.ui("slate.roll_corner", [_take])
+			board.subline = Loc.ui("slate.roll_sub")
+		"cut":
+			board.corner = Loc.ui("slate.cut_corner", [_take])
+			board.subline = ""
+		"die":
+			board.corner = Loc.ui("slate.die_corner", [_take])
+			board.subline = ""
 
 
 func play_out() -> void:

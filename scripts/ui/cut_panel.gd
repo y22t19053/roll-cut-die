@@ -79,6 +79,15 @@ func set_footer(text: String) -> void:
 	footer_label.text = text
 
 
+## Re-word an open panel (language switch) without moving the selection.
+func retext(title: String, rows: PackedStringArray, footer: String) -> void:
+	title_label.text = title
+	footer_label.text = footer
+	if rows.size() == _rows.size():
+		_rows = rows
+	_layout()
+
+
 func set_selected(i: int) -> void:
 	selected = i if i >= 0 and i < _rows.size() else -1
 	_layout()

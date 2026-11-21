@@ -21,6 +21,8 @@ const SlateScript = preload("res://scripts/ui/slate_ui.gd")
 const HudScript = preload("res://scripts/ui/hud.gd")
 const CutPanelScript = preload("res://scripts/ui/cut_panel.gd")
 const MarkBeaconScript = preload("res://scripts/ui/mark_beacon.gd")
+const PauseMenuScript = preload("res://scripts/ui/pause_menu.gd")
+const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const MarkLedger = preload("res://scripts/take/mark_ledger.gd")
 const InputSetup = preload("res://scripts/core/input_setup.gd")
 const Loc = preload("res://scripts/core/loc.gd")
@@ -76,6 +78,14 @@ var _world_running := false
 ## Point the current take resumes from; consumed when the ROLL slate releases.
 var _resume_point: Dictionary = {}
 
+var pause_menu: CanvasLayer
+## Everything on screen that is worded is kept as a Callable that produces the
+## words, so a language switch re-renders it in place without touching state.
+var _status_fn := Callable()
+var _death_fn := Callable()
+var _hint_fn := Callable()
+var _banner_fn := Callable()
+
 
 func _ready() -> void:
 	InputSetup.ensure_actions()
@@ -84,16 +94,22 @@ func _ready() -> void:
 		Logger.error("input: " + p)
 
 	if not _load_map():
+		_show_fatal()
 		return
 	_load_case()
+	# New Game / Continue from the title screen; take 1 on a direct launch.
+	var first_take: int = GameSession.consume_start_request()
 	_build_world()
 	_build_actors()
 	_build_ui()
 	var pause_input := preload("res://scripts/ui/pause_input.gd").new()
 	add_child(pause_input)
-	pause_input.resume_requested.connect(_toggle_pause)
+	pause_input.resume_requested.connect(_on_pause_escape)
+	pause_input.language_requested.connect(_toggle_language)
+	GameSession.language_changed.connect(_on_language_changed)
+	GameSession.settings_changed.connect(_on_setting_changed)
 
-	GameSession.takes.start_take(1)
+	GameSession.takes.start_take(first_take)
 	_begin_take()
 
 	Logger.info("main ready: %d npcs, %d evidence, ghosts %d" % [npcs.size(), evidence_props.size(), ghost_nodes.size()])
@@ -268,6 +284,13 @@ func _build_ui() -> void:
 	cut_panel.name = "CutPanel"
 	add_child(cut_panel)
 
+	pause_menu = PauseMenuScript.new()
+	pause_menu.name = "PauseMenu"
+	add_child(pause_menu)
+	pause_menu.resume_requested.connect(_toggle_pause)
+	pause_menu.to_title_requested.connect(_quit_to_title)
+	pause_menu.quit_requested.connect(_quit_game)
+
 	# Preview camera for the CUT panel: same geometry as CameraRig, parked on a
 	# recorded point. Only `current` moves between the two cameras.
 	preview_rig = Node3D.new()
@@ -318,8 +341,9 @@ func _begin_take() -> void:
 	_sync_beacons()
 	slate.play_roll(idx)
 	_update_hud()
+	_death_fn = Callable()
 	hud.clear_death()
-	hud.set_hint("")
+	_set_hint(Callable())
 
 
 func _spawn_ghosts() -> void:
@@ -344,18 +368,19 @@ func _clear_ghosts() -> void:
 func _on_npc_caught(npc_id: String) -> void:
 	if phase != Phase.ROLLING:
 		return
-	var cap := npc_id.to_upper()
-	var src := npc_id
-	_die(src, cap)
+	_die(npc_id, npc_id.to_upper(), _npc_label_fn(npc_id))
 
 
 func _on_ghost_caught(take_id: int) -> void:
 	if phase != Phase.ROLLING:
 		return
-	_die("take_%02d" % take_id, "TAKE %02d" % take_id)
+	_die("take_%02d" % take_id, "TAKE %02d" % take_id,
+		func() -> String: return Loc.ui("source.take", [take_id]))
 
 
-func _die(source_id: String, source_label: String) -> void:
+## `source_label` is the log's wording; `label_fn` words the cause on screen in
+## whichever language is active when it is drawn.
+func _die(source_id: String, source_label: String, label_fn := Callable()) -> void:
 	phase = Phase.DEAD
 	player.set_frozen(true)
 	rig.add_shake(1.4)
@@ -364,11 +389,21 @@ func _die(source_id: String, source_label: String) -> void:
 	for n: Node in npcs:
 		n.set_active(false)
 	GameSession.takes.die(source_id)
-	var text := "DIED TO " + source_label if Loc.language == "en" else "死于 " + source_label
-	hud.set_take(GameSession.takes.take_index, GameSession.ghost_count(), "DIED — " + source_label)
-	hud.show_death(text)
+	var who := label_fn
+	if not who.is_valid():
+		who = func() -> String: return source_label
+	_set_status(func() -> String: return Loc.ui("status.died", [who.call()]))
+	_death_fn = func() -> String: return Loc.ui("death.text", [who.call()])
+	hud.show_death(_death_fn.call())
 	slate.play_die(GameSession.takes.take_index)
 	Logger.info("die: %s (take %d)" % [source_label, GameSession.takes.take_index])
+
+
+## An NPC's on-screen name, upper-cased, in the language active at draw time.
+func _npc_label_fn(npc_id: String) -> Callable:
+	return func() -> String:
+		var t := Loc.t(GameSession.case_state.npc_meta(npc_id).get("name", {})).to_upper()
+		return t if not t.is_empty() else npc_id.to_upper()
 
 
 ## C: freeze the world and open the timeline once the slate has clapped.
@@ -383,8 +418,8 @@ func _manual_cut() -> void:
 	recorder.recording = false
 	_freeze_world()
 	GameSession.takes.manual_cut()
-	hud.set_take(GameSession.takes.take_index, GameSession.ghost_count(), "CUT")
-	hud.set_hint("")
+	_set_status(func() -> String: return Loc.ui("status.cut"))
+	_set_hint(Callable())
 	slate.play_cut(GameSession.takes.take_index)
 	Logger.info("manual cut (take %d)" % GameSession.takes.take_index)
 
@@ -437,10 +472,12 @@ func _mark() -> void:
 	if phase != Phase.ROLLING or paused or bool(player.get("frozen")):
 		return
 	if not marks.add(_snapshot()):
-		hud.flash("MARKS FULL %d/%d — CUT BACK TO FREE ONE" % [marks.count(), marks.capacity])
+		var full := [marks.count(), marks.capacity]
+		_flash(func() -> String: return Loc.ui("flash.marks_full", full))
 		return
 	_sync_beacons()
-	hud.flash("MARK %d/%d" % [marks.count(), marks.capacity], 1.4)
+	var used := [marks.count(), marks.capacity]
+	_flash(func() -> String: return Loc.ui("flash.mark", used), 1.4)
 	Logger.info("mark %d at %.2f %.2f (take %d)" % [marks.count(), player.global_position.x,
 		player.global_position.z, GameSession.takes.take_index])
 
@@ -461,25 +498,44 @@ func _sync_beacons() -> void:
 # --- CUT panel -----------------------------------------------------------
 
 func _open_cut_panel() -> void:
+	cut_cursor = -1
+	cut_panel.open(_cut_title(), _cut_rows(), _cut_footer())
+	_set_hint(func() -> String: return Loc.ui("hint.cut_panel"))
+
+
+func _cut_title() -> String:
+	var t = GameSession.takes
+	return Loc.ui("cut.title", [t.take_index, t.retake_stock, marks.count(), marks.capacity])
+
+
+func _cut_rows() -> PackedStringArray:
 	var rows := PackedStringArray()
 	for p: Dictionary in marks.points():
-		rows.append(MarkLedger.describe(p))
-	var t = GameSession.takes
-	var title := "CUT — TAKE %02d ABANDONED   ·   RETAKES %d (CUT COSTS NONE)   ·   MARK %d/%d" % [
-		t.take_index, t.retake_stock, marks.count(), marks.capacity]
-	cut_cursor = -1
-	cut_panel.open(title, rows, _cut_footer())
-	hud.set_hint("[UP/DOWN] PICK A POINT   [SPACE] CUT HERE   [ESC] FREE VIEW")
+		rows.append(_describe_point(p))
+	return rows
+
+
+## MarkLedger.describe, worded in the active language (identical in English).
+func _describe_point(p: Dictionary) -> String:
+	var ev := MarkLedger.evidence_counts(p.get("evidence", {}))
+	var pos: Vector3 = p.get("pos", Vector3.ZERO)
+	return Loc.ui("cut.row", [_point_label(p), int(p.get("take", 0)),
+		MarkLedger.clock(float(p.get("time", 0.0))), ev.x, ev.y, pos.x, pos.z])
+
+
+func _point_label(p: Dictionary) -> String:
+	if str(p.get("kind", "")) == "mark":
+		return Loc.ui("point.mark", [int(p.get("no", 0))])
+	return Loc.ui("point.start")
 
 
 func _cut_footer() -> String:
 	var pts: Array = marks.points()
 	if cut_cursor < 0 or cut_cursor >= pts.size():
-		return "FREE VIEW — pick a point to see the shot it holds"
+		return Loc.ui("cut.free")
 	var p: Dictionary = pts[cut_cursor]
-	return "PREVIEW %s — FACING %.1f°   CAM YAW %.1f°   ROLL %.2f°   WORLD T %.1f s" % [
-		MarkLedger.label(p), rad_to_deg(float(p["facing"])), rad_to_deg(float(p["cam_yaw"])),
-		rad_to_deg(float(p["cam_roll"])), float(p["world_t"])]
+	return Loc.ui("cut.preview", [_point_label(p), rad_to_deg(float(p["facing"])),
+		rad_to_deg(float(p["cam_yaw"])), rad_to_deg(float(p["cam_roll"])), float(p["world_t"])])
 
 
 func _cut_input(code: int) -> void:
@@ -497,7 +553,7 @@ func _cut_input(code: int) -> void:
 			if cut_cursor >= 0:
 				_cut_to(marks.points()[cut_cursor])
 			else:
-				hud.flash("PICK A POINT FIRST", 1.4)
+				_flash(func() -> String: return Loc.ui("flash.pick_first"), 1.4)
 		_:
 			if code >= KEY_1 and code <= KEY_9 and code - KEY_1 < n:
 				_select_point(code - KEY_1)
@@ -606,7 +662,7 @@ func _cut_to(p: Dictionary) -> void:
 	phase = Phase.ROLLING
 	slate.play_roll(idx)
 	_update_hud()
-	hud.set_hint("")
+	_set_hint(Callable())
 	Logger.info("cut to %s -> take %d (retakes %d)" % [MarkLedger.label(point), idx, t.retake_stock])
 
 
@@ -641,7 +697,7 @@ func _on_slate_finished(kind: String) -> void:
 				_update_hud()
 		"die":
 			phase = Phase.DEAD
-			hud.set_hint("SPACE — RETAKE")
+			_set_hint(func() -> String: return Loc.ui("hint.retake"))
 		"cut":
 			if phase == Phase.CUT:
 				_open_cut_panel()
@@ -687,19 +743,23 @@ func _update_hint() -> void:
 	if e != null:
 		var meta: Dictionary = GameSession.case_state.evidence_meta(e.id)
 		var label := Loc.t(meta.get("name", {}))
-		if not e.seen:
-			hud.set_hint("[E] LOOK — %s" % label)
-		else:
-			hud.set_hint("[E] TAKE — %s" % label)
+		_show_hint(Loc.ui("hint.look" if not e.seen else "hint.take", [label]))
 		return
 	var npc := _nearest_npc()
 	if npc != null:
-		hud.set_hint("[E] ASK — %s" % npc.display_name)
+		_show_hint(Loc.ui("hint.ask", [npc.display_name]))
 		return
 	if _in_report_zone(p):
-		hud.set_hint("[R] FILE REPORT")
+		_show_hint(Loc.ui("hint.file_report"))
 		return
-	hud.set_hint("")
+	_show_hint("")
+
+
+## Per-frame proximity prompt: worded fresh every frame, so it needs no stored
+## Callable, and any stored one is dropped.
+func _show_hint(text: String) -> void:
+	_hint_fn = Callable()
+	hud.set_hint(text)
 
 
 func _nearest_evidence() -> Node:
@@ -741,13 +801,15 @@ func _interact() -> void:
 		if result == "taken":
 			e.mark_taken()
 			recorder.mark(GhostTrack.FLAG_INTERACT)
-			hud.flash("TAKEN — %s" % Loc.t(GameSession.case_state.evidence_meta(e.id).get("name", {})))
+			var name_node: Variant = GameSession.case_state.evidence_meta(e.id).get("name", {})
+			_flash(func() -> String: return Loc.ui("flash.taken", [Loc.t(name_node)]))
 			Logger.info("evidence taken: " + e.id)
 		elif result == "seen":
 			e.mark_seen()
 			recorder.mark(GhostTrack.FLAG_INTERACT)
 			var meta: Dictionary = GameSession.case_state.evidence_meta(e.id)
-			hud.flash(Loc.t(meta.get("inspect", {})))
+			var inspect_node: Variant = meta.get("inspect", {})
+			_flash(func() -> String: return Loc.t(inspect_node))
 			Logger.info("evidence seen: " + e.id)
 		_refresh_evidence()
 		_commit_state()
@@ -756,7 +818,9 @@ func _interact() -> void:
 	var npc := _nearest_npc()
 	if npc != null:
 		var line: Dictionary = GameSession.case_state.ask(npc.npc_id)
-		hud.flash("%s — %s" % [npc.display_name, Loc.t(line.get("text", {}))], 4.5)
+		var who := _npc_label_fn(str(npc.npc_id))
+		var said: Variant = line.get("text", {})
+		_flash(func() -> String: return Loc.ui("flash.said", [who.call(), Loc.t(said)]), 4.5)
 		Logger.info("asked " + npc.npc_id)
 		_commit_state()
 
@@ -785,13 +849,13 @@ func _close_report() -> void:
 	player.set_frozen(false)
 	recorder.recording = true
 	hud.set_case_lines(PackedStringArray())
-	hud.set_hint("")
+	_set_hint(Callable())
 
 
 func _render_report() -> void:
 	var cs = GameSession.case_state
 	var lines := PackedStringArray()
-	lines.append("REPORT — TAKE %02d" % GameSession.takes.take_index)
+	lines.append(Loc.ui("report.title", [GameSession.takes.take_index]))
 	lines.append("")
 	var ids: Array = cs.evidence_ids()
 	for i in ids.size():
@@ -799,17 +863,17 @@ func _render_report() -> void:
 		var mark := "[x]" if cs.is_attached(id) else "[ ]"
 		var state := "-"
 		if cs.is_taken(id):
-			state = "SEIZED"
+			state = Loc.ui("report.seized")
 		elif cs.is_seen(id):
-			state = "SEEN"
+			state = Loc.ui("report.seen")
 		var cursor := ">" if i == report_cursor else " "
 		lines.append("%s %s %s  %s" % [cursor, mark, Loc.t(cs.evidence_meta(id).get("name", {})), state])
 	lines.append("")
-	lines.append("A/D move · E list/unlist")
-	lines.append("1 FILE · 2 BURY · 3 REFRAME")
-	lines.append("R close")
+	lines.append(Loc.ui("report.help_move"))
+	lines.append(Loc.ui("report.help_file"))
+	lines.append(Loc.ui("report.help_close"))
 	hud.set_case_lines(lines)
-	hud.set_hint("[1] FILE   [2] BURY   [3] REFRAME")
+	_set_hint(func() -> String: return Loc.ui("hint.report"))
 
 
 func _file(stance_idx: int) -> void:
@@ -826,20 +890,21 @@ func _file(stance_idx: int) -> void:
 	if not TERMINAL_VERDICTS.has(verdict):
 		# A rejected report is not a lost take. The clerk hands it back, the
 		# player keeps everything they have, and the take continues.
-		hud.flash(Loc.t(cs.verdict_text(verdict)), 6.0)
-		hud.set_hint("[1] FILE   [2] BURY   [3] REFRAME   [R] CLOSE")
+		var returned: Dictionary = cs.verdict_text(verdict)
+		_flash(func() -> String: return Loc.t(returned), 6.0)
 		_render_report()
+		_set_hint(func() -> String: return Loc.ui("hint.report_returned"))
 		Logger.info("report returned: %s -> %s" % [stance_id, verdict])
 		return
 
 	if not GameSession.takes.commit_report(stance_id, verdict):
 		return
 	phase = Phase.COMPLETE
-	var text := Loc.t(cs.verdict_text(verdict))
-	hud.flash(text, 6.0)
+	var verdict_node: Dictionary = cs.verdict_text(verdict)
+	_flash(func() -> String: return Loc.t(verdict_node), 6.0)
 	hud.set_case_lines(PackedStringArray())
-	hud.set_hint("SPACE — NEXT TAKE")
-	hud.set_take(GameSession.takes.take_index, GameSession.ghost_count(), "COMPLETE")
+	_set_hint(func() -> String: return Loc.ui("hint.next_take"))
+	_set_status(func() -> String: return Loc.ui("status.complete"))
 	_finish_take()
 	Logger.info("report filed: %s -> %s" % [stance_id, verdict])
 
@@ -884,14 +949,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 
 	if code == KEY_F2:
-		GameSession.set_language(Loc.toggle_language())
-		for prop in evidence_props.values():
-			prop.refresh_language()
-		for npc in npcs:
-			var name_text := Loc.t(GameSession.case_state.npc_meta(npc.npc_id).get("name", {})).to_upper()
-			npc.display_name = name_text if not name_text.is_empty() else str(npc.npc_id).to_upper()
-		_refresh_evidence()
-		hud.flash("LANG — " + Loc.language.to_upper())
+		_toggle_language()
 		return
 	if code == KEY_F3:
 		debug_on = not debug_on
@@ -902,6 +960,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if phase == Phase.CUT:
+		# ESC in free view (nothing to deselect) opens the menu instead.
+		if code == KEY_ESCAPE and cut_panel.is_open() and cut_cursor < 0:
+			_toggle_pause()
+			return
 		_cut_input(code)
 		return
 
@@ -944,16 +1006,154 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _toggle_pause() -> void:
-	if not paused and (phase != Phase.ROLLING or player.frozen):
+	if not paused and not _can_pause():
 		return
 	paused = not paused
 	get_tree().paused = paused
 	if paused:
-		hud.flash("PAUSED", 9999.0)
-		hud.set_hint("ESC — RESUME")
+		hud.set_hint(Loc.ui("hint.paused"))
+		pause_menu.open()
 	else:
-		hud.clear_banner()
+		pause_menu.close()
+		_restore_hint()
+
+
+## The menu opens whenever no slate is holding a live take: while rolling
+## (not behind the ROLL slate), after a death, after a filed report, and from
+## the CUT panel's free view. The rules for C and MARK are unchanged: both
+## already refuse while paused.
+func _can_pause() -> bool:
+	match phase:
+		Phase.ROLLING:
+			return not player.frozen
+		Phase.DEAD, Phase.COMPLETE:
+			return true
+		Phase.CUT:
+			return cut_panel.is_open()
+	return false
+
+
+## ESC while the tree is paused: back out of a sub-screen, else resume.
+func _on_pause_escape() -> void:
+	if pause_menu != null and pause_menu.is_open() and pause_menu.back():
+		return
+	_toggle_pause()
+
+
+func _quit_to_title() -> void:
+	if not ResourceLoader.exists(GameSession.TITLE_SCENE):
+		Logger.error("title scene missing: " + GameSession.TITLE_SCENE)
+		_quit_game()
+		return
+	# Leaving abandons the take in progress. Nothing is written: the last save
+	# (made at the last interaction or report) is what Continue offers.
+	paused = false
+	get_tree().paused = false
+	Logger.info("quit to title (take %d)" % GameSession.takes.take_index)
+	get_tree().change_scene_to_file(GameSession.TITLE_SCENE)
+
+
+func _quit_game() -> void:
+	Logger.info("quit from pause menu")
+	get_tree().quit()
+
+
+# --- language & settings -------------------------------------------------
+
+func _toggle_language() -> void:
+	GameSession.set_language("zh" if Loc.language == "en" else "en")
+	_flash(func() -> String: return Loc.ui("flash.lang"))
+
+
+## Every worded thing re-renders from its source; no game state moves.
+func _on_language_changed(_lang: String) -> void:
+	for prop in evidence_props.values():
+		prop.refresh_language()
+	for npc in npcs:
+		npc.display_name = _npc_label_fn(str(npc.npc_id)).call()
+	_refresh_evidence()
+	hud.relocalize()
+	_render_status()
+	if _death_fn.is_valid() and hud.death_label.visible:
+		hud.show_death(_death_fn.call())
+	if _banner_fn.is_valid():
+		hud.retext_banner(_banner_fn.call())
+	if phase == Phase.REPORT:
+		_render_report()
+	if phase == Phase.CUT and cut_panel.is_open():
+		cut_panel.retext(_cut_title(), _cut_rows(), _cut_footer())
+	slate.relocalize()
+	if paused:
+		hud.set_hint(Loc.ui("hint.paused"))
+		pause_menu.relocalize()
+	else:
+		_restore_hint()
+
+
+func _on_setting_changed(key: String, value: Variant) -> void:
+	match key:
+		"reduce_motion":
+			rig.reduce_motion = bool(value)
+		"roll_scale":
+			rig.roll_scale = float(value)
+		"mouse_sensitivity":
+			rig.mouse_sensitivity = float(value)
+
+
+# --- worded read-outs ----------------------------------------------------
+
+func _set_status(fn: Callable) -> void:
+	_status_fn = fn
+	_render_status()
+
+
+func _render_status() -> void:
+	var text := Loc.ui("status.rolling")
+	if _status_fn.is_valid():
+		text = _status_fn.call()
+	hud.set_take(GameSession.takes.take_index, GameSession.ghost_count(), text)
+
+
+func _set_hint(fn: Callable) -> void:
+	_hint_fn = fn
+	hud.set_hint(fn.call() if fn.is_valid() else "")
+
+
+func _restore_hint() -> void:
+	if phase == Phase.ROLLING:
 		_update_hint()
+	else:
+		hud.set_hint(_hint_fn.call() if _hint_fn.is_valid() else "")
+
+
+func _flash(fn: Callable, seconds: float = 2.2) -> void:
+	_banner_fn = fn
+	hud.flash(fn.call(), seconds)
+
+
+## The studio could not be built (bad map data). Say so instead of leaving a
+## black window, and offer the only useful ways out.
+func _show_fatal() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "Fatal"
+	layer.layer = 100
+	add_child(layer)
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(root)
+	var p := UiKit.panel()
+	UiKit.centered(root).add_child(p)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 16)
+	p.add_child(box)
+	box.add_child(UiKit.label(Loc.ui("error.scene"), 22))
+	if ResourceLoader.exists(GameSession.TITLE_SCENE):
+		box.add_child(UiKit.button(Loc.ui("menu.to_title"), _leave_to_title_now))
+	box.add_child(UiKit.button(Loc.ui("menu.quit"), _quit_game))
+
+
+func _leave_to_title_now() -> void:
+	get_tree().change_scene_to_file(GameSession.TITLE_SCENE)
 
 
 # --- helpers -------------------------------------------------------------
@@ -981,7 +1181,7 @@ func _load_latest_state() -> void:
 
 
 func _update_hud() -> void:
-	hud.set_take(GameSession.takes.take_index, GameSession.ghost_count(), "ROLLING")
+	_set_status(Callable())
 
 
 func _debug_text() -> String:

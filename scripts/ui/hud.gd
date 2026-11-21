@@ -22,6 +22,8 @@ var _ghost_count := 0
 var _phase := ""
 var _banner_left := 0.0
 var _banner_hold := 0.0
+var _marks := Vector2i.ZERO
+var _roll_name := ""
 
 
 func _ready() -> void:
@@ -136,17 +138,37 @@ func set_ghost_count(ghost_count: int) -> void:
 
 
 func _render_take() -> void:
-	take_label.text = "TAKE %02d   ·   %d GHOST%s   ·   %s" % [
-		_take_index, _ghost_count, "" if _ghost_count == 1 else "S", _phase
-	]
+	take_label.text = Loc.ui("hud.take_one" if _ghost_count == 1 else "hud.take_many",
+		[_take_index, _ghost_count, _phase])
 
 
 func set_marks(used: int, capacity: int) -> void:
-	mark_label.text = "MARK %d/%d" % [used, capacity]
+	_marks = Vector2i(used, capacity)
+	mark_label.text = Loc.ui("hud.marks", [used, capacity])
 
 
 func set_roll_mode(mode_name: String) -> void:
-	roll_label.text = "ROLL: " + mode_name
+	_roll_name = mode_name
+	roll_label.text = Loc.ui("hud.roll", [mode_name])
+
+
+## Re-render the read-outs the HUD formats itself. Lines handed in finished
+## (hint, banner, death, case) are re-sent by the scene.
+func relocalize() -> void:
+	_render_take()
+	set_marks(_marks.x, _marks.y)
+	if not _roll_name.is_empty():
+		set_roll_mode(_roll_name)
+
+
+func banner_showing() -> bool:
+	return _banner_left > 0.0 and not banner.text.is_empty()
+
+
+## Swap the banner wording without restarting its timer.
+func retext_banner(text: String) -> void:
+	if banner_showing():
+		banner.text = text
 
 
 func show_death(text: String) -> void:
