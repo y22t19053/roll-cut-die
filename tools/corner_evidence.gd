@@ -13,6 +13,9 @@ const PAINT := [
 var trial: Node
 
 func _ready() -> void:
+	if preload("res://tools/trial_build.gd").enabled():
+		# Options and F2 still work, but never persist a participant's choices.
+		GameSession.persist_prefs = false
 	super._ready()
 	if preload("res://tools/trial_build.gd").enabled() or OS.get_cmdline_user_args() == PackedStringArray(["--west-trial-consent"]):
 		_install_trial(false)

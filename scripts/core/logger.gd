@@ -19,6 +19,10 @@ static func _ensure() -> void:
 
 
 static func line(tag: String, msg: String) -> void:
+	# Research builds must not retain gameplay through a second logging channel,
+	# including autoload startup before the consent screen and unrecorded play.
+	if ProjectSettings.get_setting("research/west_trial/enabled", false):
+		return
 	# Print first. Console output must never depend on the file working, and a
 	# silent logger is worse than no logger: it makes every later diagnosis a
 	# guessing game.
