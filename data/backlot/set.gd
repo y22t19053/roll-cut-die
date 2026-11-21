@@ -26,6 +26,8 @@ static func layout() -> Dictionary:
 		{"id":"boom_op","route":[[25.7,8],[25.7,23]],"speed":1.65,"mode":"pingpong"}]}
 	for i in PORTAL_X.size():
 		var x: float = PORTAL_X[i]
+		# Fixed glazed sidelight beside the opening: sight passes, bodies do not.
+		plan.props.append({"id":"sidelight_%d" % i, "rect":[x-0.06,PORTAL_Z+1.28,x+0.06,PORTAL_Z+2.85], "height":2.10, "color":[0.55,0.78,0.80]})
 		for side in [-1,1]:
 			var z: float = PORTAL_Z + side * (OPENING * 0.5 + 0.14)
 			plan.props.append({"id":"portal_%d_%d" % [i,side], "rect":[x-0.16,z-0.14,x+0.16,z+0.14], "height":2.35, "color":[0.65,0.32,0.15] if i == 0 else [0.23,0.47,0.49]})

@@ -23,6 +23,13 @@ func _load_case() -> void:
 
 func _build_world() -> void:
 	super._build_world()
+	for i in SetPlan.PORTAL_X.size():
+		var pane: MeshInstance3D = get_node("Layout/sidelight_%d/Mesh" % i)
+		var glass := pane.material_override as StandardMaterial3D
+		glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		glass.albedo_color = Color(0.55, 0.78, 0.80, 0.23)
+		glass.render_priority = 1 # Composite the pane after the translucent performer.
+		pane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_sign("01  /  DOCK", Vector3(4,1.3,23))
 	_sign("02  /  TANK", Vector3(18,1.3,21))
 	_sign("03  /  SOUND", Vector3(31,1.6,21))
