@@ -100,6 +100,18 @@ static func run(h, tree = null) -> void:
 	h.near("fast dolly runs a 3.4 s lap", float(rooms._dollies[3][0]["period"]), 3.4, 0.001)
 	rooms.append_room("s", 0, "throat")
 	h.near("throat keeps the plain lap", float(rooms._dollies[4][0]["period"]), 5.0, 0.001)
+	# What the crew did to a set today is part of the room, and comes back with it.
+	var extra: Dictionary = rooms.append_room("s", 0, "", false, "extra")
+	h.eq("a rented dolly joins the set", rooms._dollies[5].size(), 2)
+	h.eq("the plan remembers the event", str(extra.get("event", "")), "extra")
+	rooms.append_room("s", 0, "", false, "relight")
+	var lit := 0
+	for child in (rooms._rooms[6] as Node3D).find_children("*", "OmniLight3D", true, false):
+		lit += 1
+	h.eq("a relamp hangs a light on the dolly", lit, 1)
+	var last_set: Dictionary = rooms.append_room("h", 0, "", true, "guide")
+	h.ok("the last set says it is the last", bool(last_set.get("final", false)))
+	h.eq("a guide set brings no light and no extra dolly", (rooms._dollies[7] as Array).size(), 1)
 
 	# The trolley's danger is its footprint, sampled at the time you ask for.
 	rooms.set_clock(0, 0.0)

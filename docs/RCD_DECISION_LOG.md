@@ -343,6 +343,19 @@
 - **代价与边界**：满舵横移时总横倾可达 13.4°（原上限 12° 是给派生 roll 的）。lean 只是表现，**不参与任何判定**；`restore_mark_motion()` 会把 lean 与弹簧一起归零，避免读档后镜头歪着。
 - **实现位置**：`scripts/camera/camera_rig.gd`（`lean_target`、`_update_lean`、`LEAN_*`）、`scripts/relay/relay_run.gd`（F3）、`tests/test_camera.gd`（`_tilt`）。
 
+## D-033 · 剧组会给这一棚加点东西：三种「事件」，每个只改一个决定
+
+- **日期**：2026-11-22
+- **来源**：goals 第 3 条（三种事件节点，每个都改变打法）＋创作者「不像任何游戏」的坐标
+- **状态**：**PROPOSED（已实现并逐项截图验证，缺真人试玩）**
+- **结论**：每棚开局按种子掷一次事件（第一棚永远不掷，留作干净教学）：`relight` 20%、`extra` 20%、`guide` 12%，其余净场。
+  - `relight`：每台推轨顶上挂一盏暖光（`OmniLight3D`，`light_energy 26`、`omni_range 3.8`、`omni_attenuation 0.5`）＋车顶小灯块＋甲板上一块 3 m 见方的暖色光斑。**打法变化**：危险源自己发光，你能远远看见它在哪，但它也把阴影里的路标出来了。
+  - `extra`：多一台「临时推轨」，横在棚中央（`x = LENGTH*0.5`），比正车快（周期 3.1 s）、相位差 90°。**打法变化**：中点变窄，加速通过会撞。
+  - `guide`：这一棚的过去自己不碰人（`_physics_process` 里 `if leg_event == "guide": break`）。**打法变化**：它替你示范路线，代价是它不再挡你的路——本棚难度只来自推轨。
+- **理由**：三个事件各自只动一件事（可见性 / 密度 / 威胁来源），玩家看一眼就能改打法；而不是叠一层新规则。事件在换场时就广播一句（`_hint`），不等撞上才解释。
+- **代价与边界**：事件只属于一棚，随 `segments[].event` 进存档；`relight` 的光斑是「画在甲板上的」，主光阴影会压掉真实点光（实测像素：车旁 0.212 比 3.5 m 外 0.251 更暗），所以必须两个一起做才读得出来。
+- **实现位置**：`scripts/relay/relay_rooms.gd`（`append_room(..., event)`、`OmniLight3D`、光斑 `pool`）、`scripts/relay/relay_run.gd`（`_roll_event`、`_event_line`、`leg_event`、碰撞跳过、存档字段）、`tests/test_relay.gd`（三条事件的断言）。
+
 ## 变更规则
 
 1. 新增决策 → 追加条目，编号连续，不得改写历史条目。

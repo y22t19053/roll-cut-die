@@ -87,8 +87,13 @@ func _draw() -> void:
 	if corner != "":
 		# Share the subline's row instead of stacking under it: two lines of
 		# small type at this width touch, and the take number is the one that
-		# has to stay legible.
+		# has to stay legible. A long subline takes the row for itself and the
+		# corner steps down, because printing one over the other reads as a typo.
 		var cy := y + bh * 0.26 if subline != "" else origin.y + bh - bh * 0.10
+		if subline != "":
+			var used: float = font.get_string_size(subline, HORIZONTAL_ALIGNMENT_LEFT, -1, int(bh * 0.13)).x
+			if used > bw - pad * 2.0 - bh * 0.34:
+				cy = y + bh * 0.40
 		draw_string(font, Vector2(origin.x + pad, cy), corner,
 			HORIZONTAL_ALIGNMENT_RIGHT, bw - pad * 2.0, int(bh * 0.11), Color(0.30, 0.30, 0.31, alpha))
 

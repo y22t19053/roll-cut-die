@@ -38,6 +38,7 @@ var required_passes := PASSES
 var act := 0
 var act_mod := ""
 var act_grace := GRACE
+var leg_event := "" # How the crew dressed this set: relight / extra / guide.
 ## The first splice of a run is free: the player has to feel what a CUT costs
 ## before it can cost them anything.
 var free_cut := 1
@@ -254,7 +255,8 @@ func _serialize_run() -> Dictionary:
 	var plan: Array = []
 	for s in segments:
 		plan.append({"kind": str(s.get("kind","")), "variant": int(s.get("variant",0)),
-			"mod": str(s.get("mod","")), "final": bool(s.get("final", false))})
+			"mod": str(s.get("mod","")), "final": bool(s.get("final", false)),
+			"event": str(s.get("event",""))})
 	var rec: Array = []
 	for t in tracks:
 		rec.append(t.to_dict())
@@ -289,7 +291,9 @@ func _apply_run(d: Dictionary) -> void:
 		if tr != null: tracks.append(tr)
 	for s in d.get("segments", []):
 		var r: Dictionary = s
-		segments.append($Rooms.append_room(str(r.get("kind","straight")), int(r.get("variant",0)), str(r.get("mod","")), bool(r.get("final", false))))
+		segments.append($Rooms.append_room(str(r.get("kind","straight")), int(r.get("variant",0)),
+			str(r.get("mod","")), bool(r.get("final", false)), str(r.get("event",""))))
+	leg_event = str((segments.back() as Dictionary).get("event","")) if not segments.is_empty() else ""
 	room_pass = int(d.get("room_pass", 0))
 	# The ghosts this set already has: everything recorded since it was joined,
 	# never the takes of a set the player has not entered yet.
@@ -478,6 +482,7 @@ func _finish_leg() -> void:
 		score.cue("clear")
 		desk.show_draw(cards, Loc.language == "zh")
 		desk.show_message(_w("第 %d 节。签一张。" % (act + 1), "Act %d. Sign one." % (act + 1)))
+		_hint("act_%d" % act, _act_line(act, true), _act_line(act, false))
 	else:
 		phase = Mode.ITEM
 		score.cue("clear")
@@ -575,6 +580,26 @@ func _mod_label(mod: String) -> String:
 		"clean": return _w("空棚 · 没有车", "EMPTY · no dolly")
 	return ""
 
+
+## One room in three has something the crew did to it today. Each one changes
+## how you read the set, not how hard the numbers are.
+func _roll_event() -> String:
+	if segments.size() <= 1: return "" # The first set teaches the floor; leave it plain.
+	var r := _rng.randf()
+	if r < 0.20: return "relight"
+	if r < 0.40: return "extra"
+	if r < 0.52: return "guide"
+	return ""
+
+
+func _event_line(event: String, zh: bool) -> String:
+	match event:
+		"relight": return _w("剧组换了灯：灯现在挂在推轨上。", "The crew relamped: the light rides the dolly.") if zh else "The crew relamped: the light rides the dolly."
+		"extra": return "临时加了一条推轨。" if zh else "A dolly was rented for this set."
+		"guide": return "这一次，上一次的你不碰人，它只是先走一遍。" if zh else "This take your past does not touch you. It shows the way."
+	return ""
+
+
 func _pick_card(i: int) -> void:
 	if phase == Mode.ACT and i >= 0 and i < cards.size():
 		_apply_contract(str(cards[i].get("contract", "rush")))
@@ -597,8 +622,11 @@ func _pick_card(i: int) -> void:
 	if phase != Mode.PICK or i < 0 or i >= cards.size(): return
 	var c: Dictionary = cards[i]
 	var last := segments.size() == MODULES - 1
-	var room: Dictionary = $Rooms.append_room(c.kind,c.variant,str(c.get("mod","")),last)
+	leg_event = _roll_event()
+	var room: Dictionary = $Rooms.append_room(c.kind,c.variant,str(c.get("mod","")),last,leg_event)
 	segments.append(room)
+	if leg_event != "":
+		_hint("event_" + leg_event, _event_line(leg_event, true), _event_line(leg_event, false))
 	required_passes = int(c.get("passes",PASSES))
 	if act_mod == "rush": required_passes = maxi(required_passes - 1, 2)
 	elif act_mod == "overtime": required_passes += 1
@@ -643,6 +671,9 @@ func _physics_process(dt: float) -> void:
 	if grace <= 0:
 		var reach: float = Ghost.DANGER_RADIUS + Player.RADIUS
 		for g in _actors:
+			# "guide": the past self walks the route and nobody dies from it. The
+			# set is asking you to watch a crossing before you have to make one.
+			if leg_event == "guide": break
 			if g.spent or g.strip_age < GRACE: continue
 			var d: float = g.global_position.distance_to(player.global_position)
 			if _inside.get(g.take_id, false):
@@ -717,7 +748,7 @@ func _hit(source: int) -> bool:
 		_board_die()
 		_restore(last_anchor)
 		_hint("first_death", "撞上就重来一条，别的什么都不扣。", "A collision costs one take and nothing else.")
-		desk.show_message(_w("撞到摄影车", "CAMERA DOLLY") if source == 0 else "TAKE %02d" % source)
+		desk.show_message(_death_line(source))
 	return true
 
 
@@ -826,7 +857,26 @@ func _refresh() -> void:
 func _board_roll() -> void:
 	var n := maxi(live.take_id,1)
 	score.duck(true)
-	slate.play_roll(n, _w("第 %02d 条" % n, "TAKE %02d" % n))
+	# The premise, in the place the player is already looking: you are not the
+	# first one shooting this take, and nobody on the floor will stop for you.
+	slate.play_roll(n, _w("第 %02d 条" % n, "TAKE %02d" % n),
+		_w("你在补拍一条镜头。棚里的人不会为你停下来。",
+			"You are reshooting a take. The crew will not stop for you."))
+
+
+## The cause of a death, in one line, the way a set would say it out loud.
+func _death_line(source: int) -> String:
+	if source == 0:
+		return _w("推轨没有看见你。", "The dolly did not see you.")
+	return _w("你撞上了第 %02d 条的你。" % source, "You hit your take %02d." % source)
+
+
+## A floor announcement at the top of an act: where the run stands, in one line.
+func _act_line(n: int, zh: bool) -> String:
+	match n:
+		1: return "第二场。场务开始记账了。" if zh else "Act two. The floor starts keeping score."
+		2: return "第三场。这一条要交片。" if zh else "Act three. This take has to print."
+	return ("第 %d 场。" % (n + 1)) if zh else ("Act %d." % (n + 1))
 
 func _board_cut() -> void:
 	var n := maxi(live.take_id,1)

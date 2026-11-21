@@ -35,7 +35,7 @@ const MODS := {
 	"throat": {"zh":"窄喉","en":"THROAT","period":5.0,"amp":2.24,"twin":false,"throat":1.0,"dollies":1},
 }
 
-func append_room(kind: String, variant: int, mod := "", final := false) -> Dictionary:
+func append_room(kind: String, variant: int, mod := "", final := false, event := "") -> Dictionary:
 	assert(is_inside_tree(), "Mount RelayRooms before requesting world positions")
 	var spec: Dictionary = MODS.get(mod, MODS[""])
 	var room := Node3D.new()
@@ -76,8 +76,46 @@ func append_room(kind: String, variant: int, mod := "", final := false) -> Dicti
 		_cart_patch(cart, ink)
 		room_dollies.append({"node":cart,"phase":posmod(variant+i*2,4)*PI*.5,
 			"period":float(spec["period"]),"amp":float(spec["amp"])})
+	if event == "extra":
+		# A dolly rented for the day: one more body on the track, faster than the
+		# house one and out of phase, parked across the middle of the set.
+		var extra := Node3D.new()
+		extra.name = "CrossTrackDolly"
+		room.add_child(extra)
+		extra.position.x = LENGTH*.5
+		_finish_cart(room, extra, ink, variant + 1)
+		_cart_patch(extra, ink)
+		room_dollies.append({"node":extra,"phase":PI*.5,"period":3.1,"amp":2.24})
 	_dollies.append(room_dollies)
 	set_clock(_count,0.0)
+	if event == "relight":
+		# The crew hung the lamp on the dolly: the only thing that can kill you is
+		# now the brightest thing in the room, and the walls drop away.
+		for d: Dictionary in room_dollies:
+			var cart_node: Node3D = d["node"]
+			var lamp := OmniLight3D.new()
+			lamp.light_color = Color("ffd6a0")
+			lamp.light_energy = 26.0
+			lamp.omni_range = 3.8
+			lamp.omni_attenuation = 0.5
+			lamp.light_specular = 0.0
+			lamp.position = Vector3(0.0, 1.05, 0.0)
+			cart_node.add_child(lamp)
+			_box(cart_node, Vector3(0.0, 1.02, 0.0), Vector3(.20, .16, .20), Color("ffde79"))
+			# A pool of light painted on the deck as well: the omni light alone
+			# loses against the key light's shadow, and this has to read at a
+			# glance from twelve metres up.
+			var pool := MeshInstance3D.new()
+			var pool_mesh := BoxMesh.new()
+			pool_mesh.size = Vector3(3.0, 0.01, 3.0)
+			pool.mesh = pool_mesh
+			pool.position = Vector3(0.0, 0.14, 0.0)
+			var pool_mat := StandardMaterial3D.new()
+			pool_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			pool_mat.albedo_color = Color(1.0, 0.84, 0.55, 0.22)
+			pool_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			pool.material_override = pool_mat
+			cart_node.add_child(pool)
 	if _count==0:
 		_buffer(room,0,-1)
 		_line(room,0)
@@ -93,7 +131,7 @@ func append_room(kind: String, variant: int, mod := "", final := false) -> Dicti
 	# The plan comes back with the room so a run can be written down and rebuilt
 	# from the same choices it was made of.
 	return {"start":room.to_global(Vector3(0,.05,0)),"end":end,"stops":stops,
-		"kind":kind,"variant":variant,"mod":mod,"final":final}
+		"kind":kind,"variant":variant,"mod":mod,"final":final,"event":event}
 
 func _letter_lanes(room: Node3D, rows: Array, hand: int, ink: Color) -> void:
 	# Consolidate horizontal wall runs; leave open vestibules to turn at either seam.
