@@ -109,6 +109,22 @@ func play_die(take_index: int, corner := "", subline := "") -> void:
 	])
 
 
+## The line at the end of a run: the same shut-board as a cut, but it holds long
+## enough to be read over the room. CUT! is what a set hears when it is done;
+## the corner says what was printed.
+func play_wrap(corner := "", subline := "") -> void:
+	_corner_text = corner
+	_subline_text = subline
+	_run("cut", 0.95, [
+		{"at": 0.0, "fn": func() -> void:
+			board.headline = "CUT!"
+			_apply_text()},
+		{"at": 0.04, "fn": func() -> void:
+			_animate_stick(0.0, 0.08)
+			_clack_now(0.0)},
+	])
+
+
 ## Re-render the language-dependent lines of a board that is up right now.
 func relocalize() -> void:
 	if _running and board != null and _next > 0:

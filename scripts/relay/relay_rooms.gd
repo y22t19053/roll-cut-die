@@ -35,7 +35,7 @@ const MODS := {
 	"throat": {"zh":"窄喉","en":"THROAT","period":5.0,"amp":2.24,"twin":false,"throat":1.0,"dollies":1},
 }
 
-func append_room(kind: String, variant: int, mod := "") -> Dictionary:
+func append_room(kind: String, variant: int, mod := "", final := false) -> Dictionary:
 	assert(is_inside_tree(), "Mount RelayRooms before requesting world positions")
 	var spec: Dictionary = MODS.get(mod, MODS[""])
 	var room := Node3D.new()
@@ -86,14 +86,14 @@ func append_room(kind: String, variant: int, mod := "") -> Dictionary:
 		_cap.get_parent().remove_child(_cap)
 		_cap.queue_free()
 	_cap = _buffer(room,LENGTH,1)
-	_line(room,LENGTH)
+	_line(room,LENGTH,final)
 	_count += 1
 	var end := room.to_global(Vector3(LENGTH,.05,0))
 	var stops: Array[Vector3] = [end]
 	# The plan comes back with the room so a run can be written down and rebuilt
-	# from the same five choices it was made of.
+	# from the same choices it was made of.
 	return {"start":room.to_global(Vector3(0,.05,0)),"end":end,"stops":stops,
-		"kind":kind,"variant":variant,"mod":mod}
+		"kind":kind,"variant":variant,"mod":mod,"final":final}
 
 func _letter_lanes(room: Node3D, rows: Array, hand: int, ink: Color) -> void:
 	# Consolidate horizontal wall runs; leave open vestibules to turn at either seam.
@@ -207,8 +207,19 @@ static func _grain() -> ImageTexture:
 	return _grain_tex
 
 
-func _line(room: Node3D, x: float) -> void:
+func _line(room: Node3D, x: float, final := false) -> void:
 	_box(room,Vector3(x,.016,0),Vector3(.13,.024,2.62),WHITE)
+	if not final: return
+	# The last line of the run is dressed like a wrap: tape under the chalk line
+	# and a gate you run under. Low and pale, so it reads at fifty-five degrees
+	# from the far seam instead of getting lost against the dark.
+	var gx := x - 0.25
+	_box(room,Vector3(x-.12,.012,0),Vector3(.30,.018,2.86),Color("ffde79"))
+	for z: float in [-1.95,1.95]:
+		_box(room,Vector3(gx,.62,z),Vector3(.09,1.24,.09),WHITE)
+		_box(room,Vector3(gx,.26,z),Vector3(.17,.12,.17),Color("ffde79"))
+	_box(room,Vector3(gx,1.26,0),Vector3(.10,.10,3.98),WHITE)
+	_box(room,Vector3(gx,1.26,0),Vector3(.05,.22,.92),Color("ffde79"))
 
 func _z_of(d: Dictionary,t: float) -> float:
 	return float(d["amp"])*sin(TAU*t/float(d["period"])+float(d["phase"]))

@@ -199,7 +199,7 @@ func _render() -> void:
 	# What the player has done before: a record, never a head start.
 	var ran: Dictionary = rules.meta()
 	var record := UiKit.label(
-		("已跑 %d 卷 · 最远 %d / %d 棚" if zh else "%d runs · best set %d / %d") % [int(ran["runs"]), int(ran["best_set"]), 5],
+		("已跑 %d 卷 · 最远 %d / %d 棚" if zh else "%d runs · best set %d / %d") % [int(ran["runs"]), int(ran["best_set"]), 6],
 		16, UiKit.DIM)
 	record.name = "Record"
 	record.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

@@ -140,9 +140,14 @@ class Sheet extends Control:
 		if not d._cards.is_empty():
 			rect(0,0,w,h,Color("101817cf"))
 			var left:=card(0).position.x
-			text(left,h*.5-105,word("道具盘   /   带走一件","SUPPLY TRAY   /   Take one") if d._items else word("剪辑台   /   接哪一段？","CUTTING DESK   /   Choose the next strip"),22,PAPER)
+			var head := word("剪辑台   /   接哪一段？","CUTTING DESK   /   Choose the next strip")
+			if d._items: head = word("道具盘   /   带走一件","SUPPLY TRAY   /   Take one")
+			elif d._cards.size() > 0 and not str(d._cards[0].get("contract","")).is_empty():
+				head = word("换场单   /   签哪一张？","NEW CALL   /   Sign one")
+			text(left,h*.5-105,head,22,PAPER)
 			for i in d._cards.size():
 				if d._items: draw_supply(i)
+				elif not str(d._cards[i].get("contract","")).is_empty(): draw_contract(i)
 				else: draw_strip(i)
 			text(left,h*.5+122,word("点选，或按 1 / 2 / 3","Click your pick, or press 1 / 2 / 3"),16,PAPER)
 		elif not d._sheet_lines.is_empty():
@@ -170,6 +175,22 @@ class Sheet extends Control:
 			var span:=minf(w-32,d._font.get_string_size(d._message,HORIZONTAL_ALIGNMENT_LEFT,-1,17).x+32)
 			rect((w-span)*.5,h-51,span,36,dark)
 			draw_string(d._font,Vector2((w-span)*.5+14,h-27),d._message,HORIZONTAL_ALIGNMENT_LEFT,span-24,17,PAPER)
+	func draw_contract(i:int) -> void:
+		var d=owner_desk; var r:=card(i); var x:=r.position.x; var y:=r.position.y
+		var selected:bool=i==d._hover
+		var data:Dictionary=d._cards[i]
+		rect(x+3,y+5,196,170,Color("101210"));rect(x,y,196,170,AMBER if selected else PAPER)
+		# A contract is a page of the call sheet, not a strip of film: ruled
+		# paper, a stamped price, and the act it covers written on the line.
+		rect(x,y,196,26,INK)
+		text(x+10,y+19,"CALL  /  0%d"%(i+1),14,MINT)
+		text(x+12,y+58,str(data.get("title","")),24,INK)
+		draw_line(Vector2(x+12,y+68),Vector2(x+184,y+68),Color("837e70"),1)
+		text(x+12,y+92,str(data.get("line1","")),14,INK)
+		text(x+12,y+114,str(data.get("line2","")),14,INK)
+		rect(x+12,y+131,170,28,INK)
+		text(x+22,y+151,str(data.get("stamp","")),17,AMBER)
+
 	func draw_strip(i:int) -> void:
 		var d=owner_desk; var r:=card(i);var x:=r.position.x;var y:=r.position.y
 		var selected:bool=i==d._hover

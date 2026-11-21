@@ -260,7 +260,11 @@ static func _tilt(h) -> void:
 		CameraRigScript.lean_target(right * 4.0, 0.0, 0.0),
 		-CameraRigScript.LEAN_MAX, 1e-9)
 	h.at_most("spinning up banks into the turn",
-		CameraRigScript.lean_target(Vector3.ZERO, 0.0, 2.0), -0.2)
+		CameraRigScript.lean_target(Vector3.ZERO, 0.0, 2.0),
+		-CameraRigScript.LEAN_MAX * 0.9)
+	h.near("a spin alone cannot exceed the cap",
+		CameraRigScript.lean_target(Vector3.ZERO, 0.0, 60.0),
+		-CameraRigScript.LEAN_MAX, 1e-9)
 	var rig = CameraRigScript.new()
 	h.ok("tilt is on by default", rig.tilt_enabled)
 	rig.tilt_enabled = false

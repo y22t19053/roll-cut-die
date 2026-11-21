@@ -320,6 +320,29 @@
 - **理由**：贴图与动机是「执行分」而不是「方向分」，成本低、收益直接；而资源未导入就静默回退，会让人以为资产没做。
 - **实现位置**：`tools/make_textures.py`、`tools/make_audio.py`、`scripts/relay/relay_rooms.gd` 的 `_surface()`/`_load_or_grain()`、`scripts/relay/relay_sound.gd` 的 `_bed()`/`_wav_on_disk()`/`set_danger()`/`resume_beds()`。
 
+## D-031 · 三节六棚：每两棚一次「签一张」，最后一棚是冲线
+
+- **日期**：2026-11-22
+- **来源**：创作者设计坐标（「最爽的一刻是第七次死了七次、最后冲线前那一刻」）＋本轮目标第 2、5 条
+- **状态**：**CONFIRMED（机械已验证，节奏待真人试玩）**
+- **结论**：
+  1. 一局由 `MODULES = 6` 个棚、`ACTS = 3` 节、`SETS_PER_ACT = 2` 组成。棚与棚之间仍是三扇门（D-023），但**每两棚多一道换场单**：`Mode.ACT`，只能签一张，签了就改下一节整节的规则。
+  2. 三张换场单（`_offer_contracts()`）：**赶一条 RUSH**（下一节每棚 3 趟，现值扣 1 MARK）、**多留一条 OVERTIME**（下一节每棚 5 趟，现值给 1 CUT）、**不许宽限 BLACKOUT**（下一节没有 0.75 s 宽限，接片作废，现值给 2 MARK）。契约只覆盖一节，用完即清（`act_mod = ""`）。
+  3. 最后一棚（`segments.size() == MODULES - 1`）由 `append_room(..., final = true)` 建出冲线门：甲板上的黄灯座 + 1.26 m 高的白色低门 + 门楣黄牌，配一条黄磁带。**第一版把龙门架放在棚外、1.96 m 高、深色立柱**，实拍站在地板外、在黑背景里读不出来，已改为落在甲板上的低门。
+  4. 过线进入 `Mode.DONE` 时先播冲线：`_finish_line()` → `score.cue("win")`、`slate.play_wrap()`（板写 `CUT!`、角标「全部接通」、副行「这一卷是你的」）、`add_shake(0.7)`、暖白闪、0.72 s 后才进结算页。**不要用 `play_roll`**：那会让冲线时板上写「ROLL.」，读起来像刚开始。
+- **理由**：肉鸽的「一局有形状」不能靠随机，要靠**分段与代价**；而「死了很多次最后冲线」需要一个看得见的终点，所以最后一棚必须自己长出一个门。
+- **实现位置**：`scripts/relay/relay_run.gd`（`MODULES`/`ACTS`/`SETS_PER_ACT`、`Mode.ACT`、`_offer_contracts`、`_apply_contract`、`_finish_line`、`_pick_card`）、`scripts/relay/relay_rooms.gd`（`append_room(..., final)`、`_line(..., final)`）、`scripts/ui/slate_ui.gd`（`play_wrap`）、`scripts/relay/cutting_desk.gd`（换场单与道具盘共用同一套纸卡绘制）。存档字段新增 `act`/`act_mod`/`act_grace`/`final`。
+
+## D-032 · ROLL 的第二个输入：镜头横倾（lean），F3 可关
+
+- **日期**：2026-11-22
+- **来源**：创作者设计坐标（「不希望它像任何游戏」）＋十维评审第 1 条（「转动要由输入产生」）
+- **状态**：**CONFIRMED（数值保守，待真人盲测）**
+- **结论**：`CameraRig` 在原有「由 yaw 角速度派生 roll」之上再加一层**由横移与角加速度派生**的 `lean`：`lean_target = -LEAN_CARVE * lateral * |input| - clamp(LEAN_ACCEL * dw, ±1)`，弹簧积分（`LEAN_STIFF 46`、`LEAN_DAMP 12`），上限 `LEAN_MAX = 7.5°`。最终 `roll = drv.roll * roll_scale + lean`。`F3` 一键开关（`tilt_enabled`），关掉即回到 0.2.x 的画面，便于 A/B。reduce_motion 下 lean 恒 0。
+- **理由**：原来的 ORBIT 是「时间让画面转」，玩家三十秒就能预测；lean 让**横移这一下**有代价与手感，且与原有 roll 同号（加深而不是抵消）。
+- **代价与边界**：满舵横移时总横倾可达 13.4°（原上限 12° 是给派生 roll 的）。lean 只是表现，**不参与任何判定**；`restore_mark_motion()` 会把 lean 与弹簧一起归零，避免读档后镜头歪着。
+- **实现位置**：`scripts/camera/camera_rig.gd`（`lean_target`、`_update_lean`、`LEAN_*`）、`scripts/relay/relay_run.gd`（F3）、`tests/test_camera.gd`（`_tilt`）。
+
 ## 变更规则
 
 1. 新增决策 → 追加条目，编号连续，不得改写历史条目。

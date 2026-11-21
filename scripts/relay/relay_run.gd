@@ -14,21 +14,30 @@ const CameraMath = preload("res://scripts/camera/camera_math.gd")
 const SlateUI = preload("res://scripts/ui/slate_ui.gd")
 const FrameFX = preload("res://scripts/relay/frame_fx.gd")
 const Save = preload("res://scripts/relay/relay_save.gd")
-const MODULES := 5
+const MODULES := 6
 const KINDS := ["s", "h", "u", "l", "n", "x"]
+## A run is three acts of two sets. The seam between acts is the only place the
+## player is asked to sign something: a shorter act, a longer one, or an act with
+## no mercy at all. Everything else is decided at a door.
+const ACTS := 3
+const SETS_PER_ACT := 2
 const TOUCH := 0.77
 const GRACE := 0.75
 const PASSES := 4
-## A run is a seed and five sets: the seed is printed on the call sheet so two
-## runs can be compared, replayed or argued about.
-static var next_seed := 0
-## A run that was written down between takes. The title screen decides whether
+## A run is a seed and six sets in three acts: the seed is printed on the call
+## sheet so two runs can be compared, replayed or argued about.
+static var next_seed := 0## A run that was written down between takes. The title screen decides whether
 ## New Game starts fresh or Continue picks this up.
 static var pending_resume := {}
 var run_seed := 0
 ## How many legs the current set asks for. A short set is faster; a long one
 ## pays a supply. This is the run's only real decision.
 var required_passes := PASSES
+## Which act of three the run is in, what was signed at the last seam, and how
+## much grace that act allows. Nothing else changes between acts.
+var act := 0
+var act_mod := ""
+var act_grace := GRACE
 ## The first splice of a run is free: the player has to feel what a CUT costs
 ## before it can cost them anything.
 var free_cut := 1
@@ -54,7 +63,7 @@ var score: Node
 ## Last distance to each ghost, so a close pass can be told from a clean one.
 var _gap := {}
 
-enum Mode { PLAY, PICK, CUT, DONE, LOST, ITEM }
+enum Mode { PLAY, PICK, CUT, DONE, LOST, ITEM, ACT }
 var phase := Mode.PLAY
 var player := Player.new()
 var rig := Rig.new()
@@ -212,7 +221,7 @@ func _start_leg(back: bool) -> void:
 	_arm_mercy()
 	desk.clear_sheet()
 	score.resume_beds() # The room comes back with the new take.
-	grace = GRACE
+	grace = act_grace
 	_checkpoint(false)
 	_show_target()
 	# The board opens once per run, on the first take of the first set.
@@ -244,14 +253,15 @@ func _hint(key: String, zh: String, en: String) -> void:
 func _serialize_run() -> Dictionary:
 	var plan: Array = []
 	for s in segments:
-		plan.append({"kind": str(s.get("kind","")), "variant": int(s.get("variant",0)), "mod": str(s.get("mod",""))})
+		plan.append({"kind": str(s.get("kind","")), "variant": int(s.get("variant",0)),
+			"mod": str(s.get("mod","")), "final": bool(s.get("final", false))})
 	var rec: Array = []
 	for t in tracks:
 		rec.append(t.to_dict())
 	return {"seed": run_seed, "difficulty": difficulty, "required_passes": required_passes,
 		"room_pass": room_pass, "segments": plan, "mark_stock": mark_stock, "cut_stock": cut_stock,
 		"free_cut": free_cut, "splice": splice.has_splice(), "deaths": deaths, "tracks": rec,
-		"room_track_start": room_track_start}
+		"room_track_start": room_track_start, "act": act, "act_mod": act_mod, "act_grace": act_grace}
 
 
 ## Written between takes, never mid-take: a leg only counts once it is in the can.
@@ -269,6 +279,9 @@ func _apply_run(d: Dictionary) -> void:
 	cut_stock = int(d.get("cut_stock", cut_stock))
 	free_cut = int(d.get("free_cut", free_cut))
 	deaths = int(d.get("deaths", 0))
+	act = int(d.get("act", 0))
+	act_mod = str(d.get("act_mod", ""))
+	act_grace = float(d.get("act_grace", GRACE))
 	if bool(d.get("splice", false)): splice.offer()
 	tracks = []
 	for raw in d.get("tracks", []):
@@ -276,7 +289,7 @@ func _apply_run(d: Dictionary) -> void:
 		if tr != null: tracks.append(tr)
 	for s in d.get("segments", []):
 		var r: Dictionary = s
-		segments.append($Rooms.append_room(str(r.get("kind","straight")), int(r.get("variant",0)), str(r.get("mod",""))))
+		segments.append($Rooms.append_room(str(r.get("kind","straight")), int(r.get("variant",0)), str(r.get("mod","")), bool(r.get("final", false))))
 	room_pass = int(d.get("room_pass", 0))
 	# The ghosts this set already has: everything recorded since it was joined,
 	# never the takes of a set the player has not entered yet.
@@ -426,7 +439,7 @@ func _restore(i: int) -> void:
 	_arm_mercy()
 	desk.clear_sheet()
 	score.resume_beds()
-	grace = GRACE
+	grace = act_grace
 	_arrival_locked = player.global_position.distance_to(route[cursor]) <= TOUCH
 	_show_target()
 
@@ -447,17 +460,70 @@ func _finish_leg() -> void:
 		score.cue("line")
 		_start_leg(not returning)
 		return
-	phase = Mode.DONE if segments.size() == MODULES else Mode.ITEM
-	_freeze()
-	_show_target()
-	if phase == Mode.DONE:
+	if segments.size() >= MODULES:
+		phase = Mode.DONE
+		_freeze()
+		_show_target()
 		Save.clear() # A finished run is not a run to come back to.
 		if Rules.unlocked(difficulty): Rules.record_clear(difficulty)
-		score.cue("win")
-		_show_sheet(true)
+		_finish_line()
+		return
+	_freeze()
+	_show_target()
+	if segments.size() % SETS_PER_ACT == 0:
+		# The seam between acts: sign one thing, and live with it for two sets.
+		phase = Mode.ACT
+		act += 1
+		cards = _offer_contracts()
+		score.cue("clear")
+		desk.show_draw(cards, Loc.language == "zh")
+		desk.show_message(_w("第 %d 节。签一张。" % (act + 1), "Act %d. Sign one." % (act + 1)))
 	else:
+		phase = Mode.ITEM
 		score.cue("clear")
 		desk.show_items(Loc.language == "zh")
+
+## The last line of the run. A wrap is loud on purpose: the run's whole promise
+## is that the crossing is worth the takes it cost.
+func _finish_line() -> void:
+	score.cue("win")
+	score.resume_beds()
+	slate.play_wrap(_w("全部接通", "ANSWER PRINT"), _w("这一卷是你的", "this reel is yours"))
+	rig.add_shake(0.7)
+	fx.flash(Color("ffeec4"), 0.46, 0.06, 0.42)
+	_hint("finish", "冲线。这一卷是你的。", "Across the line. This reel is yours.")
+	# The board names the crossing first; the call sheet comes in after the clack
+	# has landed, the way a wrap is called before the paperwork.
+	get_tree().create_timer(0.72).timeout.connect(func() -> void: _show_sheet(true))
+
+## Three contracts, each a price on the next two sets. Nothing hidden: the cost
+## is printed on the card, and it is paid the moment you sign.
+func _offer_contracts() -> Array:
+	return [
+		{"kind": "contract", "contract": "rush", "title": _w("赶一条", "RUSH"),
+			"line1": _w("下一节每棚 3 趟", "next act: 3 legs a set"),
+			"line2": _w("现在扣 1 MARK", "costs 1 MARK now"), "stamp": _w("−1 MARK", "−1 MARK")},
+		{"kind": "contract", "contract": "overtime", "title": _w("多留一条", "OVERTIME"),
+			"line1": _w("下一节每棚 5 趟", "next act: 5 legs a set"),
+			"line2": _w("现在给 1 CUT", "pays 1 CUT now"), "stamp": _w("+1 CUT", "+1 CUT")},
+		{"kind": "contract", "contract": "blackout", "title": _w("不许宽限", "BLACKOUT"),
+			"line1": _w("下一节没有 0.75 秒宽限", "next act: no 0.75 s grace"),
+			"line2": _w("接片作废，给 2 MARK", "no splice, +2 MARK now"), "stamp": _w("+2 MARK", "+2 MARK")},
+	]
+
+func _apply_contract(id: String) -> void:
+	act_mod = id
+	act_grace = GRACE
+	match id:
+		"rush":
+			mark_stock = maxi(mark_stock - 1, 0)
+		"overtime":
+			cut_stock += 1
+		"blackout":
+			mark_stock += 2
+			splice = Splice.new()
+			act_grace = 0.30
+	score.cue("pickup")
 
 ## Three doors, three stakes. A short set is quick and pays nothing; a long one
 ## costs legs and pays a supply. The condition is on the door, never a surprise
@@ -510,6 +576,13 @@ func _mod_label(mod: String) -> String:
 	return ""
 
 func _pick_card(i: int) -> void:
+	if phase == Mode.ACT and i >= 0 and i < cards.size():
+		_apply_contract(str(cards[i].get("contract", "rush")))
+		phase = Mode.PICK
+		cards = _offer_doors()
+		desk.show_draw(cards, Loc.language == "zh")
+		_refresh()
+		return
 	if phase == Mode.ITEM and i >= 0 and i < 3:
 		match i:
 			0: splice.offer()
@@ -523,13 +596,17 @@ func _pick_card(i: int) -> void:
 		return
 	if phase != Mode.PICK or i < 0 or i >= cards.size(): return
 	var c: Dictionary = cards[i]
-	var room: Dictionary = $Rooms.append_room(c.kind,c.variant,str(c.get("mod","")))
+	var last := segments.size() == MODULES - 1
+	var room: Dictionary = $Rooms.append_room(c.kind,c.variant,str(c.get("mod","")),last)
 	segments.append(room)
 	required_passes = int(c.get("passes",PASSES))
+	if act_mod == "rush": required_passes = maxi(required_passes - 1, 2)
+	elif act_mod == "overtime": required_passes += 1
 	match str(c.get("reward","")):
 		"mark": mark_stock += 1
 		"cut": cut_stock += 1
 		"splice": splice.offer()
+	act_mod = "" # A contract covers one act, never the whole run.
 	score.cue("choose")
 	room_track_start = tracks.size()
 	room_pass = 0
@@ -647,6 +724,7 @@ func _hit(source: int) -> bool:
 ## The call sheet. Win or lose, a run ends with one page that says what it was:
 ## how far, how many takes, how many deaths, and the seed to replay it.
 func _show_sheet(won: bool) -> void:
+	if not is_inside_tree(): return
 	# The run is over, so the board gets out of the way instead of printing the
 	# DIE. card over the page that explains what the run was.
 	if slate.is_running(): slate.hide_slate()
@@ -679,7 +757,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		return
 	# The board is talking. Nothing else gets a say until the clack has landed.
 	if slate.is_running(): return
-	if phase in [Mode.ITEM, Mode.PICK] and key >= KEY_1 and key <= KEY_3:
+	if phase in [Mode.ITEM, Mode.PICK, Mode.ACT] and key >= KEY_1 and key <= KEY_3:
 		_pick_card(key-KEY_1)
 	elif phase in [Mode.DONE,Mode.LOST]:
 		match key:
