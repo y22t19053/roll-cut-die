@@ -91,7 +91,10 @@ func _render() -> void:
 	# the first button in the tree, so UiKit.focus_first lands on it.
 	# Then the studio takes (continue / new) as slates with an orange ink edge;
 	# housekeeping (settings / quit) sits below a ruled line, quieter.
-	if ResourceLoader.exists(BACKLOT_SCENE):
+	if ResourceLoader.exists("res://scenes/studiolot/world.tscn"):
+		buttons.add_child(_play_key("制片厂" if Loc.language == "zh" else "The Studio Lot", _on_studiolot))
+		buttons.add_child(_secondary(UiKit.button(Loc.ui("menu.backlot"), _on_backlot)))
+	elif ResourceLoader.exists(BACKLOT_SCENE):
 		buttons.add_child(_play_key(Loc.ui("menu.backlot"), _on_backlot))
 	else:
 		buttons.add_child(_play_key(Loc.ui("menu.new"), _on_new_game))
@@ -259,6 +262,13 @@ static func _reason_key(reason: String) -> String:
 
 func _switch_language(lang: String) -> void:
 	GameSession.set_language(lang)
+
+
+func _on_studiolot() -> void:
+	GameSession.request_new_game()
+	if get_tree().change_scene_to_file("res://scenes/studiolot/world.tscn") != OK:
+		_status_key = "error.scene"
+		_rerender()
 
 
 func _on_backlot() -> void:
