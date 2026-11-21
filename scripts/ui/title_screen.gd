@@ -86,8 +86,8 @@ func _on_setting_changed(key: String, _value: Variant) -> void:
 
 func _motion_toggle_text() -> String:
 	if Loc.language == "zh":
-		return "静态背景：" + ("开" if _reduced() else "关")
-	return "Static backdrop: " + ("On" if _reduced() else "Off")
+		return "减弱动态效果：" + ("开" if _reduced() else "关")
+	return "Reduce motion: " + ("On" if _reduced() else "Off")
 
 
 func _open_motion_settings() -> void:
@@ -104,8 +104,8 @@ func _motion_row() -> Control:
 	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	var zh := Loc.language == "zh"
 	var note := UiKit.label(
-		"提示：背景与游戏含缓慢的镜头与灯光运动，可能引起眩晕。无闪烁。" if zh
-		else "Notice: slow camera and light motion here and in play may cause dizziness. No flashing.",
+		"镜头会随移动旋转，可能引起眩晕。开拍前可减弱动态效果" if zh
+		else "Moving rotates the camera and may cause dizziness. You can reduce motion before you play.",
 		16, UiKit.INK)
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

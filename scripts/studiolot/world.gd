@@ -88,8 +88,8 @@ func _build_world() -> void:
 	_sign("货梯", "FREIGHT LIFT", Vector3(21, 3.4, 30))
 	_sign("剪辑台", "EDIT BENCH", Vector3(4, 1.9, 33.6))
 	_sign("35 mm", "35 mm", Vector3(12.5, 2.0, 6.5))
-	_sign("卷帘闩", "SHUTTER LATCH", Vector3(17.9, 1.9, 7.5))
-	_sign("卷帘闩", "SHUTTER LATCH", Vector3(17.5, 1.9, 28.4))
+	_sign("布景车刹", "SCENERY BRAKE", Vector3(17.9, 1.9, 7.5))
+	_sign("布景车刹", "SCENERY BRAKE", Vector3(17.5, 1.9, 28.4))
 	for i in Plan.SITES.size():
 		var site: String = Plan.SITES[i]
 		var ir: Array = _rects["img_" + site]
@@ -103,6 +103,7 @@ func _build_world() -> void:
 		_shelf["img_" + site] = _spool(self, Vector3(2.7 + i * 1.3, 1.05, 33.6), 0.36, Color("e2ae59"))
 		_shelf["snd_" + site] = _spool(self, Vector3(2.7 + i * 1.3, 1.22, 33.6), 0.24, Color("59c7e2"))
 	_shelf["print"] = _spool(self, Vector3(12.5, 1.5, 6.5), 0.42, Color("f2f2ea"))
+	preload("res://scripts/studiolot/scenery_wagons.gd").decorate($Layout)
 	_build_screen()
 	hatch.name = "LotHatch"
 	hatch.position = Vector3(4,0.08,30)
@@ -262,6 +263,8 @@ func _target() -> Array:
 			return ["latch", g]
 	for site: String in Plan.SITES:
 		if hand_image == "" and not has_print and not images.has(site) and _near("img_" + site):
+			if site == "street" and green_stage != null and not green_stage.on_mark():
+				return ["standby", site]
 			return ["image", site]
 		if hand_sound == "" and not has_print and not sounds.has(site) and _near("snd_" + site):
 			return ["sound", site]
@@ -278,7 +281,8 @@ func _cue_text() -> String:
 	var t := _target()
 	if not t.is_empty():
 		match str(t[0]):
-			"latch": return _words("E　从这一侧拉开卷帘（本片永久打开）", "E   Unlatch the shutter from this side (stays open)")
+			"latch": return _words("E　松开脚刹，把布景车推到一旁", "E   Release the brake and strike the scenery wagon")
+			"standby": return _words("看替身的脚。站上白叉，再按 E 收镜　·　M 留接点，错过可用 C 剪回", "Watch the stand-in. Press E on the white cross · M to mark, C to retry a missed cue")
 			"image": return _words("E　取下母版画面：%s", "E   Lift master picture: %s") % _site(t[1])
 			"sound": return _words("E　取下声带：%s（与同场画面同条送回才同步）", "E   Lift sound roll: %s (in sync only if delivered with its picture)") % _site(t[1])
 			"deliver": return _words("E　交给剪辑台", "E   Hand in at the bench")
@@ -300,14 +304,14 @@ func _interact() -> void:
 	if paused or phase != Phase.ROLLING or player.frozen:
 		return
 	var t := _target()
-	if t.is_empty():
+	if t.is_empty() or t[0] == "standby":
 		return
 	recorder.mark(GhostTrack.FLAG_INTERACT)
 	var arg := str(t[1])
 	match str(t[0]):
 		"latch":
 			open_gate(arg)
-			_flash(func() -> String: return _words("卷帘开了。这条回程以后一直通。", "Shutter open. This way back stays open."), 3.0)
+			_flash(func() -> String: return _words("布景撤了，回程可以走这里", "Set struck. This way back stays open."), 3.0)
 		"image":
 			hand_image = arg
 			_flash(func() -> String: return _words("母版画面在手：", "Master picture in hand: ") + _site(arg))
