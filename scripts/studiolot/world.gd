@@ -29,6 +29,7 @@ var _site_labels := {}
 var _screen_root: Node3D
 var _screen_cam: Camera3D
 var _reels: Array = []
+var _reel_caption: Label3D
 var _screen_t := 0.0
 var _screen_total := 0.0
 var _new_armed_ms := -100000
@@ -166,6 +167,12 @@ func _build_screen() -> void:
 		label.position = _on_screen(c.x, c.y, 0.04)
 		_screen_root.add_child(label)
 		_site_labels[site] = label
+	_reel_caption = Label3D.new()
+	_reel_caption.font = load(FONT_PATH)
+	_reel_caption.pixel_size = 0.003
+	_reel_caption.rotation.y = PI * 0.5
+	_reel_caption.position = Vector3(1.34, 3.68, 6.5)
+	_screen_root.add_child(_reel_caption)
 	_screen_cam = Camera3D.new()
 	_screen_cam.fov = 50.0
 	_screen_cam.position = Vector3(9.5, 1.9, 6.5)
@@ -371,7 +378,7 @@ func _start_screening() -> void:
 		for k in 6:
 			var side := 0.14 - k * 0.018
 			nodes.append(_slab(Vector3(0.01, side, side), Vector3.ZERO, hue.darkened(k * 0.12)))
-		_reels.append({"track": tr, "start": _screen_total, "nodes": nodes})
+		_reels.append({"track": tr, "take": tr.take_id, "start": _screen_total, "nodes": nodes})
 		_screen_total += float(tr.duration())
 	for child: Node in _screen_root.get_children():
 		if child.has_meta("zone") and images.has(str(child.get_meta("zone"))):
@@ -424,14 +431,19 @@ func _process(dt: float) -> void:
 	_screen_t += dt * SCREEN_SPEED
 	if _screen_t > _screen_total + 2.0 * SCREEN_SPEED:
 		_screen_t = 0.0
+	var caption := "FIN"
 	for reel: Dictionary in _reels:
 		var local: float = _screen_t - float(reel.start)
 		var dur: float = reel.track.duration()
+		if local >= 0.0 and local < dur:
+			caption = "TAKE %02d   %s" % [reel.take, MarkLedger.clock(local)]
 		for k in reel.nodes.size():
 			var node: MeshInstance3D = reel.nodes[k]
 			node.visible = local >= 0.0
 			var pos: Vector3 = reel.track.sample_at(clampf(local - k * 0.7, 0.0, dur)).position
 			node.position = _on_screen(pos.x, pos.z, 0.03)
+
+	_reel_caption.text = caption
 
 ## B at the ending: the print goes back; everything banked and recorded stays.
 func return_to_editing() -> bool:
