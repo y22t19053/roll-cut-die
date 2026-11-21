@@ -4,6 +4,8 @@ const DOCK := Vector3(4,0.05,28)
 const SWITCH := Vector3(28,0.05,4)
 const DECK := Vector3(33,0.05,6)
 const BOOTH := Vector3(33,0.05,27)
+# The projection room opens west onto the dock; the projector stays at its east end.
+const BOOTH_EXIT := Vector3(17,0.05,30)
 
 # Two opposing stage portals on the eastward approach from the loading dock.
 # Map props supply the posts' visible surfaces and their actual collision.
@@ -20,6 +22,8 @@ static func layout() -> Dictionary:
 		{"id":"soundstage","rect":[28,9,35,22],"height":1.2,"color":[0.29,0.14,0.16]},
 		{"id":"breaker","rect":[27,1.8,29,2.8],"height":1.4,"color":[0.65,0.29,0.12]},
 		{"id":"recorder","rect":[32,3.7,34,4.8],"height":1.05,"color":[0.18,0.24,0.26]},
+		{"id":"booth_partition","rect":[16,28.8,16.2,29.0],"height":2.1,"color":[0.25,0.34,0.34]},
+		{"id":"booth_exit_jamb","rect":[16,31.05,16.2,31.5],"height":2.1,"color":[0.25,0.34,0.34]},
 		{"id":"projector","rect":[32,28.4,34,29.4],"height":1.25,"color":[0.26,0.29,0.31]},
 		{"id":"screen","rect":[28,30.6,37,30.8],"height":2.5,"color":[0.63,0.6,0.5]}],
 		"evidence":[], "npcs":[{"id":"floor_crew","route":[[9.8,24.6],[26,24.6]],"speed":1.3,"mode":"pingpong"},

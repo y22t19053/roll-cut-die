@@ -70,8 +70,16 @@ func _spool(parent: Node, at: Vector3) -> MeshInstance3D:
 
 func _begin_take() -> void:
 	carrying = false
-	spawn_pos = SetPlan.BOOTH if power_cut else SetPlan.DOCK
+	spawn_pos = SetPlan.BOOTH_EXIT if power_cut else SetPlan.DOCK
 	super._begin_take()
+	# Neither performer gets a head start while the new take's slate is closed.
+	_world_running = false
+	recorder.recording = false
+	for npc in npcs:
+		npc.set_active(false)
+	for ghost in ghost_nodes:
+		ghost.playing = false
+		ghost.global_position = ghost.track.sample_at(0.0).position
 	_sync_reel()
 
 func _sync_reel() -> void:

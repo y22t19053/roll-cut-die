@@ -56,7 +56,12 @@ func run() -> void:
 		if Vector2(pos.x,pos.z).distance_to(eye_spot) <= 4.0:
 			last_near = t
 	print("RETURN WINDOW AUDIT: observation spot %s, earliest arrival %.2fs, last replay within 4m %.2fs" % [eye_spot, earliest, last_near])
-	for p in [Vector2(36.4,27),Vector2(36.4,6),Vector2(33,6)]:
+	await walk(eye_spot)
+	var ghost = studio.ghost_nodes[0]
+	var separation: float = ghost.global_position.distance_to(studio.player.global_position)
+	print("RETURN WINDOW WALK: reached at %.2fs, separation %.2fm" % [ghost.playhead,separation])
+	if failed or separation > 4.0 or ghost.playhead >= last_near: quit(1); return
+	for p in [Vector2(17,30),Vector2(36.4,27),Vector2(36.4,6),Vector2(33,6)]:
 		await walk(p)
 	studio._interact()
 	if studio.carrying: push_error("reel collected from walkway"); quit(1); return
