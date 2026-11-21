@@ -2,7 +2,9 @@ extends RefCounted
 ## Relay progression is separate from campaign saves. Mode selection and all
 ## consumables are session-only; the highest unlocked difficulty is permanent.
 const _PATH := "user://rcd/relay_progress.cfg"
+const _META_PATH := "user://rcd/relay_meta.cfg"
 const _VERSION := 1
+const _META_VERSION := 1
 const _MARK := [6, 6, 3]
 const _CUT := [3, 3, 2]
 static var selected_mode: int = 0
@@ -44,3 +46,44 @@ static func _record_clear_at(mode: int, path: String) -> void:
 	var err := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
 	if err == OK: err = cfg.save(path)
 	if err != OK: push_warning("Relay unlock could not be saved: %s" % error_string(err))
+
+
+## What the player has already done, kept between sessions. Nothing in here makes
+## a run easier: it is a record, not a reward. Supplies stay per-run and per-mode.
+static func meta() -> Dictionary:
+	var out := {"runs": 0, "best_set": 0, "deaths": 0, "wins": 0, "last_seed": 0}
+	if not FileAccess.file_exists(_META_PATH): return out
+	var cfg := ConfigFile.new()
+	if cfg.load(_META_PATH) != OK: return out
+	if int(cfg.get_value("meta", "version", 0)) != _META_VERSION: return out
+	for key: String in out.keys():
+		out[key] = int(cfg.get_value("meta", key, 0))
+	return out
+
+
+static func record_run(sets: int, deaths: int, won: bool, seed: int) -> Dictionary:
+	var m := meta()
+	m["runs"] = int(m["runs"]) + 1
+	m["best_set"] = maxi(int(m["best_set"]), sets)
+	m["deaths"] = int(m["deaths"]) + deaths
+	m["wins"] = int(m["wins"]) + (1 if won else 0)
+	m["last_seed"] = seed
+	var cfg := ConfigFile.new()
+	cfg.set_value("meta", "version", _META_VERSION)
+	for key: String in m.keys():
+		cfg.set_value("meta", key, m[key])
+	var err := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_META_PATH.get_base_dir()))
+	if err == OK: err = cfg.save(_META_PATH)
+	if err != OK: push_warning("Relay record could not be saved: %s" % error_string(err))
+	return m
+
+
+## One seed a day, the same for everyone: the only run two people can argue about.
+static func daily_seed() -> int:
+	var d := Time.get_date_dict_from_system()
+	var stamp := int(d["year"]) * 10000 + int(d["month"]) * 100 + int(d["day"])
+	return (stamp * 2654435761) & 0xFFFFFF
+
+
+static func daily_played() -> bool:
+	return int(meta().get("last_seed", 0)) == daily_seed()

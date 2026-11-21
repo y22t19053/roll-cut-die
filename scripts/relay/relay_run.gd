@@ -13,6 +13,7 @@ const MarkBeacon = preload("res://scripts/ui/mark_beacon.gd")
 const CameraMath = preload("res://scripts/camera/camera_math.gd")
 const SlateUI = preload("res://scripts/ui/slate_ui.gd")
 const FrameFX = preload("res://scripts/relay/frame_fx.gd")
+const Save = preload("res://scripts/relay/relay_save.gd")
 const MODULES := 5
 const KINDS := ["s", "h", "u", "l", "n", "x"]
 const TOUCH := 0.77
@@ -21,6 +22,9 @@ const PASSES := 4
 ## A run is a seed and five sets: the seed is printed on the call sheet so two
 ## runs can be compared, replayed or argued about.
 static var next_seed := 0
+## A run that was written down between takes. The title screen decides whether
+## New Game starts fresh or Continue picks this up.
+static var pending_resume := {}
 var run_seed := 0
 ## How many legs the current set asks for. A short set is faster; a long one
 ## pays a supply. This is the run's only real decision.
@@ -28,6 +32,9 @@ var required_passes := PASSES
 ## The first splice of a run is free: the player has to feel what a CUT costs
 ## before it can cost them anything.
 var free_cut := 1
+## A run is only written down in the record book once, however often the sheet
+## ends up on screen.
+var _recorded := false
 var _seen_hints := {}
 ## Ghosts the tape handed you back inside of. They stop counting until you
 ## step out: a respawn is never the player's mistake.
@@ -108,10 +115,18 @@ func _ready() -> void:
 	else:
 		run_seed = int(Time.get_unix_time_from_system()) & 0xFFFFFF
 	_rng.seed = run_seed
-	segments.append($Rooms.append_room("straight",0))
+	# A written-down run is rebuilt before the player exists: the rooms have to be
+	# standing before anyone can stand in them.
+	var resuming := not pending_resume.is_empty()
+	if resuming:
+		_apply_run(pending_resume)
+		pending_resume = {}
+	else:
+		segments.append($Rooms.append_room("straight",0))
+		Save.clear() # A new run throws away the one that was left open.
 	player.name = "Player"
 	add_child(player)
-	player.teleport(segments[0].start,0)
+	player.teleport((segments.back() as Dictionary).start, 0)
 	player.roll_mode = Orbit
 	rig.name = "CameraRig"
 	add_child(rig)
@@ -196,6 +211,7 @@ func _start_leg(back: bool) -> void:
 	_restart_actors()
 	_arm_mercy()
 	desk.clear_sheet()
+	score.resume_beds() # The room comes back with the new take.
 	grace = GRACE
 	_checkpoint(false)
 	_show_target()
@@ -222,6 +238,49 @@ func _hint(key: String, zh: String, en: String) -> void:
 	_seen_hints[key] = true
 	_notice = _w(zh, en)
 	_notice_left = 3.5
+
+
+## Everything a run remembers, in the order it was paid for.
+func _serialize_run() -> Dictionary:
+	var plan: Array = []
+	for s in segments:
+		plan.append({"kind": str(s.get("kind","")), "variant": int(s.get("variant",0)), "mod": str(s.get("mod",""))})
+	var rec: Array = []
+	for t in tracks:
+		rec.append(t.to_dict())
+	return {"seed": run_seed, "difficulty": difficulty, "required_passes": required_passes,
+		"room_pass": room_pass, "segments": plan, "mark_stock": mark_stock, "cut_stock": cut_stock,
+		"free_cut": free_cut, "splice": splice.has_splice(), "deaths": deaths, "tracks": rec,
+		"room_track_start": room_track_start}
+
+
+## Written between takes, never mid-take: a leg only counts once it is in the can.
+func _save_run() -> void:
+	if phase == Mode.DONE: return
+	Save.save_run(_serialize_run())
+
+
+func _apply_run(d: Dictionary) -> void:
+	run_seed = int(d.get("seed", run_seed))
+	_rng.seed = run_seed
+	difficulty = int(d.get("difficulty", difficulty))
+	required_passes = int(d.get("required_passes", PASSES))
+	mark_stock = int(d.get("mark_stock", mark_stock))
+	cut_stock = int(d.get("cut_stock", cut_stock))
+	free_cut = int(d.get("free_cut", free_cut))
+	deaths = int(d.get("deaths", 0))
+	if bool(d.get("splice", false)): splice.offer()
+	tracks = []
+	for raw in d.get("tracks", []):
+		var tr = Track.from_dict(raw)
+		if tr != null: tracks.append(tr)
+	for s in d.get("segments", []):
+		var r: Dictionary = s
+		segments.append($Rooms.append_room(str(r.get("kind","straight")), int(r.get("variant",0)), str(r.get("mod",""))))
+	room_pass = int(d.get("room_pass", 0))
+	# The ghosts this set already has: everything recorded since it was joined,
+	# never the takes of a set the player has not entered yet.
+	room_track_start = clampi(int(d.get("room_track_start", tracks.size())), 0, tracks.size())
 
 func _restart_actors() -> void:
 	for old in _actors:
@@ -366,6 +425,7 @@ func _restore(i: int) -> void:
 	_restart_actors()
 	_arm_mercy()
 	desk.clear_sheet()
+	score.resume_beds()
 	grace = GRACE
 	_arrival_locked = player.global_position.distance_to(route[cursor]) <= TOUCH
 	_show_target()
@@ -383,6 +443,7 @@ func _finish_leg() -> void:
 	fx.flash(Color("9ceccb"), 0.12, 0.0, 0.14)
 	room_pass += 1
 	if room_pass < required_passes:
+		_save_run() # One take is in the can; a quit now costs nothing.
 		score.cue("line")
 		_start_leg(not returning)
 		return
@@ -390,6 +451,7 @@ func _finish_leg() -> void:
 	_freeze()
 	_show_target()
 	if phase == Mode.DONE:
+		Save.clear() # A finished run is not a run to come back to.
 		if Rules.unlocked(difficulty): Rules.record_clear(difficulty)
 		score.cue("win")
 		_show_sheet(true)
@@ -473,6 +535,7 @@ func _pick_card(i: int) -> void:
 	room_pass = 0
 	player.teleport(room.start,player.facing)
 	desk.hide_draw()
+	_save_run() # The door is taken: the next set starts where this one began.
 	_start_leg(false)
 
 func _freeze() -> void:
@@ -570,7 +633,9 @@ func _hit(source: int) -> bool:
 		_board_die()
 		_show_target()
 		if phase == Mode.CUT: _show_preview()
-		else: _show_sheet(false)
+		else:
+			Save.clear()
+			_show_sheet(false)
 	else:
 		_board_die()
 		_restore(last_anchor)
@@ -585,6 +650,9 @@ func _show_sheet(won: bool) -> void:
 	# The run is over, so the board gets out of the way instead of printing the
 	# DIE. card over the page that explains what the run was.
 	if slate.is_running(): slate.hide_slate()
+	if not _recorded:
+		_recorded = true
+		Rules.record_run(segments.size(), deaths, won, run_seed)
 	var lines: Array = [
 		_w("棚 %d / %d　条 %d　死 %d", "SETS %d / %d   TAKES %d   DEATHS %d") % [segments.size(),MODULES,tracks.size(),deaths],
 		_w("标记 %d　剪 %d　种子 %06X", "MARKS %d   CUTS %d   SEED %06X") % [mark_stock,cut_stock,run_seed],

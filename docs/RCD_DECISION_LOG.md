@@ -292,6 +292,34 @@
 - **理由**：字母本身是信息，不是装饰；玩家的路线判断建立在这面墙是 H 还是 U 上。推轨的光斑同理——接触感应该发生在撞上之前。
 - **实现位置**：`scripts/relay/relay_rooms.gd` 的 `_letter_lanes()`（顶边）、`_cart_patch()`、`_grain()`。
 
+## D-028 · 中途存档：关掉游戏能续同一卷
+
+- **日期**：2026-11-22
+- **来源**：十维评审第 10 条（完成度：关掉即失去本局）
+- **状态**：**CONFIRMED**
+- **结论**：一局的进度（种子、难度、已选的门与它们的 kind/variant/mod、当前棚、趟数、库存、死亡数、已录轨道、`room_track_start`）在**每条收条之后**与**每次选门之后**写入 `user://rcd/relay_run.json`，标题页出现「继续这一卷」。DONE 与 LOST 都清档——一局结束了就没有可续的东西。记录只存「这一卷」，不存跨局的局外进度。
+- **理由**：「关掉就没了」是原型和产品之间最硬的一条线，而它只需要一个 JSON 和一次按钮。
+- **实现位置**：`scripts/relay/relay_save.gd`；`scripts/relay/relay_run.gd` 的 `_serialize_run()`/`_apply_run()`/`_save_run()`/`pending_resume`；`scripts/ui/title_screen.gd` 的 Continue。
+- **陷阱**：`_apply_run()` 必须把 `room_track_start` 从存档读回来并 `clampi`，否则同棚续玩时上一趟的幽灵会丢。
+
+## D-029 · 种子、每日种子与局外记录
+
+- **日期**：2026-11-22
+- **来源**：十维评审第 5 条（耐玩性 47）
+- **状态**：**CONFIRMED**
+- **结论**：①`RelayRules.daily_seed()` 由日期算出当天固定的种子，标题页「每日种子 XXXXXX」一键开局。②`RelayRules.record_run()` 在结算时累加 `runs / best_set / deaths / wins / last_seed` 到 `user://rcd/relay_meta.cfg`，标题页显示「已跑 n 卷 · 最远 n/5 棚」。③局外记录**只是记录，不是奖励**：初始 MARK/CUT 仍由难度决定，不因跑得多而变多。
+- **理由**：耐玩性的第一个台阶是「有理由再开一局」，第二个才是「开了有奖励」。先做第一个，且不要让它破坏公平。
+- **实现位置**：`scripts/relay/relay_rules.gd` 的 `meta()`/`record_run()`/`daily_seed()`；`scripts/relay/relay_run.gd` 的 `_recorded`；`scripts/ui/title_screen.gd` 的 Record / Daily。
+
+## D-030 · 资产：贴图与三态音乐，且不依赖编辑器导入
+
+- **日期**：2026-11-22
+- **来源**：十维评审第 7 条（美术音乐 56：无贴图色块 + 正弦波）
+- **状态**：**CONFIRMED（真机看/听已验，真人可读性未验）**
+- **结论**：①`assets/textures/deck.png`、`flat.png` 是 **multiply mask**（近白，带磨损、拖痕、拼板缝），由 `tools/make_textures.py` 程序化生成并可无缝平铺；材质保留自己的 albedo 颜色，贴图只加齿纹。②`assets/audio/bed_calm/tense/halt.wav` 是 72 BPM、D 小调四音动机（D3 F3 A3 C4）的三态床，由 `tools/make_audio.py` 生成。③**关键实现约束**：Godot 4 运行时（不经编辑器）不会导入新资源，`ResourceLoader.exists()` 对未导入的 png/wav 返回 false，因此两处都要有「盘上直接读」的回退：图片走 `Image.load_png_from_buffer`，音频走 `relay_sound.gd::_wav_on_disk()` 解析 RIFF。程序化生成仍是最后回退。
+- **理由**：贴图与动机是「执行分」而不是「方向分」，成本低、收益直接；而资源未导入就静默回退，会让人以为资产没做。
+- **实现位置**：`tools/make_textures.py`、`tools/make_audio.py`、`scripts/relay/relay_rooms.gd` 的 `_surface()`/`_load_or_grain()`、`scripts/relay/relay_sound.gd` 的 `_bed()`/`_wav_on_disk()`/`set_danger()`/`resume_beds()`。
+
 ## 变更规则
 
 1. 新增决策 → 追加条目，编号连续，不得改写历史条目。

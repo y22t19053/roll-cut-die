@@ -7,6 +7,7 @@ const Rules = preload("res://scripts/relay/relay_rules.gd")
 const Splice = preload("res://scripts/relay/safety_splice.gd")
 const Track = preload("res://scripts/ghost/ghost_track.gd")
 const Rooms = preload("res://scripts/relay/relay_rooms.gd")
+const Save = preload("res://scripts/relay/relay_save.gd")
 
 
 static func run(h, tree = null) -> void:
@@ -21,6 +22,14 @@ static func run(h, tree = null) -> void:
 	h.eq("master buys 2 cuts", Rules._CUT[2], 2)
 	h.eq("three difficulties are priced", Rules._MARK.size(), 3)
 	h.ok("novice is always open", Rules.unlocked(0))
+
+	# The record book is read-only here: a test must never write a player's runs.
+	var rec := Rules.meta()
+	h.ok("the record keeps a run count", int(rec["runs"]) >= 0)
+	h.ok("the record keeps a best set", int(rec["best_set"]) >= 0)
+	var today := Rules.daily_seed()
+	h.ok("the daily seed is stable within a day", today == Rules.daily_seed())
+	h.ok("the daily seed prints in six hex digits", today >= 0 and today <= 0xFFFFFF)
 
 	# A safety splice is one hit, protected for exactly its own window.
 	var s = Splice.new()
@@ -46,6 +55,32 @@ static func run(h, tree = null) -> void:
 	h.at_least("head_until keeps a prefix only", head.size(), 5)
 	h.ok("head_until is shorter than the leg", head.size() < tr.size())
 	h.near("sample_at interpolates", tr.sample_at(0.55).position.x, 1.65, 0.05)
+
+	# A run written between takes has to come back as the same run: same seed,
+	# same doors, same supplies, same recordings.
+	Save.clear()
+	h.ok("no run before one is written", not Save.has_run())
+	h.ok("an empty file is not a run", Save.load_run().is_empty())
+	var state := {"seed": 130334, "difficulty": 1, "required_passes": 4, "room_pass": 2,
+		"segments": [{"kind":"straight","variant":0,"mod":""}, {"kind":"h","variant":1,"mod":"twin"}],
+		"mark_stock": 5, "cut_stock": 2, "free_cut": 0, "splice": true, "deaths": 3,
+		"tracks": [tr.to_dict()]}
+	h.ok("a run is written", Save.save_run(state))
+	h.ok("a written run is found", Save.has_run())
+	var back: Dictionary = Save.load_run()
+	h.eq("the seed survives", int(back.get("seed", 0)), 130334)
+	h.eq("the doors survive", (back.get("segments", []) as Array).size(), 2)
+	h.eq("a door keeps its condition", str((back["segments"] as Array)[1].get("mod", "")), "twin")
+	h.eq("the legs done survive", int(back.get("room_pass", -1)), 2)
+	h.eq("the supplies survive", int(back.get("cut_stock", -1)), 2)
+	h.ok("the splice survives", bool(back.get("splice", false)))
+	h.eq("the recordings survive", (back.get("tracks", []) as Array).size(), 1)
+	var again = Track.from_dict((back["tracks"] as Array)[0])
+	h.ok("a written track loads", again != null)
+	if again != null:
+		h.eq("the written track keeps its samples", again.size(), tr.size())
+	Save.clear()
+	h.ok("a finished run is not offered again", not Save.has_run())
 
 	if tree == null:
 		h.finish()

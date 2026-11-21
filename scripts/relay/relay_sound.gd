@@ -36,6 +36,20 @@ var _fx := AudioStreamPlayer.new()
 var _lock_until := 0
 var _rank := -1
 var _last := {}
+## Three states of the same four notes. The recordings in assets/audio are used
+## when the project has imported them; the same parts are also synthesised here,
+## so a fresh checkout still has a score.
+const BED_PATHS := {"calm": "res://assets/audio/bed_calm.wav",
+	"tense": "res://assets/audio/bed_tense.wav", "halt": "res://assets/audio/bed_halt.wav"}
+const BED_BPM := 72.0
+const BED_BEAT := 60.0 / BED_BPM
+const MOTIF := [146.83, 174.61, 220.00, 261.63] # D3 F3 A3 C4
+var _calm := AudioStreamPlayer.new()
+var _tense := AudioStreamPlayer.new()
+var _halt := AudioStreamPlayer.new()
+var _calm_db := -22.0
+var _tense_db := -60.0
+var _beds_muted := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -61,6 +75,16 @@ func _ready() -> void:
 	_danger.stream = _danger_stream
 	_danger.volume_db = -60.0
 	_danger.play()
+	for pair: Array in [["calm", _calm, _calm_db], ["tense", _tense, -60.0], ["halt", _halt, -60.0]]:
+		var key: String = pair[0]
+		var deck: AudioStreamPlayer = pair[1]
+		deck.name = "Bed_%s" % key
+		deck.bus = &"Master"
+		add_child(deck)
+		deck.stream = _bed(key)
+		deck.volume_db = float(pair[2])
+		if key != "halt":
+			deck.play()
 
 
 ## How close the nearest armed ghost is, 0..1. The score is being listened to
@@ -68,11 +92,22 @@ func _ready() -> void:
 func set_danger(v: float) -> void:
 	if not is_node_ready() or _danger.stream == null:
 		return
-	var target := -60.0 if v <= 0.01 else lerpf(-24.0, -9.0, clampf(v, 0.0, 1.0))
-	if absf(target - _danger_target) < 0.4:
+	var w := clampf(v, 0.0, 1.0)
+	var target := -60.0 if v <= 0.01 else lerpf(-24.0, -9.0, w)
+	if absf(target - _danger_target) >= 0.4:
+		_danger_target = target
+		create_tween().tween_property(_danger, "volume_db", target, 0.22)
+	# The bed changes state with the same information: one note of the world.
+	if _beds_muted:
 		return
-	_danger_target = target
-	create_tween().tween_property(_danger, "volume_db", target, 0.22)
+	var calm_target := lerpf(-22.0, -31.0, w)
+	var tense_target := -60.0 if w <= 0.02 else lerpf(-24.0, -12.0, w)
+	if absf(calm_target - _calm_db) >= 0.5:
+		_calm_db = calm_target
+		create_tween().tween_property(_calm, "volume_db", calm_target, 0.35)
+	if absf(tense_target - _tense_db) >= 0.5:
+		_tense_db = tense_target
+		create_tween().tween_property(_tense, "volume_db", tense_target, 0.35)
 
 
 ## The board is talking: step the score back so the clack is the loudest thing
@@ -99,6 +134,131 @@ static func _compose_danger() -> AudioStreamWAV:
 			buf[(at + i) % buf.size()] += s * exp(-9.0 * t) * minf(t / 0.004, 1.0) * 0.5
 	return _wav(buf, true)
 
+## The bed: the recorded loop when the project has imported it, otherwise the
+## same four notes rendered here. Either way the score has a state.
+static func _bed(kind: String) -> AudioStream:
+	var wav := _wav_on_disk(str(BED_PATHS.get(kind, "")))
+	if wav == null:
+		var path := str(BED_PATHS.get(kind, ""))
+		if path != "" and ResourceLoader.exists(path):
+			var loaded = load(path)
+			if loaded is AudioStreamWAV:
+				wav = (loaded as AudioStreamWAV).duplicate()
+	if wav == null:
+		return _compose_bed(kind)
+	if kind != "halt":
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_end = roundi(wav.get_length() * wav.mix_rate)
+	return wav
+
+
+## Read a 16-bit PCM wav straight off disk. A build that never ran the editor
+## has no import cache for these files, and the score would silently fall back
+## to the synthesised version forever.
+static func _wav_on_disk(path: String) -> AudioStreamWAV:
+	if path == "" or not FileAccess.file_exists(path):
+		return null
+	var bytes := FileAccess.get_file_as_bytes(path)
+	if bytes.size() < 44 or bytes.slice(0, 4).get_string_from_ascii() != "RIFF":
+		return null
+	var at := 12
+	var rate := 44100
+	var channels := 1
+	var bits := 16
+	var data := PackedByteArray()
+	while at + 8 <= bytes.size():
+		var tag := bytes.slice(at, at + 4).get_string_from_ascii()
+		var size := bytes.decode_u32(at + 4)
+		var body := at + 8
+		if tag == "fmt " and body + 16 <= bytes.size():
+			channels = bytes.decode_u16(body + 2)
+			rate = bytes.decode_u32(body + 4)
+			bits = bytes.decode_u16(body + 14)
+		elif tag == "data":
+			data = bytes.slice(body, mini(body + size, bytes.size()))
+			break
+		at = body + size + (size & 1)
+	if data.is_empty() or bits != 16:
+		return null
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = rate
+	wav.stereo = channels > 1
+	wav.data = data
+	return wav
+
+
+static func _compose_bed(kind: String) -> AudioStreamWAV:
+	if kind == "halt": return _compose_halt()
+	var beats := 16.0
+	var buf := PackedFloat32Array()
+	buf.resize(roundi(beats * BED_BEAT * RATE))
+	# A pad that breathes rather than holds: three low sines and a slow swell.
+	for pair: Array in [[73.42, 0.16], [110.0, 0.09], [146.83, 0.07]]:
+		var step := TAU * float(pair[0]) / RATE
+		for i in buf.size():
+			var t := float(i) / RATE
+			buf[i] += sin(step * i) * (0.75 + 0.25 * sin(TAU * 0.05 * t)) * float(pair[1])
+	# The motif: four notes. Calm leaves them to ring, tense runs them short.
+	var tense := kind == "tense"
+	for rep in (2 if tense else 1):
+		var gap := BED_BEAT * (0.5 if tense else 1.0)
+		for k in MOTIF.size():
+			_add_tone(buf, (float(rep) * 8.0 * BED_BEAT) + float(k) * gap, float(MOTIF[k]),
+				0.9 if tense else 2.4, 0.15 if tense else 0.17)
+	if tense:
+		for step_i in int(beats * 2.0):
+			_add_pulse(buf, float(step_i) * BED_BEAT * 0.5, 41.2 if step_i % 4 == 0 else 55.0)
+	else:
+		for bar in int(beats / 4.0):
+			_add_tick(buf, float(bar) * 4.0 * BED_BEAT + 0.11)
+	return _wav(buf, true)
+
+
+## The take is over: the pad loses its pitch like a tape losing its capstan.
+static func _compose_halt() -> AudioStreamWAV:
+	var n := roundi(5.0 * RATE)
+	var buf := PackedFloat32Array()
+	buf.resize(n)
+	var phase := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var f := 73.42 * (1.0 - 0.34 * pow(t / 5.0, 1.4))
+		phase += TAU * f / RATE
+		buf[i] = (sin(phase) * 0.22 + sin(phase * 2.0) * 0.08) * exp(-t / 1.6)
+	return _wav(buf, false)
+
+
+static func _add_tone(buf: PackedFloat32Array, at: float, freq: float, dur: float, amp: float) -> void:
+	var start := roundi(at * RATE)
+	var n := ceili(dur * RATE)
+	var step := TAU * freq / RATE
+	for i in n:
+		var t := float(i) / RATE
+		var s := sin(step * i) * 0.62 + sin(step * 2.0 * i) * 0.18 + sin(step * 3.01 * i) * 0.07
+		var a := minf(t / 0.02, 1.0) * exp(-t / (dur * 0.45))
+		buf[(start + i) % buf.size()] += s * a * amp
+
+
+static func _add_pulse(buf: PackedFloat32Array, at: float, freq: float) -> void:
+	var start := roundi(at * RATE)
+	var n := ceili(0.34 * RATE)
+	var step := TAU * freq / RATE
+	for i in n:
+		var t := float(i) / RATE
+		var a := minf(t / 0.006, 1.0) * exp(-t / 0.09)
+		buf[(start + i) % buf.size()] += sin(step * i) * a * 0.20
+
+
+static func _add_tick(buf: PackedFloat32Array, at: float) -> void:
+	var start := roundi(at * RATE)
+	var n := ceili(0.05 * RATE)
+	for i in n:
+		var t := float(i) / RATE
+		var a := exp(-t / 0.008)
+		buf[(start + i) % buf.size()] += (sin(TAU * 180.0 * t) * 0.5 + sin(TAU * 2400.0 * t) * 0.2) * a * 0.06
+
+
 func cue(kind: String) -> void:
 	if not is_node_ready() or not _cues.has(kind): return
 	var now := Time.get_ticks_msec()
@@ -108,9 +268,49 @@ func cue(kind: String) -> void:
 	_rank = PRIORITY[kind]
 	_lock_until = now + (300 if kind in ["clear","win"] else 100)
 	_last[kind] = now
+	if kind == "hit" or kind == "trap":
+		_halt_bed()
+	elif kind == "win":
+		_mute_beds()
 	_fx.stream = _cues[kind]
 	_fx.volume_db = -4 if kind != "near" else -8
 	_fx.play()
+
+
+## A collision stops the bed: the room goes quiet under the board.
+func _halt_bed() -> void:
+	_beds_muted = true
+	_calm_db = -60.0
+	_tense_db = -60.0
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(_calm, "volume_db", -60.0, 0.25)
+	tw.tween_property(_tense, "volume_db", -60.0, 0.25)
+	_halt.volume_db = -11.0
+	_halt.play()
+
+
+func _mute_beds() -> void:
+	_beds_muted = true
+	_calm_db = -60.0
+	_tense_db = -60.0
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(_calm, "volume_db", -60.0, 0.6)
+	tw.tween_property(_tense, "volume_db", -60.0, 0.6)
+
+
+## A new take brings the room back; the score picks up where the room is.
+func resume_beds() -> void:
+	if not is_node_ready(): return
+	_beds_muted = false
+	_halt.stop()
+	_calm_db = -22.0
+	_tense_db = -60.0
+	_calm.volume_db = -22.0
+	_tense.volume_db = -60.0
+	if not _calm.playing: _calm.play()
+	if not _tense.playing: _tense.play()
 
 static func _compose() -> AudioStreamWAV:
 	var buf := PackedFloat32Array()

@@ -171,6 +171,15 @@ func _render() -> void:
 	buttons.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_child(buttons)
 	# One way in, then housekeeping below a ruled line, quieter.
+	var save = load("res://scripts/relay/relay_save.gd")
+	# An open run is offered before a new one: closing the game should never be
+	# the most expensive decision in it.
+	if save.has_run():
+		var cont := _primary(UiKit.button("继续这一卷" if zh else "CONTINUE", _on_continue))
+		cont.name = "Continue"
+		cont.custom_minimum_size = Vector2(340, 52)
+		cont.add_theme_font_size_override("font_size", 24)
+		buttons.add_child(cont)
 	buttons.add_child(_new_game_key())
 	var rules = load("res://scripts/relay/relay_rules.gd")
 	var modes := OptionButton.new()
@@ -187,6 +196,18 @@ func _render() -> void:
 	modes.select(rules.selected_mode)
 	modes.item_selected.connect(func(i: int) -> void: rules.selected_mode = i)
 	buttons.add_child(modes)
+	# What the player has done before: a record, never a head start.
+	var ran: Dictionary = rules.meta()
+	var record := UiKit.label(
+		("已跑 %d 卷 · 最远 %d / %d 棚" if zh else "%d runs · best set %d / %d") % [int(ran["runs"]), int(ran["best_set"]), 5],
+		16, UiKit.DIM)
+	record.name = "Record"
+	record.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	buttons.add_child(record)
+	var daily := _secondary(UiKit.button(
+		("每日种子 %06X" if zh else "DAILY SEED %06X") % rules.daily_seed(), _on_daily))
+	daily.name = "Daily"
+	buttons.add_child(daily)
 	var rule := ColorRect.new()
 	rule.color = Color(UiKit.DIM, 0.35)
 	rule.custom_minimum_size = Vector2(220, 2)
@@ -352,8 +373,44 @@ func _leave(path: String) -> Error:
 ## Straight into the relay run. Deliberately no GameSession.request_new_game:
 ## that belongs to the old studio flow and its save.
 func _on_new_game() -> void:
+	var run = load("res://scripts/relay/relay_run.gd")
+	run.pending_resume = {} # A new run never continues the one left open.
 	var err := _leave(RUN_SCENE)
 	if err != OK:
+		Logger.error("cannot open relay run: %s" % error_string(err))
+		_failed = true
+		_render()
+		_focus_menu()
+
+
+## The daily seed: one seed a day for everyone, so two runs can be compared
+## without either player having to type anything.
+func _on_daily() -> void:
+	var rules = load("res://scripts/relay/relay_rules.gd")
+	var run = load("res://scripts/relay/relay_run.gd")
+	run.pending_resume = {}
+	run.next_seed = rules.daily_seed()
+	var err := _leave(RUN_SCENE)
+	if err != OK:
+		Logger.error("cannot open relay run: %s" % error_string(err))
+		_failed = true
+		_render()
+		_focus_menu()
+
+
+## Pick the written-down run up at the set it was left in. The save is read here,
+## on the title screen, so the run scene only ever gets state it can trust.
+func _on_continue() -> void:
+	var save = load("res://scripts/relay/relay_save.gd")
+	var state: Dictionary = save.load_run()
+	if state.is_empty():
+		_render()
+		return
+	var run = load("res://scripts/relay/relay_run.gd")
+	run.pending_resume = state
+	var err := _leave(RUN_SCENE)
+	if err != OK:
+		run.pending_resume = {}
 		Logger.error("cannot open relay run: %s" % error_string(err))
 		_failed = true
 		_render()

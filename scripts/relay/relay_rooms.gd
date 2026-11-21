@@ -90,7 +90,10 @@ func append_room(kind: String, variant: int, mod := "") -> Dictionary:
 	_count += 1
 	var end := room.to_global(Vector3(LENGTH,.05,0))
 	var stops: Array[Vector3] = [end]
-	return {"start":room.to_global(Vector3(0,.05,0)),"end":end,"stops":stops}
+	# The plan comes back with the room so a run can be written down and rebuilt
+	# from the same five choices it was made of.
+	return {"start":room.to_global(Vector3(0,.05,0)),"end":end,"stops":stops,
+		"kind":kind,"variant":variant,"mod":mod}
 
 func _letter_lanes(room: Node3D, rows: Array, hand: int, ink: Color) -> void:
 	# Consolidate horizontal wall runs; leave open vestibules to turn at either seam.
@@ -165,6 +168,30 @@ func _cart_patch(cart: Node3D, ink: Color) -> void:
 ## Paper grain for the deck and the flats. Without a texture the set reads as
 ## untextured blocks no matter how good the light is.
 static var _grain_tex: ImageTexture
+static var _deck_tex: Texture2D
+static var _flat_tex: Texture2D
+
+## The two painted surfaces. Loaded once; the fallback is the procedural grain so
+## a missing asset never leaves the set bare.
+static func _surface(color: Color) -> Texture2D:
+	if color == DECK:
+		if _deck_tex == null: _deck_tex = _load_or_grain("res://assets/textures/deck.png")
+		return _deck_tex
+	if _flat_tex == null: _flat_tex = _load_or_grain("res://assets/textures/flat.png")
+	return _flat_tex
+
+
+static func _load_or_grain(path: String) -> Texture2D:
+	if ResourceLoader.exists(path):
+		var tex := load(path) as Texture2D
+		if tex != null: return tex
+	# A build without an editor pass has no .import cache, so the paint would
+	# vanish exactly where it matters. Read the PNG off disk instead.
+	if FileAccess.file_exists(path):
+		var img := Image.new()
+		if img.load_png_from_buffer(FileAccess.get_file_as_bytes(path)) == OK:
+			return ImageTexture.create_from_image(img)
+	return _grain()
 
 static func _grain() -> ImageTexture:
 	if _grain_tex != null:
@@ -239,8 +266,10 @@ func _box(root: Node3D, at: Vector3, size: Vector3, color: Color, solid := false
 		mat.emission = color
 		mat.emission_energy_multiplier = .10
 		if color == DECK or color == FLAT:
-			mat.albedo_texture = _grain()
-			mat.uv1_scale = Vector3(4, 4, 4)
+			# Painted plywood, not a colour chip: the texture is what tells a
+			# soundstage floor from a grey box at twelve metres.
+			mat.albedo_texture = _surface(color)
+			mat.uv1_scale = Vector3(3.2, 3.2, 3.2)
 			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 		_inks[color] = mat
 	mi.material_override = _inks[color]
