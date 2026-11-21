@@ -47,7 +47,7 @@ var settings := {
 	"mouse_sensitivity": 0.0022,
 	"master_volume": 0.8,
 	"muted": false,
-	"fullscreen": false,
+	"fullscreen": true,
 	"vsync": true,
 	"max_fps": 0,
 }

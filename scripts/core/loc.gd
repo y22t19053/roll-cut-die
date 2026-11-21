@@ -11,8 +11,8 @@ static var language := "en"
 
 const SUPPORTED := ["zh", "en"]
 ## Fallback when neither a stored preference nor rcd/default_language exists.
-## Playtests run in Chinese.
-const FALLBACK_DEFAULT := "zh"
+## The festival build starts in English; stored preferences take precedence.
+const FALLBACK_DEFAULT := "en"
 const SETTING_DEFAULT := "rcd/default_language"
 
 ## Name the destination in the active UI language (shared by both pickers).

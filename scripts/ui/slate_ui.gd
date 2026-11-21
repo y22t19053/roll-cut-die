@@ -61,7 +61,7 @@ func is_running() -> bool:
 ## corner and subline follow the language and re-render on a switch.
 func play_roll(take_index: int) -> void:
 	_take = take_index
-	_run("roll", 0.46, [
+	_run("roll", 0.61, [ # Keep the clap sharp; hold its image for another 0.15s.
 		{"at": 0.0, "fn": func() -> void:
 			board.headline = "ROLL."
 			_apply_text()},
