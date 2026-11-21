@@ -23,6 +23,10 @@ var _take := 0
 var _audio: AudioStreamPlayer
 var _clack: AudioStreamWAV
 var _kind := ""
+## Callers outside the campaign (the relay) name the take their own way; empty
+## keeps the campaign's corner/subline from Loc.
+var _corner_text := ""
+var _subline_text := ""
 var _t := 0.0
 var _dur := 0.0
 var _running := false
@@ -59,8 +63,10 @@ func is_running() -> bool:
 ## First take of a session: the board opens, shuts, clacks, says ROLL.
 ## Headlines ROLL./CUT!/DIE. are the game's name and stay as written; the
 ## corner and subline follow the language and re-render on a switch.
-func play_roll(take_index: int) -> void:
+func play_roll(take_index: int, corner := "", subline := "") -> void:
 	_take = take_index
+	_corner_text = corner
+	_subline_text = subline
 	_run("roll", 0.61, [ # Keep the clap sharp; hold its image for another 0.15s.
 		{"at": 0.0, "fn": func() -> void:
 			board.headline = "ROLL."
@@ -72,8 +78,10 @@ func play_roll(take_index: int) -> void:
 
 
 ## Deliberate cut: no death wording, the player did this.
-func play_cut(take_index: int) -> void:
+func play_cut(take_index: int, corner := "", subline := "") -> void:
 	_take = take_index
+	_corner_text = corner
+	_subline_text = subline
 	_run("cut", 0.23, [
 		{"at": 0.0, "fn": func() -> void:
 			board.headline = "CUT!"
@@ -86,8 +94,10 @@ func play_cut(take_index: int) -> void:
 
 ## Death: DIE first, then the slate shuts on it. The cause is the HUD's line,
 ## not the board's: two copies of it on screen at once read as two events.
-func play_die(take_index: int) -> void:
+func play_die(take_index: int, corner := "", subline := "") -> void:
 	_take = take_index
+	_corner_text = corner
+	_subline_text = subline
 	_run("die", 2.05, [
 		{"at": 0.0, "fn": func() -> void:
 			board.headline = "DIE."
@@ -109,16 +119,26 @@ func relocalize() -> void:
 func _apply_text() -> void:
 	if board == null:
 		return
+	board.corner = _corner_text if not _corner_text.is_empty() else _default_corner()
+	board.subline = _subline_text if not _subline_text.is_empty() else _default_subline()
+
+
+func _default_corner() -> String:
 	match _kind:
-		"roll":
-			board.corner = Loc.ui("slate.roll_corner", [_take])
-			board.subline = Loc.ui("slate.roll_sub")
-		"cut":
-			board.corner = Loc.ui("slate.cut_corner", [_take])
-			board.subline = ""
-		"die":
-			board.corner = Loc.ui("slate.die_corner", [_take])
-			board.subline = ""
+		"roll": return Loc.ui("slate.roll_corner", [_take])
+		"cut": return Loc.ui("slate.cut_corner", [_take])
+		"die": return Loc.ui("slate.die_corner", [_take])
+	return ""
+
+
+func _default_subline() -> String:
+	return Loc.ui("slate.roll_sub") if _kind == "roll" else ""
+
+
+## The sound alone: a take can go in the can without the board standing up.
+## Same transient as the full sequences, so one object makes every clack.
+func clack(volume_db := -8.0) -> void:
+	_clack_now(volume_db)
 
 
 func play_out() -> void:

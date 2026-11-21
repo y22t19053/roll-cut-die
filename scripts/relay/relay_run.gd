@@ -9,15 +9,24 @@ const Ghost = preload("res://scripts/ghost/ghost_actor.gd")
 const Rules = preload("res://scripts/relay/relay_rules.gd")
 const Splice = preload("res://scripts/relay/safety_splice.gd")
 const Loc = preload("res://scripts/core/loc.gd")
+const MarkBeacon = preload("res://scripts/ui/mark_beacon.gd")
+const CameraMath = preload("res://scripts/camera/camera_math.gd")
+const SlateUI = preload("res://scripts/ui/slate_ui.gd")
 const MODULES := 5
 const KINDS := ["s", "h", "u", "l", "n", "x"]
 const TOUCH := 0.77
 const GRACE := 0.75
 const PASSES := 4
+## The projection a MARK leaves: the colour of the film, never the paint of the
+## set. Alpha stays low so a MARK can never be mistaken for an obstacle.
+const STILL_INK := Color(0.55, 0.95, 0.85)
+const STILL_ALPHA := 0.30
+const STILL_FADE := 0.28
 var room_pass := 0
 var room_track_start := 0
 var cards: Array = []
 var desk: CanvasLayer
+var slate: CanvasLayer
 var score: Node
 
 enum Mode { PLAY, PICK, CUT, DONE, LOST, ITEM }
@@ -43,6 +52,12 @@ var elapsed := 0.0
 var grace := 0.0
 var _actors: Array = []
 var _selected := 0
+var _preview_rig := Node3D.new()
+var _preview_camera := Camera3D.new()
+var _preview_still: Node3D
+var _preview_ghosts: Array[Node3D] = []
+var _preview_point: Node3D
+var _mark_count := 0
 var _arrival_locked := false
 var _next_sample := 0.0
 var _lamp := MeshInstance3D.new()
@@ -59,6 +74,9 @@ func _ready() -> void:
 	desk = load("res://scripts/relay/cutting_desk.gd").new()
 	add_child(desk)
 	desk.picked.connect(_pick_card)
+	slate = SlateUI.new()
+	slate.name = "Slate"
+	add_child(slate)
 	score = load("res://scripts/relay/relay_sound.gd").new()
 	add_child(score)
 	preload("res://scripts/core/input_setup.gd").ensure_actions()
@@ -73,6 +91,15 @@ func _ready() -> void:
 	rig.setup(player)
 	rig.set_roll_mode(Orbit)
 	rig.camera.fov = 53.0 # Frame both ends of the short set without changing ORBIT.
+	add_child(_preview_rig)
+	_preview_rig.add_child(_preview_camera)
+	_preview_camera.fov = rig.camera.fov
+	_preview_camera.near = rig.camera.near
+	_preview_camera.far = rig.camera.far
+	# Browsing a MARK shows what was on the film then: the live players and their
+	# distance rings stay out of the frame, only the recorded stills are drawn.
+	_preview_camera.cull_mask &= ~Ghost.LIVE_LAYER
+	rig.camera.make_current()
 	rig.reduce_motion = GameSession.settings.reduce_motion
 	rig.roll_scale = GameSession.settings.roll_scale
 	var env := Environment.new()
@@ -129,6 +156,9 @@ func _start_leg(back: bool) -> void:
 	grace = GRACE
 	_checkpoint(false)
 	_show_target()
+	# The board opens once per run, on the first take of the first set.
+	if tracks.is_empty() and segments.size() == 1:
+		_board_roll()
 
 func _restart_actors() -> void:
 	for old in _actors:
@@ -156,6 +186,10 @@ func _checkpoint(manual: bool) -> void:
 	var p := {"leg":live.take_id,"pos":player.global_position,"facing":player.facing,
 		"cursor":cursor,"time":elapsed,"cam_motion":rig.mark_motion(),"cam_yaw":rig.yaw,
 		"cam_roll":rig.roll,"prefix":live.head_until(elapsed),"manual":manual}
+	var frames := {}
+	for ghost in _actors:
+		frames[ghost.take_id] = ghost.still_frame()
+	p["ghost_frames"] = frames
 	# Replace the tape for this physical system stop, rather than flooding the
 	# timeline with duplicates at every round trip. User MARKs stay distinct.
 	if not manual:
@@ -164,8 +198,92 @@ func _checkpoint(manual: bool) -> void:
 				anchors[i] = p
 				last_anchor = i
 				return
+	if manual:
+		_mark_count += 1
+		p["number"] = _mark_count
+		_add_mark_still(p)
 	anchors.append(p)
 	last_anchor = anchors.size()-1
+
+
+## A MARK is a place you can come back to, so it is drawn as yourself standing
+## there: the projection of this take, not a prop and not a shadow.
+func _add_mark_still(p: Dictionary) -> void:
+	var beacon := MarkBeacon.new()
+	beacon.setup(p.number, to_local(Vector3(p.pos)))
+	add_child(beacon)
+	var still := player.make_still(Vector3(0.0, 0.05, 0.0), float(p.facing))
+	_tint_still(still, 0.0)
+	beacon.add_child(still)
+	_fade_in_still(still)
+
+
+func _tint_still(still: Node3D, weight := 1.0) -> void:
+	var ink := StandardMaterial3D.new()
+	ink.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ink.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ink.albedo_color = Color(STILL_INK.r, STILL_INK.g, STILL_INK.b, STILL_ALPHA * weight)
+	still.set_meta("ink", ink)
+	for part in still.get_children():
+		if part is MeshInstance3D:
+			part.material_override = ink
+			part.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## Brought up rather than popped in: the film is still settling on the mark.
+func _fade_in_still(still: Node3D) -> void:
+	var ink := still.get_meta("ink") as StandardMaterial3D
+	var tw := create_tween()
+	tw.tween_method(func(k: float) -> void:
+		if is_instance_valid(ink):
+			ink.albedo_color = Color(STILL_INK.r, STILL_INK.g, STILL_INK.b, STILL_ALPHA * k)
+	, 0.0, 1.0, STILL_FADE)
+
+
+func _close_preview() -> void:
+	rig.camera.make_current()
+	_clear_preview_nodes()
+
+
+func _clear_preview_nodes() -> void:
+	var nodes: Array = _preview_ghosts.duplicate()
+	nodes.append(_preview_still)
+	nodes.append(_preview_point)
+	for node in nodes:
+		if is_instance_valid(node):
+			node.hide()
+			node.queue_free()
+	_preview_ghosts.clear()
+	_preview_still = null
+	_preview_point = null
+
+
+## Browsing costs nothing: the camera stands where the take stood, with the
+## stills of that instant laid over the empty set. Only the splice spends a CUT.
+func _show_preview() -> void:
+	_clear_preview_nodes()
+	var p := anchors[_selected]
+	var pos: Vector3 = p.pos
+	if not p.manual:
+		_preview_point = MarkBeacon.new()
+		_preview_point.setup(0, to_local(pos), _w("起点","START"))
+		add_child(_preview_point)
+		_preview_still = player.make_still(to_local(pos), float(p.facing))
+		_tint_still(_preview_still)
+		add_child(_preview_still)
+	_preview_rig.global_position = pos + Vector3.UP * CameraMath.FOCUS_HEIGHT
+	_preview_rig.rotation.y = float(p.cam_yaw)
+	_preview_camera.position = CameraMath.camera_offset(rig.pitch_deg, rig.distance)
+	_preview_camera.rotation = CameraMath.camera_euler(rig.pitch_deg, float(p.cam_roll))
+	if p.leg == live.take_id:
+		for ghost in _actors:
+			if not p.ghost_frames.has(ghost.take_id): continue
+			var frame: Dictionary = p.ghost_frames[ghost.take_id]
+			var still: Node3D = ghost.make_still(frame)
+			add_child(still)
+			still.global_transform = frame.pose
+			_preview_ghosts.append(still)
+	_preview_camera.make_current()
 
 func _restore(i: int) -> void:
 	var p := anchors[i]
@@ -195,6 +313,7 @@ func _show_target() -> void:
 func _finish_leg() -> void:
 	_sample()
 	tracks.append(live)
+	slate.clack(-8.0) # One take is in the can.
 	room_pass += 1
 	if room_pass < PASSES:
 		score.cue("line")
@@ -244,6 +363,7 @@ func _freeze() -> void:
 	for g in _actors: g.playing = false
 
 func _leave_cut() -> void:
+	_close_preview()
 	phase = Mode.PLAY
 	player.set_frozen(false)
 	player.velocity = _cut_velocity
@@ -293,9 +413,12 @@ func _hit(source: int) -> bool:
 		phase = Mode.CUT if forced_cut else Mode.LOST
 		_selected = last_anchor
 		_freeze()
+		_board_die()
 		_show_target()
-		if phase == Mode.LOST: desk.show_result(false,Loc.language == "zh")
+		if phase == Mode.CUT: _show_preview()
+		else: desk.show_result(false,Loc.language == "zh")
 	else:
+		_board_die()
 		_restore(last_anchor)
 		desk.show_message(_w("撞到摄影车", "CAMERA DOLLY") if source == 0 else "TAKE %02d" % source)
 	return true
@@ -305,7 +428,10 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	var key: int = e.physical_keycode
 	if key == KEY_F2:
 		Loc.set_language("en" if Loc.language == "zh" else "zh")
-	elif phase in [Mode.ITEM, Mode.PICK] and key >= KEY_1 and key <= KEY_3:
+		return
+	# The board is talking. Nothing else gets a say until the clack has landed.
+	if slate.is_running(): return
+	if phase in [Mode.ITEM, Mode.PICK] and key >= KEY_1 and key <= KEY_3:
 		_pick_card(key-KEY_1)
 	elif phase in [Mode.DONE,Mode.LOST] and key == KEY_SPACE:
 		get_tree().reload_current_scene()
@@ -313,12 +439,17 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		match key:
 			KEY_C, KEY_ESCAPE:
 				if not forced_cut: _leave_cut()
-			KEY_UP: _selected = posmod(_selected-1,anchors.size())
-			KEY_DOWN: _selected = posmod(_selected+1,anchors.size())
+			KEY_UP:
+				_selected = posmod(_selected-1,anchors.size())
+				_show_preview()
+			KEY_DOWN:
+				_selected = posmod(_selected+1,anchors.size())
+				_show_preview()
 			KEY_SPACE, KEY_ENTER:
 				if cut_stock > 0:
 					cut_stock -= 1
 					forced_cut = false
+					_board_cut()
 					_leave_cut()
 					_restore(_selected)
 	elif phase == Mode.PLAY:
@@ -327,6 +458,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 				phase = Mode.CUT
 				_selected = last_anchor
 				_freeze()
+				_show_preview()
 			KEY_M:
 				if mark_stock > 0:
 					mark_stock -= 1
@@ -342,7 +474,23 @@ func _refresh() -> void:
 	_hud.visible = phase == Mode.CUT
 	if _hud.visible:
 		var p := anchors[_selected]
-		_hud.text = _w("剪辑台　↑ ↓　%02d / %02d", "CUT DESK   ↑ ↓   %02d / %02d") % [_selected+1, anchors.size()] + "\nTAKE %02d · %.1fs\n" % [p.leg,p.time] + _w("空格：剪回　−1 CUT", "SPACE: splice   −1 CUT")
+		var tag := ("MARK %d" % int(p.get("number",0))) if p.manual else _w("起点","START")
+		_hud.text = _w("剪辑台　↑ ↓　%02d / %02d", "CUT DESK   ↑ ↓   %02d / %02d") % [_selected+1, anchors.size()] + "\n%s · TAKE %02d · %.1fs\n" % [tag,p.leg,p.time] + _w("空格：剪回　−1 CUT　（看片不要钱）", "SPACE: splice   −1 CUT   (looking is free)")
 	if _notice_left > 0:
 		desk.show_message(_notice)
 		_notice_left = 0
+
+## The board, three ways. It never changes state itself: it names what just
+## happened and gets out of the way, so the player learns one object for all of
+## ROLL, CUT and DIE.
+func _board_roll() -> void:
+	var n := maxi(live.take_id,1)
+	slate.play_roll(n, _w("第 %02d 条" % n, "TAKE %02d" % n))
+
+func _board_cut() -> void:
+	var n := maxi(live.take_id,1)
+	slate.play_cut(n, _w("第 %02d 条" % n, "TAKE %02d" % n))
+
+func _board_die() -> void:
+	var n := maxi(live.take_id,1)
+	slate.play_die(n, _w("第 %02d 条" % n, "TAKE %02d" % n))

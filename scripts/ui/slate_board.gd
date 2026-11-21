@@ -85,8 +85,12 @@ func _draw() -> void:
 		draw_string(font, Vector2(origin.x + pad, y + bh * 0.26), subline,
 			HORIZONTAL_ALIGNMENT_LEFT, bw - pad * 2.0, int(bh * 0.13), Color(0.20, 0.20, 0.21, alpha))
 	if corner != "":
-		draw_string(font, Vector2(origin.x + pad, origin.y + bh - bh * 0.10), corner,
-			HORIZONTAL_ALIGNMENT_LEFT, bw - pad * 2.0, int(bh * 0.11), Color(0.30, 0.30, 0.31, alpha))
+		# Share the subline's row instead of stacking under it: two lines of
+		# small type at this width touch, and the take number is the one that
+		# has to stay legible.
+		var cy := y + bh * 0.26 if subline != "" else origin.y + bh - bh * 0.10
+		draw_string(font, Vector2(origin.x + pad, cy), corner,
+			HORIZONTAL_ALIGNMENT_RIGHT, bw - pad * 2.0, int(bh * 0.11), Color(0.30, 0.30, 0.31, alpha))
 
 
 func _draw_stripes(r: Rect2, a: float, count: int) -> void:

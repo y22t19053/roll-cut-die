@@ -8,16 +8,24 @@ extends Node3D
 const COLOR := Color(0.55, 0.95, 0.85)
 const DISC_RADIUS := 0.38
 const POLE_HEIGHT := 1.3
+## Above a standing figure (1.75 m), so the tag is never swallowed by a still.
+const LABEL_HEIGHT := 1.95
 
 var no := 0
 var _label: Label3D
+var _caption := ""
 
 
-func setup(n: int, pos: Vector3) -> void:
+func setup(n: int, pos: Vector3, caption := "") -> void:
 	no = n
+	_caption = caption
 	position = Vector3(pos.x, 0.0, pos.z)
 	if _label != null:
-		_label.text = "MARK %d" % no
+		_label.text = _text()
+
+
+func _text() -> String:
+	return _caption if not _caption.is_empty() else "MARK %d" % no
 
 
 func _ready() -> void:
@@ -51,12 +59,13 @@ func _ready() -> void:
 
 	_label = Label3D.new()
 	_label.name = "Tag"
-	_label.text = "MARK %d" % no
+	_label.text = _text()
 	_label.font_size = 40
 	_label.pixel_size = 0.005
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.outline_size = 8
 	_label.outline_modulate = Color(0, 0, 0, 0.85)
 	_label.modulate = COLOR
-	_label.position = Vector3(0.0, POLE_HEIGHT + 0.2, 0.0)
+	_label.no_depth_test = true
+	_label.position = Vector3(0.0, LABEL_HEIGHT, 0.0)
 	add_child(_label)
