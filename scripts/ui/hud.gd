@@ -6,6 +6,35 @@ extends CanvasLayer
 
 const Loc = preload("res://scripts/core/loc.gd")
 const SlateBoard = preload("res://scripts/ui/slate_board.gd")
+const Foley = preload("res://scripts/ui/foley.gd")
+
+## Emitted whenever a HUD line carries a feedback cue (a Foley kind), whether
+## or not a sound device exists to play it.
+signal cue_played(kind: String)
+
+const INK := Color(0.95, 0.94, 0.90)
+const DEATH_RED := Color(1.0, 0.32, 0.28)
+## Banner ink per cue: looking is cool, taking is warm, MARK matches its
+## counter, a refusal is red. Anything else keeps the plain ink.
+## Keyed by Foley kind.
+const CUE_INK := {
+	"inspect": Color(0.74, 0.88, 1.0),
+	"pickup": Color(1.0, 0.84, 0.48),
+	"mark": Color(0.55, 0.95, 0.85),
+	"deny": Color(1.0, 0.52, 0.45),
+}
+const ACCENT_IN := 0.16
+const MARK_PULSE := 0.36
+const DEATH_PUNCH := 0.24
+## main.gd flashes an inspect line with the default hold; spoken lines and
+## verdicts hold longer. The HUD is only handed finished text, so the hold is
+## what tells a looked-at line from the rest.
+const DEFAULT_HOLD := 2.2
+
+var foley: Node
+var accent: ColorRect
+## The cue of the most recent banner or death line; "" before the first.
+var last_cue := ""
 
 var take_label: Label
 var hint_label: Label
@@ -24,15 +53,36 @@ var _banner_left := 0.0
 var _banner_hold := 0.0
 var _marks := Vector2i.ZERO
 var _roll_name := ""
+var _accent_t := 0.0
+var _mark_pulse := 0.0
+var _death_punch := 0.0
 
 
 func _ready() -> void:
 	layer = 10
+	foley = Foley.new()
+	foley.name = "Foley"
+	add_child(foley)
 	screen = Control.new()
 	screen.name = "Screen"
 	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(screen)
 	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	# A hairline that wipes open above the banner in the cue's colour. It sits
+	# in the empty strip between the ROLL read-out and the banner text.
+	accent = ColorRect.new()
+	accent.name = "BannerAccent"
+	accent.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	screen.add_child(accent)
+	accent.anchor_left = 0.5
+	accent.anchor_right = 0.5
+	accent.offset_left = -110.0
+	accent.offset_right = 110.0
+	accent.offset_top = 86.0
+	accent.offset_bottom = 88.0
+	accent.pivot_offset = Vector2(110.0, 1.0)
+	accent.visible = false
 
 	take_label = _mk("", 24, 18, 520, 30, 20, HORIZONTAL_ALIGNMENT_LEFT)
 	mark_label = _mk("", 24, 50, 520, 30, 18, HORIZONTAL_ALIGNMENT_LEFT)
@@ -104,9 +154,11 @@ func _ready() -> void:
 	death_label.offset_top = -SlateBoard.BOTTOM_CLEAR + 8.0
 	death_label.offset_bottom = -SlateBoard.BOTTOM_CLEAR + 128.0
 	death_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	death_label.add_theme_color_override("font_color", Color(1.0, 0.32, 0.28))
+	death_label.add_theme_color_override("font_color", DEATH_RED)
 	death_label.add_theme_constant_override("outline_size", 12)
+	death_label.pivot_offset = Vector2(600.0, 60.0)
 	death_label.visible = false
+	mark_label.pivot_offset = Vector2(0.0, 15.0)
 
 
 func _mk(text: String, x: float, y: float, w: float, h: float, fsize: int, align: int) -> Label:
@@ -117,7 +169,7 @@ func _mk(text: String, x: float, y: float, w: float, h: float, fsize: int, align
 	l.horizontal_alignment = align
 	l.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	l.add_theme_font_size_override("font_size", fsize)
-	l.add_theme_color_override("font_color", Color(0.95, 0.94, 0.90))
+	l.add_theme_color_override("font_color", INK)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.92))
 	l.add_theme_constant_override("outline_size", 6)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -171,14 +223,23 @@ func retext_banner(text: String) -> void:
 		banner.text = text
 
 
+## The first call of a death lands the cue; a re-send while the line is still
+## up (a language switch) only swaps the wording.
 func show_death(text: String) -> void:
+	var fresh := not death_label.visible
 	death_label.text = text
 	death_label.visible = true
+	if fresh and not text.is_empty():
+		_death_punch = DEATH_PUNCH
+		_cue(Foley.DEATH)
 
 
 func clear_death() -> void:
 	death_label.text = ""
 	death_label.visible = false
+	_death_punch = 0.0
+	death_label.scale = Vector2.ONE
+	death_label.modulate = Color.WHITE
 
 
 func set_hint(text: String) -> void:
@@ -189,11 +250,67 @@ func flash(text: String, seconds: float = 2.2) -> void:
 	banner.text = text
 	_banner_left = seconds
 	_banner_hold = seconds
+	if text.is_empty():
+		_end_banner()
+		return
+	var kind := _classify(text, seconds)
+	var ink: Color = CUE_INK.get(kind, INK)
+	banner.add_theme_color_override("font_color", ink)
+	accent.color = ink
+	accent.scale.x = 0.0
+	accent.visible = true
+	_accent_t = 0.0
+	if kind == Foley.MARK:
+		_mark_pulse = MARK_PULSE
+	_cue(kind)
 
 
 func clear_banner() -> void:
 	banner.text = ""
 	_banner_left = 0.0
+	_end_banner()
+
+
+func _end_banner() -> void:
+	accent.visible = false
+	banner.add_theme_color_override("font_color", INK)
+
+
+func _cue(kind: String) -> void:
+	last_cue = kind
+	foley.play(kind)
+	cue_played.emit(kind)
+
+
+## Which cue a finished banner line carries. The line arrives already
+## localised, so it is matched against both columns of the string table rather
+## than the active one: a line composed just before a language switch still
+## lands the right cue.
+func _classify(text: String, seconds: float) -> String:
+	if _is_line("flash.mark", [_marks.x, _marks.y], text):
+		return Foley.MARK
+	if _is_line("flash.marks_full", [_marks.x, _marks.y], text) or _is_line("flash.pick_first", [], text):
+		return Foley.DENY
+	for fmt: String in _columns("flash.taken"):
+		if text.begins_with(fmt % [""]):
+			return Foley.PICKUP
+	if _is_line("flash.lang", [], text) or _is_line("flash.load_ok", [], text):
+		return Foley.MESSAGE
+	if is_equal_approx(seconds, DEFAULT_HOLD):
+		return Foley.INSPECT
+	return Foley.MESSAGE
+
+
+func _columns(key: String) -> Array:
+	var node: Variant = Loc.STRINGS.get(key, {})
+	return node.values() if node is Dictionary else []
+
+
+func _is_line(key: String, args: Array, text: String) -> bool:
+	for fmt: String in _columns(key):
+		if (fmt if args.is_empty() else fmt % args) == text:
+			return true
+	return false
 
 
 func set_case_lines(lines: PackedStringArray) -> void:
@@ -213,7 +330,28 @@ func _process(dt: float) -> void:
 		_banner_left -= dt
 		if _banner_left <= 0.0:
 			banner.text = ""
+			_end_banner()
 		elif _banner_left < 0.5:
 			banner.modulate.a = _banner_left / 0.5
 	else:
 		banner.modulate.a = 1.0
+
+	if accent.visible:
+		_accent_t += dt
+		var k := clampf(_accent_t / ACCENT_IN, 0.0, 1.0)
+		accent.scale.x = 1.0 - (1.0 - k) * (1.0 - k)
+		accent.modulate.a = banner.modulate.a * 0.85
+
+	# MARK success: the counter the banner just quoted answers with a flare.
+	if _mark_pulse > 0.0:
+		_mark_pulse = maxf(_mark_pulse - dt, 0.0)
+		var m := _mark_pulse / MARK_PULSE
+		mark_label.scale = Vector2.ONE * (1.0 + 0.14 * m * m)
+		mark_label.modulate = Color.WHITE.lerp(Color(1.7, 1.7, 1.7), m)
+
+	# Death: the cause lands hot and settles into its red within a few frames.
+	if _death_punch > 0.0:
+		_death_punch = maxf(_death_punch - dt, 0.0)
+		var d := _death_punch / DEATH_PUNCH
+		death_label.scale = Vector2.ONE * (1.0 + 0.06 * d * d)
+		death_label.modulate = Color.WHITE.lerp(Color(1.0, 2.4, 2.6), d * d)
