@@ -14,8 +14,6 @@ const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
 const ConfirmBox = preload("res://scripts/ui/confirm_box.gd")
 
 const BACKLOT_SCENE := "res://scenes/backlot/backlot.tscn"
-## Shown in both languages at once, whatever the current one is.
-const PLAY_TEXT := "PLAY / 开拍"
 const PLAY_TEXT_X := 98
 
 var settings_panel: Control
@@ -116,13 +114,13 @@ func _render() -> void:
 	status.custom_minimum_size = Vector2(640, 0)
 	col.add_child(status)
 
-	# Language: always one click away, written in the language it switches to.
+	# Language: name the destination in the current interface language.
 	var other := "en" if Loc.language == "zh" else "zh"
 	var lang := UiKit.button(Loc.language_name(other), _switch_language.bind(other), 18)
 	lang.custom_minimum_size = Vector2(150, 40)
 	lang.anchor_left = 1.0
 	lang.anchor_right = 1.0
-	lang.offset_left = -180.0
+	lang.offset_left = -236.0
 	lang.offset_right = -24.0
 	lang.offset_top = 24.0
 	lang.offset_bottom = 64.0
@@ -158,10 +156,10 @@ static func _slate(bg: Color, ink: Color, edge: int, rule: int, bottom: int = -1
 
 
 ## The primary transport control: a tall slate with a recessed deck key and a
-## procedurally drawn play triangle (no glyph dependency). The headline is
-## bilingual in both languages; `destination` says, localized, where it goes.
+## procedurally drawn play triangle (no glyph dependency). The localized
+## destination line identifies the scene that will open.
 func _play_key(destination: String, on_pressed: Callable) -> Button:
-	var b := _primary(UiKit.button(PLAY_TEXT, on_pressed))
+	var b := _primary(UiKit.button(Loc.ui("menu.play"), on_pressed))
 	b.name = "Play"
 	b.custom_minimum_size = Vector2(400, 88)
 	b.add_theme_font_size_override("font_size", 32)

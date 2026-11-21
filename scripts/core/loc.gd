@@ -15,9 +15,11 @@ const SUPPORTED := ["zh", "en"]
 const FALLBACK_DEFAULT := "zh"
 const SETTING_DEFAULT := "rcd/default_language"
 
-## Language names are written in their own language so the picker is usable
-## whichever one is active.
-const LANGUAGE_NAMES := {"zh": "中文", "en": "English"}
+## Name the destination in the active UI language (shared by both pickers).
+const LANGUAGE_NAMES := {
+	"zh": {"en": "Simplified Chinese", "zh": "简体中文"},
+	"en": {"en": "English", "zh": "English"},
+}
 
 const STRINGS := {
 	# --- HUD -------------------------------------------------------------
@@ -80,6 +82,7 @@ const STRINGS := {
 
 	# --- front end -------------------------------------------------------
 	"title.tagline": {"en": "One set. Every take you finish walks it again.", "zh": "一个片场。你拍完的每一条，都会再走一遍。"},
+	"menu.play": {"en": "PLAY", "zh": "开拍 / PLAY"},
 	"menu.backlot": {"en": "Backlot · Save the Negative", "zh": "外景片场 · 抢救原片"},
 	"menu.new": {"en": "New Game", "zh": "新游戏"},
 	"menu.continue": {"en": "Continue", "zh": "继续游戏"},
@@ -164,7 +167,7 @@ static func default_language() -> String:
 
 
 static func language_name(lang: String) -> String:
-	return str(LANGUAGE_NAMES.get(lang, lang))
+	return t(LANGUAGE_NAMES.get(lang, lang))
 
 
 ## Resolve one text node. Never returns null.
