@@ -2,6 +2,8 @@
 
 记录真实调用。配置存在不算，必须有返回证据。禁止写入密钥、认证头、账号凭据。
 
+**NIGHT-TITLE（2026-11-21）**：Claude Code / XHYAPI 返回 `claude-fable-5-2`，35 轮、API 220062 ms；input 24、cache create 64594、cache read 547762、output 21936。CLI 报价 $1.6331244，实际扣款、余额、推理 token 和长上下文费率档 UNKNOWN。直接制作夜拍绿幕背景、标题音乐和开拍前的运动选项（`48ce97a`）。总控独立窗口验收：全屏标题，音乐节点 playing=true、−20 dB；窗口截图可见 PLAY、提示、设置、制作名单且未见裁切。这不是主观试听。Gemini 本批无可调度路由，未计入署名。
+
 **试玩修订 / HUD-FOLEY-52（2026-11-21）**：创作者澄清目标为 Fable **5.2**。Claude Code / XHYAPI 回执 `canonicalModel=claude-fable-5-2`、`stop_reason=end_turn`，API 181820 ms；input 14、cache create 55726、cache read 233423、output 15599（thinking 5469）。CLI list cost $1.2280166，实际扣费及余额 UNKNOWN。直接编写 HUD 反馈与原创程序音效，提交 `e149ef9`，Godot 4.3 编译通过，听感待窗口试听。
 
 **BURST 3.1 / B31-UI（2026-11-21）**：XHYAPI 可见列表没有 `claude-fable-5-5`，未将其他 Fable 当作 5.5。Claude Code 返回 `claude-opus-5-5`，76 轮，705499 ms；input 84 / cache create 125152 / cache read 3314831 / output 67780；CLI 报价 $2.6446622，实际中转扣款、余额、精确上下文长度和推理 token UNKNOWN。这不是昨晚账单。实际产出为标题、设置、语言表、偏好持久化、暂停和游戏 UI；集成人修正 Godot `_set` 命名冲突，经主菜单启动和全套 400 项断言通过后纳入 `b96a483`。Gemini/Kimi 无本批调用凭证，不署名。
