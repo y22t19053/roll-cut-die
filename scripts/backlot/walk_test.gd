@@ -1,0 +1,57 @@
+extends SceneTree
+## End-to-end physics walk. No teleports, injected tracks or disabled hazards.
+var studio
+var failed := false
+func _initialize() -> void:
+	call_deferred("run")
+
+func walk(p: Vector2) -> void:
+	for i in 1200:
+		var pos: Vector3 = studio.player.position
+		var d := p - Vector2(pos.x,pos.z)
+		if d.length() < 0.15:
+			studio.player.input_override = Vector2.ZERO
+			return
+		if studio.player.frozen: break
+		studio.player.input_override = d.normalized()
+		await physics_frame
+	failed = true
+	push_error("walk blocked at %s -> %s" % [studio.player.position,p])
+
+func live() -> void:
+	for i in 480:
+		await physics_frame
+		if not studio.player.frozen: return
+	failed = true
+
+func run() -> void:
+	studio = load("res://scenes/backlot/backlot.tscn").instantiate()
+	root.add_child(studio)
+	await live()
+	for p in [Vector2(1.2,28), Vector2(1.2,4), Vector2(28,4)]:
+		await walk(p)
+	studio._interact()
+	if not studio.power_cut: quit(1); return
+	studio._retake()
+	await live()
+	if studio.ghost_nodes.size() != 1: quit(1); return
+	for p in [Vector2(36.4,27),Vector2(36.4,6),Vector2(33,6)]:
+		await walk(p)
+	studio._mark()
+	studio._interact()
+	if not studio.carrying: quit(1); return
+	studio._manual_cut()
+	for i in 240:
+		await physics_frame
+		if studio.cut_panel.is_open(): break
+	var points: Array = studio.marks.points()
+	studio._cut_to(points[-1])
+	await live()
+	if studio.carrying or studio.ghost_nodes.size() != 1: quit(1); return
+	studio._interact()
+	for p in [Vector2(36.4,6),Vector2(36.4,27),Vector2(33,27)]:
+		await walk(p)
+	studio._interact()
+	var ok: bool = not failed and studio.screened
+	print("BACKLOT_WALK_CUT_SCREEN: ",ok)
+	quit(0 if ok else 1)
