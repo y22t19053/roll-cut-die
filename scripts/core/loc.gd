@@ -17,7 +17,7 @@ const SETTING_DEFAULT := "rcd/default_language"
 
 ## Name the destination in the active UI language (shared by both pickers).
 const LANGUAGE_NAMES := {
-	"zh": {"en": "Simplified Chinese", "zh": "简体中文"},
+	"zh": {"en": "简体中文", "zh": "简体中文"},
 	"en": {"en": "English", "zh": "English"},
 }
 
