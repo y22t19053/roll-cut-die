@@ -101,31 +101,39 @@ func _physics_process(dt: float) -> void:
 func _words(zh: String,en: String) -> String:
 	return zh if Loc.language == "zh" else en
 
-func _near(pos: Vector3) -> bool:
-	return player.global_position.distance_to(pos) < 1.7
+# From the capsule centre: 0.32 m body radius + 0.32 m arm extension.
+# Use the solid's actual footprint rather than a radius around a walkway sign.
+func _near(device: String) -> bool:
+	var at := Vector2(player.global_position.x, player.global_position.z)
+	for prop in map_data.props:
+		if prop.id == device:
+			var r: Array = prop.rect
+			var surface := Vector2(clampf(at.x,r[0],r[2]), clampf(at.y,r[1],r[3]))
+			return at.distance_squared_to(surface) <= 0.64 * 0.64
+	return false
 
 func _update_hint() -> void:
 	if phase != Phase.ROLLING or player.frozen:
 		return
 	if not power_cut:
 		var left := ceili(maxf(LIMIT-_world_t,0))
-		_show_hint(_words("原片即将覆盖 · %ds　穿过水槽或绕布景车道，到 REC 拉闸。", "Master overwrite in %ds. Cross the tank aisle or skirt the scenery dock to REC.") % left if not _near(SetPlan.SWITCH) else _words("E　切断覆录电源", "E   Stop overwrite"))
+		_show_hint(_words("原片即将覆盖 · %ds　穿过水槽或绕布景车道，到 REC 拉闸。", "Master overwrite in %ds. Cross the tank aisle or skirt the scenery dock to REC.") % left if not _near("breaker") else _words("E　切断覆录电源", "E   Stop overwrite"))
 	elif not carrying:
-		_show_hint(_words("从放映间出发。到录机 MASTER 取原片；留意上次拉闸的人影。", "From the booth, reach MASTER. Watch for your previous run.") if not _near(SetPlan.DECK) else _words("E　从录机卸下原片", "E   Unload master reel"))
+		_show_hint(_words("从放映间出发。到录机 MASTER 取原片；留意上次拉闸的人影。", "From the booth, reach MASTER. Watch for your previous run.") if not _near("recorder") else _words("E　从录机卸下原片", "E   Unload master reel"))
 	else:
-		_show_hint(_words("带原片回 35 mm 放映间。录音棚窄道近，水槽外道宽。", "Return to 35 mm. Soundstage alley is short; the tank detour is wider.") if not _near(SetPlan.BOOTH) else _words("E　装片、放映", "E   Thread and project"))
+		_show_hint(_words("带原片回 35 mm 放映间。录音棚窄道近，水槽外道宽。", "Return to 35 mm. Soundstage alley is short; the tank detour is wider.") if not _near("projector") else _words("E　装片、放映", "E   Thread and project"))
 
 func _interact() -> void:
 	if paused or phase != Phase.ROLLING or player.frozen:
 		return
-	if not power_cut and _near(SetPlan.SWITCH):
+	if not power_cut and _near("breaker"):
 		power_cut = true
 		_complete_leg("stop_overwrite")
-	elif power_cut and not carrying and _near(SetPlan.DECK):
+	elif power_cut and not carrying and _near("recorder"):
 		carrying = true
 		_sync_reel()
 		hud.flash(_words("原片已卸下 · 送到 35 mm 放映间", "Master reel in hand · Return to 35 mm"), 2.2, "pickup")
-	elif carrying and _near(SetPlan.BOOTH):
+	elif carrying and _near("projector"):
 		screened = true
 		_complete_leg("screen_master")
 		_sync_reel()

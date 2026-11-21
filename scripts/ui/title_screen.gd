@@ -1,5 +1,6 @@
 extends Control
-## TitleScreen — New Game, Continue, Settings, Quit.
+## TitleScreen — PLAY (Backlot rescue, else studio New), Continue, New Game,
+## Settings, Quit.
 ##
 ## Reads the save only to describe it; never writes or deletes it. New Game
 ## leaves the old save on disk until the new run's first save replaces it, and
@@ -11,6 +12,11 @@ const Loc = preload("res://scripts/core/loc.gd")
 const Logger = preload("res://scripts/core/logger.gd")
 const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
 const ConfirmBox = preload("res://scripts/ui/confirm_box.gd")
+
+const BACKLOT_SCENE := "res://scenes/backlot/backlot.tscn"
+## Shown in both languages at once, whatever the current one is.
+const PLAY_TEXT := "PLAY / 开拍"
+const PLAY_TEXT_X := 98
 
 var settings_panel: Control
 var confirm: Control
@@ -82,14 +88,27 @@ func _render() -> void:
 	buttons.add_theme_constant_override("separation", 12)
 	buttons.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_child(buttons)
-	var cont := UiKit.button(Loc.ui("menu.continue"), _on_continue)
+	# Transport first: one deck PLAY key that rolls the Backlot rescue when it
+	# ships, else a studio New Game (same confirm path as the New slate). It is
+	# the first button in the tree, so UiKit.focus_first lands on it.
+	# Then the studio takes (continue / new) as slates with an orange ink edge;
+	# housekeeping (settings / quit) sits below a ruled line, quieter.
+	if ResourceLoader.exists(BACKLOT_SCENE):
+		buttons.add_child(_play_key(Loc.ui("menu.backlot"), _on_backlot))
+	else:
+		buttons.add_child(_play_key(Loc.ui("menu.new"), _on_new_game))
+	var cont := _primary(UiKit.button(Loc.ui("menu.continue"), _on_continue))
 	cont.disabled = not bool(_summary.get("ok", false))
 	buttons.add_child(cont)
-	buttons.add_child(UiKit.button(Loc.ui("menu.new"), _on_new_game))
-	if ResourceLoader.exists("res://scenes/backlot/backlot.tscn"):
-		buttons.add_child(UiKit.button(Loc.ui("menu.backlot"), _on_backlot))
-	buttons.add_child(UiKit.button(Loc.ui("menu.settings"), func() -> void: settings_panel.open()))
-	buttons.add_child(UiKit.button(Loc.ui("menu.quit"), func() -> void: get_tree().quit()))
+	buttons.add_child(_primary(UiKit.button(Loc.ui("menu.new"), _on_new_game)))
+	var rule := ColorRect.new()
+	rule.color = Color(UiKit.DIM, 0.35)
+	rule.custom_minimum_size = Vector2(220, 2)
+	rule.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	buttons.add_child(rule)
+	buttons.add_child(_secondary(UiKit.button(Loc.ui("menu.settings"), func() -> void: settings_panel.open())))
+	buttons.add_child(_secondary(UiKit.button(Loc.ui("menu.quit"), func() -> void: get_tree().quit())))
 
 	var status := UiKit.label(_status_text(), 18, UiKit.DIM)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -119,6 +138,109 @@ func _render() -> void:
 	_menu.add_child(foot)
 
 
+## Slate-edge box: square corners, `edge` px ink strip on the left, `rule` px
+## elsewhere. Focus boxes pass a transparent bg so they overlay hover/normal.
+static func _slate(bg: Color, ink: Color, edge: int, rule: int, bottom: int = -1) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.border_color = ink
+	sb.set_corner_radius_all(0)
+	sb.border_width_left = edge
+	sb.border_width_top = rule
+	sb.border_width_right = rule
+	sb.border_width_bottom = rule if bottom < 0 else bottom
+	# Capped so a thicker hover/focus edge doesn't shift the label.
+	sb.content_margin_left = 14 + mini(edge, 6)
+	sb.content_margin_right = 14
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	return sb
+
+
+## The primary transport control: a tall slate with a recessed deck key and a
+## procedurally drawn play triangle (no glyph dependency). The headline is
+## bilingual in both languages; `destination` says, localized, where it goes.
+func _play_key(destination: String, on_pressed: Callable) -> Button:
+	var b := _primary(UiKit.button(PLAY_TEXT, on_pressed))
+	b.name = "Play"
+	b.custom_minimum_size = Vector2(400, 88)
+	b.add_theme_font_size_override("font_size", 32)
+	b.add_theme_stylebox_override("normal", _slate(Color(0.15, 0.13, 0.13, 0.98), UiKit.ACCENT, 8, 2))
+	b.add_theme_stylebox_override("hover", _slate(Color(0.22, 0.17, 0.16, 0.98), UiKit.ACCENT, 10, 2))
+	b.add_theme_stylebox_override("focus", _slate(Color(0, 0, 0, 0), Color.WHITE, 10, 3))
+	# Room for the key on the left and the destination line underneath.
+	for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
+		var sb := b.get_theme_stylebox(state) as StyleBoxFlat
+		sb.content_margin_left = PLAY_TEXT_X
+		sb.content_margin_bottom = 30
+	var dest := UiKit.label(destination, 16, UiKit.DIM)
+	dest.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dest.clip_text = true
+	dest.position = Vector2(PLAY_TEXT_X, 54)
+	dest.size = Vector2(400 - PLAY_TEXT_X - 14, 24)
+	b.add_child(dest)
+	b.draw.connect(_draw_play_key.bind(b))
+	return b
+
+
+## Drawn over the button's own stylebox: a dark key well with an ink rim and
+## the play triangle, lit white while the key is hovered or focused.
+func _draw_play_key(b: Button) -> void:
+	var lit := b.has_focus() or b.is_hovered()
+	var side := b.size.y - 28.0
+	var well := Rect2(22, 14, side, side)
+	b.draw_rect(well, Color(0.03, 0.032, 0.038))
+	b.draw_rect(well, Color(UiKit.ACCENT, 1.0 if lit else 0.6), false, 2.0)
+	var c := well.get_center()
+	var r := side * 0.28
+	var tri := PackedVector2Array([
+		Vector2(c.x - r * 0.8, c.y - r),
+		Vector2(c.x + r, c.y),
+		Vector2(c.x - r * 0.8, c.y + r),
+	])
+	b.draw_colored_polygon(tri, Color.WHITE if lit else UiKit.ACCENT)
+
+
+## New / Continue: full-weight slates, film-orange ink edge.
+static func _primary(b: Button) -> Button:
+	b.custom_minimum_size = Vector2(340, 52)
+	b.add_theme_font_size_override("font_size", 24)
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	var faded_ink := Color(UiKit.ACCENT, 0.55)
+	b.add_theme_stylebox_override("normal", _slate(Color(0.12, 0.125, 0.14, 0.97), faded_ink, 6, 1))
+	b.add_theme_stylebox_override("hover", _slate(Color(0.19, 0.17, 0.165, 0.98), UiKit.ACCENT, 10, 1))
+	b.add_theme_stylebox_override("pressed", _slate(Color(UiKit.ACCENT, 0.85), UiKit.INK, 10, 1))
+	b.add_theme_stylebox_override("focus", _slate(Color(0, 0, 0, 0), UiKit.ACCENT, 10, 2))
+	b.add_theme_stylebox_override("disabled", _slate(Color(0.075, 0.075, 0.085, 0.9), Color(0.22, 0.2, 0.2), 6, 1))
+	b.add_theme_color_override("font_color", UiKit.INK)
+	b.add_theme_color_override("font_hover_color", Color.WHITE)
+	b.add_theme_color_override("font_focus_color", Color.WHITE)
+	b.add_theme_color_override("font_pressed_color", Color.WHITE)
+	b.add_theme_color_override("font_hover_pressed_color", Color.WHITE)
+	b.add_theme_color_override("font_disabled_color", Color(0.38, 0.38, 0.4))
+	return b
+
+
+## Settings / Quit: narrower, smaller, no fill — just an ink underline.
+static func _secondary(b: Button) -> Button:
+	b.custom_minimum_size = Vector2(260, 40)
+	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	b.add_theme_font_size_override("font_size", 19)
+	var none := Color(0, 0, 0, 0)
+	b.add_theme_stylebox_override("normal", _slate(none, Color(UiKit.DIM, 0.35), 0, 0, 1))
+	b.add_theme_stylebox_override("hover", _slate(Color(1, 1, 1, 0.04), UiKit.INK, 0, 0, 2))
+	b.add_theme_stylebox_override("pressed", _slate(Color(UiKit.ACCENT, 0.25), UiKit.ACCENT, 0, 0, 2))
+	b.add_theme_stylebox_override("focus", _slate(none, UiKit.ACCENT, 0, 1, 2))
+	b.add_theme_stylebox_override("disabled", _slate(none, Color(0.18, 0.18, 0.2), 0, 0, 1))
+	b.add_theme_color_override("font_color", UiKit.DIM)
+	b.add_theme_color_override("font_hover_color", UiKit.INK)
+	b.add_theme_color_override("font_focus_color", UiKit.INK)
+	b.add_theme_color_override("font_pressed_color", UiKit.INK)
+	b.add_theme_color_override("font_hover_pressed_color", UiKit.INK)
+	b.add_theme_color_override("font_disabled_color", Color(0.36, 0.36, 0.38))
+	return b
+
+
 ## Under the menu: why Continue is unavailable, what it would load, or the
 ## last error.
 func _status_text() -> String:
@@ -143,7 +265,7 @@ func _switch_language(lang: String) -> void:
 
 func _on_backlot() -> void:
 	GameSession.request_new_game()
-	var err := get_tree().change_scene_to_file("res://scenes/backlot/backlot.tscn")
+	var err := get_tree().change_scene_to_file(BACKLOT_SCENE)
 	if err != OK:
 		_status_key = "error.scene"
 		_rerender()

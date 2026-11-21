@@ -31,12 +31,18 @@ func run() -> void:
 	for p in [Vector2(1.2,28), Vector2(1.2,4), Vector2(28,4)]:
 		await walk(p)
 	studio._interact()
+	if studio.power_cut: push_error("breaker operated from walkway"); quit(1); return
+	await walk(Vector2(28,3.22))
+	studio._interact()
 	if not studio.power_cut: quit(1); return
 	studio._retake()
 	await live()
 	if studio.ghost_nodes.size() != 1: quit(1); return
 	for p in [Vector2(36.4,27),Vector2(36.4,6),Vector2(33,6)]:
 		await walk(p)
+	studio._interact()
+	if studio.carrying: push_error("reel collected from walkway"); quit(1); return
+	await walk(Vector2(33,5.22))
 	studio._mark()
 	studio._interact()
 	if not studio.carrying: quit(1); return
@@ -51,6 +57,9 @@ func run() -> void:
 	studio._interact()
 	for p in [Vector2(36.4,6),Vector2(36.4,27),Vector2(33,27)]:
 		await walk(p)
+	studio._interact()
+	if studio.screened: push_error("projector operated from walkway"); quit(1); return
+	await walk(Vector2(33,27.96))
 	studio._interact()
 	var ok: bool = not failed and studio.screened
 	print("BACKLOT_WALK_CUT_SCREEN: ",ok)
