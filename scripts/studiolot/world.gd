@@ -29,6 +29,7 @@ var _site_labels := {}
 var _screen_root: Node3D
 var _screen_cam: Camera3D
 var _reels: Array = []
+var _score := preload("res://scripts/studiolot/soundtrack.gd").new()
 var _reel_caption: Label3D
 var _screen_t := 0.0
 var _screen_total := 0.0
@@ -39,6 +40,7 @@ var _new_armed_ms := -100000
 func _ready() -> void:
 	GameSession.reset_run()
 	super._ready()
+	add_child(_score)
 
 func _load_map() -> bool:
 	variation = Plan.variation(production)
@@ -386,6 +388,7 @@ func _start_screening() -> void:
 	for child: Node in _screen_root.get_children():
 		if child.has_meta("zone") and images.has(str(child.get_meta("zone"))):
 			(child as MeshInstance3D).material_override.albedo_color = Color(0.85, 0.66, 0.30)
+	_score.set_screening(true)
 	_screen_root.visible = true
 	_screen_cam.current = true
 	_render_ending()
@@ -464,6 +467,7 @@ func return_to_editing() -> bool:
 	if not screened or phase != Phase.COMPLETE or paused:
 		return false
 	screened = false
+	_score.set_screening(false)
 	_screen_root.visible = false
 	rig.camera.current = true
 	hud.set_case_lines(PackedStringArray())

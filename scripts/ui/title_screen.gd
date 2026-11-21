@@ -19,6 +19,7 @@ const PLAY_TEXT_X := 98
 var settings_panel: Control
 var confirm: Control
 var _menu: Control
+var _in_credits := false
 var _status_key := ""
 var _summary: Dictionary = {}
 
@@ -66,6 +67,9 @@ func _rerender() -> void:
 
 func _render() -> void:
 	UiKit.clear(_menu)
+	if _in_credits:
+		_render_credits()
+		return
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 14)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -109,6 +113,7 @@ func _render() -> void:
 	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	buttons.add_child(rule)
 	buttons.add_child(_secondary(UiKit.button(Loc.ui("menu.settings"), func() -> void: settings_panel.open())))
+	buttons.add_child(_secondary(UiKit.button("制作名单" if Loc.language == "zh" else "Credits", _credits.bind(true))))
 	buttons.add_child(_secondary(UiKit.button(Loc.ui("menu.quit"), func() -> void: get_tree().quit())))
 
 	var status := UiKit.label(_status_text(), 18, UiKit.DIM)
@@ -260,6 +265,21 @@ static func _reason_key(reason: String) -> String:
 	return "save.corrupt"
 
 
+func _credits(opened: bool) -> void:
+	_in_credits = opened
+	_rerender.call_deferred()
+
+func _render_credits() -> void:
+	var zh := Loc.language == "zh"
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 16)
+	UiKit.centered(_menu).add_child(col)
+	for line: String in ["ROLL CUT DIE", "出品与制作" if zh else "A GAME BY", "MacGuffin Works", "游戏引擎  ·  Godot Engine" if zh else "ENGINE  ·  Godot Engine", "字体  ·  Noto Sans CJK SC" if zh else "TYPE  ·  Noto Sans CJK SC", "© 2014–2021 Adobe  ·  SIL Open Font License 1.1"]:
+		var label := UiKit.label(line, 38 if line == "MacGuffin Works" else 22, UiKit.INK)
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(label)
+	col.add_child(UiKit.button("返回标题" if zh else "Back to title", _credits.bind(false)))
+
 func _switch_language(lang: String) -> void:
 	GameSession.set_language(lang)
 
@@ -327,7 +347,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_switch_language("en" if Loc.language == "zh" else "zh")
 			get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
-			if confirm.is_open():
+			if _in_credits:
+				_credits(false)
+			elif confirm.is_open():
 				confirm.cancel()
 			elif settings_panel.is_open():
 				settings_panel.close()
