@@ -325,16 +325,34 @@ func _begin_take() -> void:
 	var idx: int = GameSession.takes.take_index
 	_clear_ghosts()
 	_spawn_ghosts()
+	# Experimental inherited scenes keep their authored spawn and timing protocol.
+	var studio := scene_file_path == "res://scenes/main/main.tscn"
+	var entrance := spawn_pos
+	if studio:
+		var selected: Variant = preload("res://scripts/world/safe_entrance.gd").choose(map_data,spawn_pos,GameSession.ghosts)
+		if selected == null:
+			Logger.error("no clear entrance for the opening tracks")
+			_freeze_world()
+			player.set_frozen(true)
+			set_process_unhandled_input(false)
+			_show_fatal()
+			return
+		entrance = selected
+		for g: Node in ghost_nodes:
+			g.playing = false
+			g.global_position = g.track.sample_at(0).position
 	for n: Node in npcs:
-		n.set_active(true)
 		n.reset_phase()
-	player.teleport(spawn_pos, 0.0)
+		n.set_active(not studio)
+	player.teleport(entrance, 0.0)
 	player.set_frozen(true)
 	_refresh_evidence()
 	recorder.setup(player, rig, idx)
-	recorder.start()
+	recorder.recording = false
+	if not studio:
+		recorder.start()
 	_world_t = 0.0
-	_world_running = true
+	_world_running = not studio
 	_resume_point = {}
 	marks.clear()
 	marks.checkpoint = _snapshot()
@@ -691,6 +709,12 @@ func _on_slate_finished(kind: String) -> void:
 				if not _resume_point.is_empty():
 					_release_resumed()
 					return
+				if not _world_running:
+					for n: Node in npcs:
+						n.set_active(true)
+					for g: Node in ghost_nodes:
+						g.playing = true
+					_world_running = true
 				player.set_frozen(false)
 				recorder.start()
 				marks.checkpoint = _snapshot()

@@ -155,5 +155,64 @@ func _main() -> void:
 	await process_frame
 
 	print("")
+	await _record_and_reenter(gs, fixture)
 	print("DEATH/HUD PROBE: %s" % ("OK" if _fails == 0 else "%d FAILED" % _fails))
 	quit(0 if _fails == 0 else 1)
+
+
+func _press(code: int, frames := 2) -> void:
+	var ev := InputEventKey.new()
+	ev.physical_keycode = code
+	ev.keycode = code
+	ev.pressed = true
+	Input.parse_input_event(ev)
+	Input.flush_buffered_events()
+	await _ticks(frames)
+	ev = ev.duplicate()
+	ev.pressed = false
+	Input.parse_input_event(ev)
+	Input.flush_buffered_events()
+	await _ticks(2)
+
+
+func _ticks(count: int) -> void:
+	for _i in count:
+		await physics_frame
+
+
+func _record_and_reenter(gs: Node, fixture: Script) -> void:
+	gs.reset_run()
+	gs.set_roll_mode(RollModes.ORBIT)
+	var studio = load("res://scenes/main/main.tscn").instantiate()
+	studio.set_script(fixture) # real scene, with only disk persistence intercepted
+	root.add_child(studio)
+	await _ticks(150)
+	var home: Vector3 = studio.player.position
+	# A real eight-second standstill gives both stationary-opening and lethal
+	# re-entry checks time against the very same successful TAKE 01.
+	await _ticks(480)
+	await _press(KEY_W,14)
+	await _press(KEY_R)
+	await _press(KEY_3)
+	_check("real REFRAME succeeded", gs.ghost_count() == 1 and studio.phase == studio.Phase.COMPLETE)
+	if gs.ghost_count() != 1: return
+	await _press(KEY_SPACE)
+	await _ticks(55)
+	var ghost = studio.ghost_nodes[0]
+	_check("slate holds replay, patrol, recorder and world on zero",studio.player.frozen and ghost.playhead == 0 and studio.npcs[0].traveled == 0 and studio.recorder.elapsed() == 0 and studio._world_t == 0)
+	for i in 180:
+		if not studio.player.frozen: break
+		await physics_frame
+	var entrance: Vector3 = studio.player.position
+	await _ticks(303)
+	_check("Take 02 survives five seconds stationary against armed TAKE 01",studio.phase == studio.Phase.ROLLING and ghost._armed and entrance.distance_to(home) >= 1.4 and entrance.distance_to(studio.player.position) < 0.01, "home %s entrance %s playhead %.2f" % [home,entrance,ghost.playhead])
+	# Move across the open entrance area into the stationary projection using only keys.
+	for axis in [0,2]:
+		var d: float = home[axis]-studio.player.position[axis]
+		if absf(d) < 0.16: continue
+		var code := (KEY_D if d>0 else KEY_A) if axis == 0 else (KEY_S if d>0 else KEY_W)
+		await _press(code,roundi(absf(d)*60.0/studio.player.SPEED))
+	await _ticks(8)
+	_check("entering old route still kills and credits TAKE 01", studio.phase == studio.Phase.DEAD and studio.hud.death_label.text.contains("TAKE 01"),studio.hud.death_label.text)
+	studio.queue_free()
+	await process_frame
