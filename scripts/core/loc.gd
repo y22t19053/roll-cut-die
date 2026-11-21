@@ -80,6 +80,7 @@ const STRINGS := {
 
 	# --- front end -------------------------------------------------------
 	"title.tagline": {"en": "One set. Every take you finish walks it again.", "zh": "一个片场。你拍完的每一条，都会再走一遍。"},
+	"menu.backlot": {"en": "Backlot · Save the Negative", "zh": "外景片场 · 抢救原片"},
 	"menu.new": {"en": "New Game", "zh": "新游戏"},
 	"menu.continue": {"en": "Continue", "zh": "继续游戏"},
 	"menu.settings": {"en": "Settings", "zh": "设置"},

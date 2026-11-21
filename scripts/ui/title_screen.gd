@@ -86,6 +86,8 @@ func _render() -> void:
 	cont.disabled = not bool(_summary.get("ok", false))
 	buttons.add_child(cont)
 	buttons.add_child(UiKit.button(Loc.ui("menu.new"), _on_new_game))
+	if ResourceLoader.exists("res://scenes/backlot/backlot.tscn"):
+		buttons.add_child(UiKit.button(Loc.ui("menu.backlot"), _on_backlot))
 	buttons.add_child(UiKit.button(Loc.ui("menu.settings"), func() -> void: settings_panel.open()))
 	buttons.add_child(UiKit.button(Loc.ui("menu.quit"), func() -> void: get_tree().quit()))
 
@@ -137,6 +139,14 @@ static func _reason_key(reason: String) -> String:
 
 func _switch_language(lang: String) -> void:
 	GameSession.set_language(lang)
+
+
+func _on_backlot() -> void:
+	GameSession.request_new_game()
+	var err := get_tree().change_scene_to_file("res://scenes/backlot/backlot.tscn")
+	if err != OK:
+		_status_key = "error.scene"
+		_rerender()
 
 
 func _on_continue() -> void:
