@@ -6,6 +6,7 @@ const FLAT := Color("847362")
 const WHITE := Color("f3dfad")
 const IRON := Color("333139")
 const SET_INKS := {"straight":Color("bd5743"),"tee":Color("4f9187"),"cross":Color("bb914d"),"zig":Color("8075a3")}
+const LETTER_INKS := {"s": Color("b96452"), "h": Color("579888"), "u": Color("c59c59"), "l": Color("8776a8"), "n": Color("6288ae"), "x": Color("a57b58")}
 ## Plan view, north to south. Dots are walkable lanes; # becomes solid scenery.
 ## The outer columns are mouths, not decoration: the S must double back twice.
 const LANES := {
@@ -16,18 +17,6 @@ const LANES := {
 	"n": ["#..##..","#...#.#","#.#...#","#.##..#","..###.#"],
 	"x": ["..###..","#..#..#","##...##","#..#..#","..###.."],
 }
-## Five-by-five stencils: dots are walkable cells (1.12 m, actor Ø0.64).
-## West/east vestibules run along the open ends, so rotated letters still join
-## the original finish lines without punching a shortcut through their walls.
-const LETTERS := {
-	"s": [".....", ".####", ".....", "####.", "....."],
-	"h": [".###.", ".###.", ".....", ".###.", ".###."],
-	"u": [".###.", ".###.", ".###.", ".###.", "....."],
-	"l": [".####", ".####", ".####", ".####", "....."],
-	"n": ["..##.", "...#.", ".#...", ".##..", ".###."],
-	"x": ["..#..", "#...#", "##.##", "#...#", "..#.."]
-}
-const TILE := 1.12
 var _count := 0
 var _cap: Node3D
 var _inks := {}
@@ -42,7 +31,7 @@ func append_room(kind: String, variant: int) -> Dictionary:
 	room.position.x = _count*LENGTH
 	add_child(room)
 	_rooms.append(room)
-	var ink: Color = SET_INKS.get(kind,SET_INKS.straight)
+	var ink: Color = SET_INKS.get(kind, LETTER_INKS.get(kind, SET_INKS.straight))
 	var hand := 1 if posmod(variant,2)==0 else -1
 	_box(room,Vector3(4.5,-.12,0),Vector3(9,.24,6),DECK,true)
 	for z in [-1,1]:

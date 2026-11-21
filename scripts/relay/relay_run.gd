@@ -72,6 +72,7 @@ func _ready() -> void:
 	add_child(rig)
 	rig.setup(player)
 	rig.set_roll_mode(Orbit)
+	rig.camera.fov = 53.0 # Frame both ends of the short set without changing ORBIT.
 	rig.reduce_motion = GameSession.settings.reduce_motion
 	rig.roll_scale = GameSession.settings.roll_scale
 	var env := Environment.new()
@@ -304,7 +305,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	var key: int = e.physical_keycode
 	if key == KEY_F2:
 		Loc.set_language("en" if Loc.language == "zh" else "zh")
-	elif phase == Mode.PICK and key >= KEY_1 and key <= KEY_3:
+	elif phase in [Mode.ITEM, Mode.PICK] and key >= KEY_1 and key <= KEY_3:
 		_pick_card(key-KEY_1)
 	elif phase in [Mode.DONE,Mode.LOST] and key == KEY_SPACE:
 		get_tree().reload_current_scene()
