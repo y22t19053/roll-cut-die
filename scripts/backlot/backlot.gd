@@ -41,6 +41,7 @@ func _build_world() -> void:
 	projection = _sign("END  /  001", Vector3(32.5,2,30.3))
 	projection.visible = false
 	reel = _spool(get_node("Layout"), SetPlan.DECK + Vector3(0,1.12,-1.4))
+	preload("res://data/backlot/portal_dressing.gd").install(self)
 
 func _build_actors() -> void:
 	super._build_actors()
