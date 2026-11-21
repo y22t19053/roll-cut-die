@@ -1,5 +1,7 @@
 extends "res://scripts/main.gd"
-## Isolated two-take job; success leaves exactly the route actually walked.
+## Each successful shot advances the rescue; failed takes do not change the job.
+enum Shot { STOP, UNLOAD, DELIVER, LAMP, SCREEN, DONE }
+var shot := Shot.STOP
 const SetPlan = preload("res://data/backlot/set.gd")
 const LIMIT := 90.0
 var power_cut := false
@@ -70,7 +72,8 @@ func _spool(parent: Node, at: Vector3) -> MeshInstance3D:
 
 func _begin_take() -> void:
 	carrying = false
-	spawn_pos = SetPlan.BOOTH_EXIT if power_cut else SetPlan.DOCK
+	# Different crew positions and hand-offs; never mirror the recorded world.
+	spawn_pos = [SetPlan.DOCK, SetPlan.BOOTH_EXIT, SetPlan.DECK, Vector3(18,0.05,25.8), Vector3(28,0.05,5.6)][mini(shot,Shot.SCREEN)]
 	super._begin_take()
 	# Neither performer gets a head start while the new take's slate is closed.
 	_world_running = false
@@ -83,6 +86,7 @@ func _begin_take() -> void:
 	_sync_reel()
 
 func _sync_reel() -> void:
+	reel.position = (SetPlan.BOOTH + Vector3(0,1.3,1.8)) if shot >= Shot.LAMP else (SetPlan.DECK + Vector3(0,1.12,-1.4))
 	reel.visible = not carrying and not screened
 	carry_reel.visible = carrying and not screened
 	projection.visible = screened
@@ -127,31 +131,48 @@ func _near(device: String) -> bool:
 			return at.distance_squared_to(surface) <= 0.64 * 0.64
 	return false
 
+func _cue_text() -> String:
+	match shot:
+		Shot.STOP:
+			return _words("原片即将覆盖 · %ds　找 REC 急停。", "Overwrite in %ds. Find the REC breaker.") % ceili(maxf(LIMIT-_world_t,0)) if not _near("breaker") else _words("E　切断覆录", "E   Stop overwrite")
+		Shot.UNLOAD:
+			return _words("录机停了。到 MASTER 松开压片轮。", "Deck stopped. Release the pinch roller at MASTER.") if not _near("recorder") else _words("E　松开压片轮", "E   Release pinch roller")
+		Shot.DELIVER:
+			if not carrying:
+				return _words("E　卸下原片", "E   Lift reel off deck") if _near("recorder") else _words("原片已松开，等在 MASTER 上。", "Reel released. Pick it up at MASTER.")
+			return _words("E　穿片", "E   Thread reel") if _near("projector") else _words("把原片送进 35 mm 放映机。", "Thread the master into the 35 mm projector.")
+		Shot.LAMP:
+			return _words("E　接通放映灯", "E   Energize lamp circuit") if _near("breaker") else _words("片穿好了，灯还不亮。去 REC 配电台接通灯路。", "Film threaded. Switch on the lamp circuit at REC.")
+	return _words("E　开映", "E   Roll picture") if _near("projector") else _words("灯路已通。到 35 mm 开映。", "Lamp circuit live. Roll picture at 35 mm.")
+
 func _update_hint() -> void:
-	if phase != Phase.ROLLING or player.frozen:
-		return
-	if not power_cut:
-		var left := ceili(maxf(LIMIT-_world_t,0))
-		_show_hint(_words("原片即将覆盖 · %ds　穿过水槽或绕布景车道，到 REC 拉闸。", "Master overwrite in %ds. Cross the tank aisle or skirt the scenery dock to REC.") % left if not _near("breaker") else _words("E　切断覆录电源", "E   Stop overwrite"))
-	elif not carrying:
-		_show_hint(_words("从放映间出发。到录机 MASTER 取原片；留意上次拉闸的人影。", "From the booth, reach MASTER. Watch for your previous run.") if not _near("recorder") else _words("E　从录机卸下原片", "E   Unload master reel"))
-	else:
-		_show_hint(_words("带原片回 35 mm 放映间。录音棚窄道近，水槽外道宽。", "Return to 35 mm. Soundstage alley is short; the tank detour is wider.") if not _near("projector") else _words("E　装片、放映", "E   Thread and project"))
+	if phase == Phase.ROLLING and not player.frozen:
+		_show_hint(_cue_text())
 
 func _interact() -> void:
 	if paused or phase != Phase.ROLLING or player.frozen:
 		return
-	if not power_cut and _near("breaker"):
-		power_cut = true
-		_complete_leg("stop_overwrite")
-	elif power_cut and not carrying and _near("recorder"):
-		carrying = true
-		_sync_reel()
-		hud.flash(_words("原片已卸下 · 送到 35 mm 放映间", "Master reel in hand · Return to 35 mm"), 2.2, "pickup")
-	elif carrying and _near("projector"):
-		screened = true
-		_complete_leg("screen_master")
-		_sync_reel()
+	match shot:
+		Shot.STOP:
+			if _near("breaker"):
+				power_cut = true
+				_complete_leg("stop_overwrite")
+		Shot.UNLOAD:
+			if _near("recorder"): _complete_leg("release_roller")
+		Shot.DELIVER:
+			if not carrying and _near("recorder"):
+				carrying = true
+				_sync_reel()
+				hud.flash(_words("原片已卸下", "Master off deck"), 2.2, "pickup")
+			elif carrying and _near("projector"):
+				carrying = false
+				_complete_leg("thread_projector")
+		Shot.LAMP:
+			if _near("breaker"): _complete_leg("energize_lamp")
+		Shot.SCREEN:
+			if _near("projector"):
+				screened = true
+				_complete_leg("screen_master")
 
 func _complete_leg(result: String) -> void:
 	GameSession.takes.begin_report()
@@ -160,7 +181,9 @@ func _complete_leg(result: String) -> void:
 	player.set_frozen(true)
 	_freeze_world()
 	_finish_take()
-	_set_hint(func() -> String: return _words("原片已上银幕。空格回标题。", "The master is on screen. SPACE: title.") if screened else _words("覆录已停。空格换到放映间，去接原片。", "Overwrite stopped. SPACE: start at the booth and fetch the master."))
+	shot += 1
+	_sync_reel()
+	_set_hint(func() -> String: return _words("原片已上银幕。空格回标题。", "The master is on screen. SPACE: title.") if screened else _words("本镜完成。空格交班。", "Shot complete. SPACE: hand off."))
 
 func _retake() -> void:
 	if screened and phase == Phase.COMPLETE:

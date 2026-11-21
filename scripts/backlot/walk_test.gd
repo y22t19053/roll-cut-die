@@ -66,6 +66,11 @@ func run() -> void:
 	studio._interact()
 	if studio.carrying: push_error("reel collected from walkway"); quit(1); return
 	await walk(Vector2(33,5.22))
+	studio._interact() # Release roller; leave the physical reel on the deck.
+	if studio.shot != studio.Shot.DELIVER or studio.carrying: quit(1); return
+	studio._retake()
+	await live()
+	await walk(Vector2(33,5.22))
 	studio._mark()
 	studio._interact()
 	if not studio.carrying: quit(1); return
@@ -76,14 +81,27 @@ func run() -> void:
 	var points: Array = studio.marks.points()
 	studio._cut_to(points[-1])
 	await live()
-	if studio.carrying or studio.ghost_nodes.size() != 1: quit(1); return
+	if studio.carrying or studio.ghost_nodes.size() != 2: quit(1); return
 	studio._interact()
-	for p in [Vector2(36.4,6),Vector2(36.4,27),Vector2(33,27)]:
+	for p in [Vector2(27.25,6),Vector2(27.25,25.7),Vector2(33,27)]:
 		await walk(p)
 	studio._interact()
 	if studio.screened: push_error("projector operated from walkway"); quit(1); return
 	await walk(Vector2(33,27.96))
 	studio._interact()
-	var ok: bool = not failed and studio.screened
+	if studio.shot != studio.Shot.LAMP or studio.screened: quit(1); return
+	studio._retake()
+	await live()
+	if studio.ghost_nodes.size() != 3: quit(1); return
+	for p in [Vector2(18,6),Vector2(28,6),Vector2(28,3.22)]: await walk(p)
+	studio._interact()
+	if studio.shot != studio.Shot.SCREEN: quit(1); return
+	studio._retake()
+	await live()
+	if studio.ghost_nodes.size() != 4 or studio.npcs.size() != 2: quit(1); return
+	print("FIFTH SHOT: 4 recorded ghosts and 2 live crew")
+	for p in [Vector2(1.2,6.2),Vector2(1.2,28),Vector2(14,28),Vector2(30,26.6),Vector2(33,27.96)]: await walk(p)
+	studio._interact()
+	var ok: bool = not failed and studio.screened and root.get_node("GameSession").takes.history.size() == 5
 	print("BACKLOT_WALK_CUT_SCREEN: ",ok)
 	quit(0 if ok else 1)
