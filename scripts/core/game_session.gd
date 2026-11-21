@@ -299,6 +299,7 @@ func to_dict() -> Dictionary:
 			g.append(tr.to_dict())
 	return {
 		"take_index": takes.take_index,
+		"retake_stock": takes.retake_stock,
 		"history": takes.history.duplicate(true),
 		"outtakes": takes.outtakes.duplicate(true),
 		"case": case_state.to_dict(),
@@ -312,6 +313,9 @@ func to_dict() -> Dictionary:
 func from_dict(d: Dictionary) -> void:
 	if d.is_empty():
 		return
+	var stored_stock: Variant = d.get("retake_stock", takes.retake_stock)
+	if typeof(stored_stock) in [TYPE_FLOAT, TYPE_INT]:
+		takes.retake_stock = maxi(0, int(stored_stock))
 	takes.history = d.get("history", []) if d.get("history") is Array else []
 	takes.outtakes = d.get("outtakes", []) if d.get("outtakes") is Array else []
 	case_state.from_dict(d.get("case", {}) if d.get("case") is Dictionary else {})
