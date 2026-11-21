@@ -1,6 +1,15 @@
 # RCD 项目状态（PROJECT STATUS）
 
-最新核对：**2026-11-21；Windows 试玩基线 `6bab995`，开发验收至 `ecd51e6`**。研究场景没有打进既有 EXE；重新计算的 SHA256 为 `A56F2D1622D7D31DE74D4923ADE5AA85B80B114B4C75C3346E0D2A49F1E165BC`。第 2–7 节保留早期记录。
+## 0 · 当前主线是 relay（2026-11-22 复核，优先于下文 campaign 记录）
+
+新游戏的唯一入口是标题页的「新游戏」，进 `scenes/relay/run.tscn`。下文的案件、两名 NPC、四件证物、三周目、Final Cut 属于旧 campaign 线，代码仍在、但正式流程里没有入口，不要据此判断当前可玩内容。
+
+- 自动套件：`godot --headless --path . --script tests/run_all.gd` → **430 assertions, ALL PASS**（含 relay 31 条）。
+- relay 现有能力：五个棚一局；棚型 S/H/U/L/N/X 与五种机械条件（净场/空棚/快车/双推轨/窄喉）；每个棚之间三扇门，门带趟数（3/4/5）与补给代价；死亡的复位免判；第一次剪回免费；种子与场记单；M 的静帧锚点、C 的选点预览、场记板 ROLL/CUT/DIE；张力床、震屏、闪白、暗角、雾与木纹噪点。
+- 仍未做：中途存档（关掉即失去本局）、ROLL 手感未按十维评审第 1 条改动（ORBIT30 仍是受保护基线）、Final Cut 不存在、真人可读性与难度曲线未验证。
+- 已知缺陷：站着不动的录段即使在免判窗口外仍会在原地致命；`user://rcd/runtime.log` 与设置之外没有任何本局进度持久化。
+
+最新核对（campaign 记录）：**2026-11-21；Windows 试玩基线 `6bab995`，开发验收至 `ecd51e6`**。研究场景没有打进既有 EXE；重新计算的 SHA256 为 `A56F2D1622D7D31DE74D4923ADE5AA85B80B114B4C75C3346E0D2A49F1E165BC`。第 2–7 节保留早期记录。
 
 西侧首测：按[主持卡](history/B3_MODERATOR_CARD.md)准备独立数据目录。真人首曝样本为 0；合成采集通过，真实跨应用失焦封存未验。不能从机器走位推断标线有教学效果。2026-11-21 合并回归：`python -m unittest discover -s tests -p "test_*.py"` 共 30 项通过，覆盖首测副本与配置指纹、目录冲突拒绝、前台观察器、采集结果分析与发行版预检，不含真人或 EXE 操作。四部作品的研究分别见[视角研究](research/B3_PERSPECTIVE.md)与[教学和时间研究](research/B3_TEACHING_TIME.md)。
 

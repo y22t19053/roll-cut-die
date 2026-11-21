@@ -73,6 +73,7 @@ func append_room(kind: String, variant: int, mod := "") -> Dictionary:
 		room.add_child(cart)
 		cart.position.x = tracks[i]
 		_finish_cart(room, cart, ink, variant + i*2)
+		_cart_patch(cart, ink)
 		room_dollies.append({"node":cart,"phase":posmod(variant+i*2,4)*PI*.5,
 			"period":float(spec["period"]),"amp":float(spec["amp"])})
 	_dollies.append(room_dollies)
@@ -104,6 +105,11 @@ func _letter_lanes(room: Node3D, rows: Array, hand: int, ink: Color) -> void:
 			var width := (x-first)*0.68
 			var z := (row-2)*1.12*hand
 			_box(room, Vector3(2.12+first*.68+width*.5,.36,z), Vector3(width,.72,1.12), ink, true)
+			# A chalk cap in the same off-white as the finish line: at fifty-five
+			# degrees the wall face is a flat block, and the cap is what draws the
+			# letter's line. The set keeps its own ink on the faces.
+			_box(room, Vector3(2.12+first*.68+width*.5,.735,z), Vector3(width,.03,1.12), WHITE)
+
 
 func _island(room: Node3D, kind: String, hand: int, ink: Color) -> void:
 	var island := Vector3(4.5,.34,hand*.15)
@@ -136,6 +142,43 @@ func _finish_cart(room: Node3D, cart: Node3D, ink: Color, variant: int) -> void:
 	_box(cart,Vector3(0,.53,0),Vector3(.14,.38,.15),IRON)
 	_box(cart,Vector3(0,.83,0),Vector3(.58,.34,.35),ink)
 	_disc(cart,Vector3(0,.84,.23),.12,.16,IRON)
+
+## The trolley throws a pool of light on the deck. It is set lighting, not a
+## danger ring: the eye should place the cart a beat before the body does.
+func _cart_patch(cart: Node3D, ink: Color) -> void:
+	var mi := MeshInstance3D.new()
+	var disc := CylinderMesh.new()
+	disc.radial_segments = 20
+	disc.top_radius = .62
+	disc.bottom_radius = .62
+	disc.height = .008
+	mi.mesh = disc
+	mi.position = Vector3(0, .012, 0)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(ink.r, ink.g, ink.b, .16)
+	mi.material_override = mat
+	cart.add_child(mi)
+
+
+## Paper grain for the deck and the flats. Without a texture the set reads as
+## untextured blocks no matter how good the light is.
+static var _grain_tex: ImageTexture
+
+static func _grain() -> ImageTexture:
+	if _grain_tex != null:
+		return _grain_tex
+	var img := Image.create(64, 64, false, Image.FORMAT_RGB8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	for y in 64:
+		for x in 64:
+			var v := 0.88 + rng.randf() * 0.12
+			img.set_pixel(x, y, Color(v, v, v))
+	_grain_tex = ImageTexture.create_from_image(img)
+	return _grain_tex
+
 
 func _line(room: Node3D, x: float) -> void:
 	_box(room,Vector3(x,.016,0),Vector3(.13,.024,2.62),WHITE)
@@ -195,6 +238,10 @@ func _box(root: Node3D, at: Vector3, size: Vector3, color: Color, solid := false
 		mat.emission_enabled = true
 		mat.emission = color
 		mat.emission_energy_multiplier = .10
+		if color == DECK or color == FLAT:
+			mat.albedo_texture = _grain()
+			mat.uv1_scale = Vector3(4, 4, 4)
+			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 		_inks[color] = mat
 	mi.material_override = _inks[color]
 	root.add_child(mi)

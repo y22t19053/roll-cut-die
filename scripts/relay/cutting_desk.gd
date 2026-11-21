@@ -20,6 +20,9 @@ var _cards := []
 var _message := ""
 var _remaining := 0.0
 var _result := -1
+var _sheet_title := ""
+var _sheet_lines: Array = []
+var _sheet_won := true
 var _age := 0.0
 var _hover := -1
 var _font := SystemFont.new()
@@ -58,6 +61,14 @@ func show_message(text:String) -> void:
 
 func show_result(won:bool,zh:bool) -> void:
 	_zh=zh; _result=int(won); _cards.clear(); _age=0
+	_sheet_lines=[]; _refresh()
+
+
+## The call sheet: what this run was, in lines a player can read out loud. The
+## seed is on it so two runs can be compared, replayed or argued about.
+func show_call_sheet(title:String, lines:Array, won:bool, zh:bool) -> void:
+	_zh=zh; _sheet_title=title; _sheet_lines=lines; _sheet_won=won
+	_cards.clear(); _items=false; _result=-1; _age=0
 	_refresh()
 
 func hide_draw() -> void:
@@ -127,6 +138,20 @@ class Sheet extends Control:
 				if d._items: draw_supply(i)
 				else: draw_strip(i)
 			text(left,h*.5+122,word("点选，或按 1 / 2 / 3","Click your pick, or press 1 / 2 / 3"),16,PAPER)
+		elif not d._sheet_lines.is_empty():
+			var bw: float = 460.0
+			var bh: float = 100.0 + float(d._sheet_lines.size()) * 30.0
+			var bx: float = (w-bw)*.5
+			var by: float = (h-bh)*.5
+			rect(bx+3,by+6,bw,bh,Color("101210"))
+			rect(bx,by,bw,bh,INK)
+			rect(bx,by,bw,5,MINT if d._sheet_won else AMBER)
+			text(bx+26,by+44,d._sheet_title,26,PAPER)
+			rect(bx+26,by+58,bw-52,1,Color("4a4638"))
+			var row: float = by+92
+			for line in d._sheet_lines:
+				text(bx+26,row,str(line),17,PAPER)
+				row+=30
 		elif d._result>=0:
 			var x:=w*.5-192;var y:=h*.5-60
 			rect(x,y,384,120,INK)
@@ -153,11 +178,13 @@ class Sheet extends Control:
 			var pts:=PackedVector2Array()
 			for cell:int in stroke: pts.append(Vector2(x+61+37*(cell%3),y+32+27*floori(cell/3.0)))
 			draw_polyline(pts,MINT,4,true)
-		text(x+11,y+126,"%02d"%(i+1),17,INK);text(x+47,y+126,title,19,INK)
+		text(x+11,y+120,"%02d"%(i+1),17,INK);text(x+47,y+120,title,19,INK)
 		var mod := str(data.get("mod_label",""))
 		if mod != "":
-			rect(x+11,y+136,174,25,INK)
-			text(x+18,y+154,mod,13,MINT)
+			text(x+11,y+138,mod,13,Color("6b6656"))
+		var stake := str(data.get("stake_label",""))
+		if stake != "":
+			text(x+11,y+153,stake,13,INK)
 
 	func draw_supply(i:int) -> void:
 		var r:=card(i); var x:=r.position.x; var y:=r.position.y

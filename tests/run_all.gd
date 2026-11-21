@@ -31,6 +31,7 @@ const MODULES := [
 	["case", preload("res://tests/test_case.gd")],
 	["take", preload("res://tests/test_take.gd")],
 	["mark", preload("res://tests/test_mark.gd")],
+	["relay", preload("res://tests/test_relay.gd")],
 	["save", preload("res://tests/test_save.gd")],
 	["routes", preload("res://tests/test_routes.gd")],
 	["scene", preload("res://tests/test_scene.gd")],

@@ -18,6 +18,20 @@ const KINDS := ["s", "h", "u", "l", "n", "x"]
 const TOUCH := 0.77
 const GRACE := 0.75
 const PASSES := 4
+## A run is a seed and five sets: the seed is printed on the call sheet so two
+## runs can be compared, replayed or argued about.
+static var next_seed := 0
+var run_seed := 0
+## How many legs the current set asks for. A short set is faster; a long one
+## pays a supply. This is the run's only real decision.
+var required_passes := PASSES
+## The first splice of a run is free: the player has to feel what a CUT costs
+## before it can cost them anything.
+var free_cut := 1
+var _seen_hints := {}
+## Ghosts the tape handed you back inside of. They stop counting until you
+## step out: a respawn is never the player's mistake.
+var _inside := {}
 ## The projection a MARK leaves: the colour of the film, never the paint of the
 ## set. Alpha stays low so a MARK can never be mistaken for an obstacle.
 const STILL_INK := Color(0.55, 0.95, 0.85)
@@ -88,7 +102,12 @@ func _ready() -> void:
 	score = load("res://scripts/relay/relay_sound.gd").new()
 	add_child(score)
 	preload("res://scripts/core/input_setup.gd").ensure_actions()
-	_rng.randomize()
+	if next_seed != 0:
+		run_seed = next_seed
+		next_seed = 0
+	else:
+		run_seed = int(Time.get_unix_time_from_system()) & 0xFFFFFF
+	_rng.seed = run_seed
 	segments.append($Rooms.append_room("straight",0))
 	player.name = "Player"
 	add_child(player)
@@ -175,12 +194,33 @@ func _start_leg(back: bool) -> void:
 	_next_sample = 0.1
 	_sample()
 	_restart_actors()
+	_arm_mercy()
 	grace = GRACE
 	_checkpoint(false)
 	_show_target()
 	# The board opens once per run, on the first take of the first set.
 	if tracks.is_empty() and segments.size() == 1:
 		_board_roll()
+	elif segments.size() == 1 and room_pass == 1:
+		_hint("first_ghost", "这一条是你刚才留下的。它会迎面回来。", "That is your last take. It comes back the other way.")
+
+
+## The tape hands you back at a MARK. If a ghost already stands there, it waits:
+## it starts counting again only once you have stepped out of it. A respawn is
+## never the player's mistake.
+func _arm_mercy() -> void:
+	_inside.clear()
+	for g in _actors:
+		if g.global_position.distance_to(player.global_position) < Ghost.DANGER_RADIUS + Player.RADIUS + 0.06:
+			_inside[g.take_id] = true
+
+
+## One line, once. The first minutes teach by naming what just happened.
+func _hint(key: String, zh: String, en: String) -> void:
+	if _seen_hints.has(key): return
+	_seen_hints[key] = true
+	_notice = _w(zh, en)
+	_notice_left = 3.5
 
 func _restart_actors() -> void:
 	for old in _actors:
@@ -323,6 +363,7 @@ func _restore(i: int) -> void:
 	_sample()
 	last_anchor = i
 	_restart_actors()
+	_arm_mercy()
 	grace = GRACE
 	_arrival_locked = player.global_position.distance_to(route[cursor]) <= TOUCH
 	_show_target()
@@ -339,7 +380,7 @@ func _finish_leg() -> void:
 	rig.add_shake(0.2)
 	fx.flash(Color("9ceccb"), 0.12, 0.0, 0.14)
 	room_pass += 1
-	if room_pass < PASSES:
+	if room_pass < required_passes:
 		score.cue("line")
 		_start_leg(not returning)
 		return
@@ -349,20 +390,52 @@ func _finish_leg() -> void:
 	if phase == Mode.DONE:
 		if Rules.unlocked(difficulty): Rules.record_clear(difficulty)
 		score.cue("win")
-		desk.show_result(true, Loc.language == "zh")
+		_show_sheet(true)
 	else:
 		score.cue("clear")
 		desk.show_items(Loc.language == "zh")
 
-## The offer is the run's only decision: a fast set, a crowded one, a narrow
-## mouth, or an empty stage to spend your marks in. The card always says which.
-func _roll_mod() -> String:
+## Three doors, three stakes. A short set is quick and pays nothing; a long one
+## costs legs and pays a supply. The condition is on the door, never a surprise
+## after the pick.
+func _offer_doors() -> Array:
+	var tier := segments.size() - 1
+	var deck := KINDS.duplicate()
+	var stakes := [[3, ""], [PASSES, ""], [PASSES + 1, "mark"]]
+	if tier >= 2:
+		stakes = [[3, ""], [PASSES + 1, "cut"], [PASSES + 1, "mark"]]
+	var out: Array = []
+	for slot in 3:
+		var st: Array = stakes[slot]
+		var door := {"kind": deck.pop_at(_rng.randi_range(0, deck.size() - 1)),
+			"variant": _rng.randi_range(0, 1), "mod": _roll_mod(tier, slot),
+			"passes": int(st[0]), "reward": str(st[1])}
+		door["mod_label"] = _mod_label(str(door["mod"]))
+		door["stake_label"] = _stake_label(int(door["passes"]), str(door["reward"]))
+		out.append(door)
+	return out
+
+
+## Threat climbs with depth. The first set is the teaching one: at most a quick
+## trolley. Deeper in, twin tracks and narrow mouths show up on the doors.
+func _roll_mod(tier: int, _slot := 0) -> String:
 	var r := _rng.randf()
-	if r < 0.35: return ""
-	if r < 0.55: return "fast"
-	if r < 0.70: return "twin"
-	if r < 0.85: return "throat"
+	if tier <= 0:
+		return "" if r < 0.65 else "fast"
+	var hard := clampf(0.16 + float(tier) * 0.09, 0.0, 0.50)
+	if r < 1.0 - hard: return "" if r < 0.5 else "fast"
+	if r < 1.0 - hard * 0.55: return "twin"
+	if r < 1.0 - hard * 0.22: return "throat"
 	return "clean"
+
+
+func _stake_label(passes: int, reward: String) -> String:
+	var base := _w("%d 趟", "%d legs") % passes
+	match reward:
+		"mark": return base + _w("　多给 1 MARK", "   +1 MARK")
+		"cut": return base + _w("　多给 1 CUT", "   +1 CUT")
+		"splice": return base + _w("　送一片接片", "   free splice")
+	return base + _w("　无补给", "   no supply")
 
 func _mod_label(mod: String) -> String:
 	match mod:
@@ -380,12 +453,7 @@ func _pick_card(i: int) -> void:
 			2: cut_stock += 1
 		score.cue("pickup")
 		phase = Mode.PICK
-		cards.clear()
-		var deck := KINDS.duplicate()
-		for _slot in 3:
-			cards.append({"kind": deck.pop_at(_rng.randi_range(0, deck.size() - 1)),
-				"variant": _rng.randi_range(0, 1), "mod": _roll_mod()})
-			cards[-1]["mod_label"] = _mod_label(str(cards[-1]["mod"]))
+		cards = _offer_doors()
 		desk.show_draw(cards, Loc.language == "zh")
 		_refresh()
 		return
@@ -393,6 +461,11 @@ func _pick_card(i: int) -> void:
 	var c: Dictionary = cards[i]
 	var room: Dictionary = $Rooms.append_room(c.kind,c.variant,str(c.get("mod","")))
 	segments.append(room)
+	required_passes = int(c.get("passes",PASSES))
+	match str(c.get("reward","")):
+		"mark": mark_stock += 1
+		"cut": cut_stock += 1
+		"splice": splice.offer()
 	score.cue("choose")
 	room_track_start = tracks.size()
 	room_pass = 0
@@ -426,8 +499,14 @@ func _physics_process(dt: float) -> void:
 		_next_sample = elapsed + 0.10
 	$Rooms.set_clock(segments.size()-1,elapsed)
 	if grace <= 0:
+		var reach: float = Ghost.DANGER_RADIUS + Player.RADIUS
 		for g in _actors:
-			if not g.spent and g.strip_age >= GRACE and g.global_position.distance_to(player.global_position) < Ghost.DANGER_RADIUS + Player.RADIUS:
+			if g.spent or g.strip_age < GRACE: continue
+			var d: float = g.global_position.distance_to(player.global_position)
+			if _inside.get(g.take_id, false):
+				if d > reach + 0.25: _inside.erase(g.take_id)
+				continue
+			if d < reach:
 				if _hit(g.take_id): return
 				break
 		if $Rooms.hazard_at(player.global_position,segments.size()-1,elapsed):
@@ -489,12 +568,28 @@ func _hit(source: int) -> bool:
 		_board_die()
 		_show_target()
 		if phase == Mode.CUT: _show_preview()
-		else: desk.show_result(false,Loc.language == "zh")
+		else: _show_sheet(false)
 	else:
 		_board_die()
 		_restore(last_anchor)
+		_hint("first_death", "撞上就重来一条，别的什么都不扣。", "A collision costs one take and nothing else.")
 		desk.show_message(_w("撞到摄影车", "CAMERA DOLLY") if source == 0 else "TAKE %02d" % source)
 	return true
+
+
+## The call sheet. Win or lose, a run ends with one page that says what it was:
+## how far, how many takes, how many deaths, and the seed to replay it.
+func _show_sheet(won: bool) -> void:
+	var lines: Array = [
+		_w("棚 %d / %d　条 %d　死 %d", "SETS %d / %d   TAKES %d   DEATHS %d") % [segments.size(),MODULES,tracks.size(),deaths],
+		_w("标记 %d　剪 %d　种子 %06X", "MARKS %d   CUTS %d   SEED %06X") % [mark_stock,cut_stock,run_seed],
+		_w("空格：再来一局　R：同种子重开", "SPACE: new run   R: same seed"),
+	]
+	if won:
+		desk.show_call_sheet(_w("全部接通","ANSWER PRINT"), lines, true, Loc.language == "zh")
+	else:
+		lines.insert(0,_w("最后一趟没走出来。","The last take never made it out."))
+		desk.show_call_sheet(_w("这卷到头了","END OF REEL"), lines, false, Loc.language == "zh")
 
 func _unhandled_key_input(e: InputEvent) -> void:
 	if not e is InputEventKey or not e.pressed or e.echo: return
@@ -506,8 +601,14 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	if slate.is_running(): return
 	if phase in [Mode.ITEM, Mode.PICK] and key >= KEY_1 and key <= KEY_3:
 		_pick_card(key-KEY_1)
-	elif phase in [Mode.DONE,Mode.LOST] and key == KEY_SPACE:
-		get_tree().reload_current_scene()
+	elif phase in [Mode.DONE,Mode.LOST]:
+		match key:
+			KEY_SPACE:
+				next_seed = 0
+				get_tree().reload_current_scene()
+			KEY_R:
+				next_seed = run_seed
+				get_tree().reload_current_scene()
 	elif phase == Mode.CUT:
 		match key:
 			KEY_C, KEY_ESCAPE:
@@ -519,8 +620,15 @@ func _unhandled_key_input(e: InputEvent) -> void:
 				_selected = posmod(_selected+1,anchors.size())
 				_show_preview()
 			KEY_SPACE, KEY_ENTER:
-				if cut_stock > 0:
-					cut_stock -= 1
+				# The first splice of the run is free: knowing what a CUT costs
+				# has to happen before it can cost anything.
+				var cost := 0 if (free_cut > 0 and not forced_cut) else 1
+				if cut_stock >= cost:
+					if cost == 0:
+						free_cut = 0
+						desk.show_message(_w("第一次剪回不收钱。", "The first splice is free."))
+					else:
+						cut_stock -= 1
 					forced_cut = false
 					_board_cut()
 					_leave_cut()
@@ -532,6 +640,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 				_selected = last_anchor
 				_freeze()
 				_show_preview()
+				_hint("cut_desk", "↑ ↓ 选一段，空格才花 CUT。看片不要钱。", "↑ ↓ to pick a strip. Looking is free; SPACE spends the CUT.")
 			KEY_M:
 				if mark_stock > 0:
 					mark_stock -= 1
@@ -543,7 +652,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 
 func _refresh() -> void:
 	var zh := Loc.language == "zh"
-	desk.update_run(segments.size(),MODULES,mini(room_pass+1,PASSES),PASSES,mark_stock,cut_stock,splice.has_splice(),zh)
+	desk.update_run(segments.size(),MODULES,mini(room_pass+1,required_passes),required_passes,mark_stock,cut_stock,splice.has_splice(),zh)
 	_hud.visible = phase == Mode.CUT
 	if _hud.visible:
 		var p := anchors[_selected]
