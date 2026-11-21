@@ -43,6 +43,19 @@ func run() -> void:
 	studio._retake()
 	await live()
 	if studio.ghost_nodes.size() != 1: quit(1); return
+	# Timing audit: the most optimistic return ignores walls and acceleration.
+	var recording = studio.ghost_nodes[0].track
+	var window_x: float = studio.SetPlan.PORTAL_X[1]
+	var eye_spot := Vector2(window_x + 1.0, studio.SetPlan.PORTAL_Z + 2.0)
+	var start: Vector3 = studio.player.global_position
+	var earliest := Vector2(start.x,start.z).distance_to(eye_spot) / float(studio.player.SPEED)
+	var last_near := -1.0
+	for tick in range(ceili(recording.duration() * 60.0) + 1):
+		var t := tick / 60.0
+		var pos: Vector3 = recording.sample_at(t).position
+		if Vector2(pos.x,pos.z).distance_to(eye_spot) <= 4.0:
+			last_near = t
+	print("RETURN WINDOW AUDIT: observation spot %s, earliest arrival %.2fs, last replay within 4m %.2fs" % [eye_spot, earliest, last_near])
 	for p in [Vector2(36.4,27),Vector2(36.4,6),Vector2(33,6)]:
 		await walk(p)
 	studio._interact()
