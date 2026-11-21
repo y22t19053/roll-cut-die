@@ -154,6 +154,10 @@ class Sheet extends Control:
 			for cell:int in stroke: pts.append(Vector2(x+61+37*(cell%3),y+32+27*floori(cell/3.0)))
 			draw_polyline(pts,MINT,4,true)
 		text(x+11,y+126,"%02d"%(i+1),17,INK);text(x+47,y+126,title,19,INK)
+		var mod := str(data.get("mod_label",""))
+		if mod != "":
+			rect(x+11,y+136,174,25,INK)
+			text(x+18,y+154,mod,13,MINT)
 
 	func draw_supply(i:int) -> void:
 		var r:=card(i); var x:=r.position.x; var y:=r.position.y

@@ -12,6 +12,7 @@ const Loc = preload("res://scripts/core/loc.gd")
 const MarkBeacon = preload("res://scripts/ui/mark_beacon.gd")
 const CameraMath = preload("res://scripts/camera/camera_math.gd")
 const SlateUI = preload("res://scripts/ui/slate_ui.gd")
+const FrameFX = preload("res://scripts/relay/frame_fx.gd")
 const MODULES := 5
 const KINDS := ["s", "h", "u", "l", "n", "x"]
 const TOUCH := 0.77
@@ -27,7 +28,10 @@ var room_track_start := 0
 var cards: Array = []
 var desk: CanvasLayer
 var slate: CanvasLayer
+var fx: Node
 var score: Node
+## Last distance to each ghost, so a close pass can be told from a clean one.
+var _gap := {}
 
 enum Mode { PLAY, PICK, CUT, DONE, LOST, ITEM }
 var phase := Mode.PLAY
@@ -77,6 +81,10 @@ func _ready() -> void:
 	slate = SlateUI.new()
 	slate.name = "Slate"
 	add_child(slate)
+	fx = FrameFX.new()
+	fx.name = "FrameFX"
+	add_child(fx)
+	slate.sequence_finished.connect(_slate_done)
 	score = load("res://scripts/relay/relay_sound.gd").new()
 	add_child(score)
 	preload("res://scripts/core/input_setup.gd").ensure_actions()
@@ -108,6 +116,12 @@ func _ready() -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("e6e4dc")
 	env.ambient_light_energy = 0.8
+	# Depth fog: the far end of a set goes soft, so "eight legs away" reads as a
+	# distance and not as the same wall twice.
+	env.fog_enabled = true
+	env.fog_light_color = Color("28333e")
+	env.fog_density = 0.006
+	env.fog_aerial_perspective = 0.0
 	var sky := WorldEnvironment.new()
 	sky.environment = env
 	add_child(sky)
@@ -115,6 +129,14 @@ func _ready() -> void:
 	sun.rotation_degrees = Vector3(-54,-28,0)
 	sun.shadow_enabled = true
 	add_child(sun)
+	# A cold bounce from the opposite side keeps the shadowed faces from going
+	# flat black; it is a set light, never a gameplay signal.
+	var bounce := DirectionalLight3D.new()
+	bounce.rotation_degrees = Vector3(-24,146,0)
+	bounce.light_color = Color("9fb8c8")
+	bounce.light_energy = 0.32
+	bounce.shadow_enabled = false
+	add_child(bounce)
 	var tape := BoxMesh.new()
 	tape.size = Vector3(0.15,0.035,2.7)
 	_lamp.mesh = tape
@@ -314,6 +336,8 @@ func _finish_leg() -> void:
 	_sample()
 	tracks.append(live)
 	slate.clack(-8.0) # One take is in the can.
+	rig.add_shake(0.2)
+	fx.flash(Color("9ceccb"), 0.12, 0.0, 0.14)
 	room_pass += 1
 	if room_pass < PASSES:
 		score.cue("line")
@@ -330,6 +354,24 @@ func _finish_leg() -> void:
 		score.cue("clear")
 		desk.show_items(Loc.language == "zh")
 
+## The offer is the run's only decision: a fast set, a crowded one, a narrow
+## mouth, or an empty stage to spend your marks in. The card always says which.
+func _roll_mod() -> String:
+	var r := _rng.randf()
+	if r < 0.35: return ""
+	if r < 0.55: return "fast"
+	if r < 0.70: return "twin"
+	if r < 0.85: return "throat"
+	return "clean"
+
+func _mod_label(mod: String) -> String:
+	match mod:
+		"fast": return _w("快车 · 推轨更快", "FAST · quicker dolly")
+		"twin": return _w("双推轨 · 两台车", "TWIN · two dollies")
+		"throat": return _w("窄喉 · 口子更窄", "THROAT · narrower mouth")
+		"clean": return _w("空棚 · 没有车", "EMPTY · no dolly")
+	return ""
+
 func _pick_card(i: int) -> void:
 	if phase == Mode.ITEM and i >= 0 and i < 3:
 		match i:
@@ -341,13 +383,15 @@ func _pick_card(i: int) -> void:
 		cards.clear()
 		var deck := KINDS.duplicate()
 		for _slot in 3:
-			cards.append({"kind": deck.pop_at(_rng.randi_range(0, deck.size() - 1)), "variant": _rng.randi_range(0, 1)})
+			cards.append({"kind": deck.pop_at(_rng.randi_range(0, deck.size() - 1)),
+				"variant": _rng.randi_range(0, 1), "mod": _roll_mod()})
+			cards[-1]["mod_label"] = _mod_label(str(cards[-1]["mod"]))
 		desk.show_draw(cards, Loc.language == "zh")
 		_refresh()
 		return
 	if phase != Mode.PICK or i < 0 or i >= cards.size(): return
 	var c: Dictionary = cards[i]
-	var room: Dictionary = $Rooms.append_room(c.kind,c.variant)
+	var room: Dictionary = $Rooms.append_room(c.kind,c.variant,str(c.get("mod","")))
 	segments.append(room)
 	score.cue("choose")
 	room_track_start = tracks.size()
@@ -397,17 +441,46 @@ func _physics_process(dt: float) -> void:
 			return
 		_checkpoint(false)
 		_show_target()
+	_track_gaps()
 	_refresh()
+
+## The nearest ghost sets the tension bed; the moment a close pass becomes a
+## clean one, a single click says so. Nothing here scores, slows or pushes.
+func _track_gaps() -> void:
+	var near := Ghost.DANGER_RADIUS + 1.0
+	var loudest := 0.0
+	for g in _actors:
+		var id: int = g.take_id
+		var d: float = player.global_position.distance_to(g.global_position)
+		var prev: float = float(_gap.get(id, 99.0))
+		_gap[id] = d
+		if g.spent: continue
+		if d < 2.1:
+			loudest = maxf(loudest, clampf((1.7 - d) / 1.1, 0.0, 1.0))
+		# Out of the near zone alive: that, and only that, is worth a click.
+		if prev <= near and d > near and player.speed_now() > 1.0:
+			score.cue("near")
+			rig.add_shake(0.12)
+	score.set_danger(loudest if grace <= 0.0 else 0.0)
+
+## The board is done talking: the score comes back up. The clack is the loudest
+## thing in the room for as long as the board is on screen.
+func _slate_done(_kind: String) -> void:
+	score.duck(false)
 
 func _hit(source: int) -> bool:
 	var held := splice.has_splice()
 	if splice.protect(active_clock):
 		if held and not splice.has_splice():
 			_foley.play("splice")
+			rig.add_shake(0.5)
+			fx.flash(Color("9ceccb"), 0.22, 0.0, 0.18)
 			desk.show_message(_w("接片续拍", "SPLICED"))
 		return false
 	deaths += 1
 	score.cue("trap" if source == 0 else "hit")
+	rig.add_shake(1.0)
+	fx.flash(Color("f3dfad"), 0.34, 0.0, 0.22)
 	if difficulty > 0:
 		forced_cut = cut_stock > 0
 		phase = Mode.CUT if forced_cut else Mode.LOST
@@ -485,12 +558,15 @@ func _refresh() -> void:
 ## ROLL, CUT and DIE.
 func _board_roll() -> void:
 	var n := maxi(live.take_id,1)
+	score.duck(true)
 	slate.play_roll(n, _w("第 %02d 条" % n, "TAKE %02d" % n))
 
 func _board_cut() -> void:
 	var n := maxi(live.take_id,1)
+	score.duck(true)
 	slate.play_cut(n, _w("第 %02d 条" % n, "TAKE %02d" % n))
 
 func _board_die() -> void:
 	var n := maxi(live.take_id,1)
+	score.duck(true)
 	slate.play_die(n, _w("第 %02d 条" % n, "TAKE %02d" % n))

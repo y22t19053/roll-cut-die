@@ -86,6 +86,10 @@ func mouse_look(relative_x: float) -> void:
 
 
 func add_shake(amount: float) -> void:
+	# Shake is comfort, not gameplay: the reduced-motion setting removes it and
+	# nothing else about the collision changes.
+	if reduce_motion:
+		return
 	_shake = maxf(_shake, amount)
 
 

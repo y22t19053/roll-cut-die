@@ -21,11 +21,23 @@ var _count := 0
 var _cap: Node3D
 var _inks := {}
 var _rooms: Array[Node3D] = []
-var _carts: Array[Node3D] = []
-var _phases: Array[float] = []
+## Per room: the dollies that sweep it, each {node, phase, period, amp}. A mod may
+## add a second one, or take the room's only one away.
+var _dollies: Array = []
 
-func append_room(kind: String, variant: int) -> Dictionary:
+## What a room's card promises. The mods are the run's only real decisions:
+## tension costs attention, a clean stage gives marks and cuts back.
+const MODS := {
+	"": {"zh":"净场","en":"CLEAN","period":5.0,"amp":2.24,"twin":false,"throat":0.0,"dollies":1},
+	"clean": {"zh":"空棚","en":"EMPTY","period":5.0,"amp":2.24,"twin":false,"throat":0.0,"dollies":0},
+	"fast": {"zh":"快车","en":"FAST","period":3.4,"amp":2.24,"twin":false,"throat":0.0,"dollies":1},
+	"twin": {"zh":"双推轨","en":"TWIN","period":5.0,"amp":2.24,"twin":true,"throat":0.0,"dollies":1},
+	"throat": {"zh":"窄喉","en":"THROAT","period":5.0,"amp":2.24,"twin":false,"throat":1.0,"dollies":1},
+}
+
+func append_room(kind: String, variant: int, mod := "") -> Dictionary:
 	assert(is_inside_tree(), "Mount RelayRooms before requesting world positions")
+	var spec: Dictionary = MODS.get(mod, MODS[""])
 	var room := Node3D.new()
 	room.name = "Bay%d_%s" % [_count+1,kind]
 	room.position.x = _count*LENGTH
@@ -38,20 +50,33 @@ func append_room(kind: String, variant: int) -> Dictionary:
 		_box(room,Vector3(4.5,.48,z*2.94),Vector3(9,.96,.12),FLAT,true)
 		_box(room,Vector3(4.5,.91,z*2.94),Vector3(8.84,.09,.14),ink)
 		# Twin grip bays make a narrow throat at each end, not a sealed door.
+		# THROAT walks them in to 1.62 m apart: the mouth is now a decision.
 		var bay := .60 if LANES.has(kind) else 1.16
+		var bay_z := 1.62 if float(spec["throat"]) > 0.0 else 2.16
 		for x: float in [bay*.5,LENGTH-bay*.5]:
-			_box(room,Vector3(x,.34,z*2.16),Vector3(bay,.68,1.68),ink,true)
-			_box(room,Vector3(x,.70,z*2.16),Vector3(bay-.04,.04,1.64),IRON)
+			_box(room,Vector3(x,.34,z*bay_z),Vector3(bay,.68,1.68),ink,true)
+			_box(room,Vector3(x,.70,z*bay_z),Vector3(bay-.04,.04,1.64),IRON)
 	if LANES.has(kind):
 		_letter_lanes(room, LANES[kind], hand, ink)
 	else:
 		_island(room, kind, hand, ink)
-	var cart := Node3D.new()
-	cart.name = "CrossTrackDolly"
-	room.add_child(cart)
-	cart.position.x = 2.30 if hand>0 else 6.70
-	if LANES.has(kind): cart.position.x = 1.70 if hand>0 else 7.30
-	_finish_cart(room, cart, ink, variant)
+	var first_x := 2.30 if hand>0 else 6.70
+	if LANES.has(kind): first_x = 1.70 if hand>0 else 7.30
+	var tracks: Array = []
+	if int(spec["dollies"]) > 0:
+		tracks.append(first_x)
+	if bool(spec["twin"]): tracks.append(LENGTH-first_x)
+	var room_dollies: Array = []
+	for i in tracks.size():
+		var cart := Node3D.new()
+		cart.name = "CrossTrackDolly"
+		room.add_child(cart)
+		cart.position.x = tracks[i]
+		_finish_cart(room, cart, ink, variant + i*2)
+		room_dollies.append({"node":cart,"phase":posmod(variant+i*2,4)*PI*.5,
+			"period":float(spec["period"]),"amp":float(spec["amp"])})
+	_dollies.append(room_dollies)
+	set_clock(_count,0.0)
 	if _count==0:
 		_buffer(room,0,-1)
 		_line(room,0)
@@ -111,26 +136,28 @@ func _finish_cart(room: Node3D, cart: Node3D, ink: Color, variant: int) -> void:
 	_box(cart,Vector3(0,.53,0),Vector3(.14,.38,.15),IRON)
 	_box(cart,Vector3(0,.83,0),Vector3(.58,.34,.35),ink)
 	_disc(cart,Vector3(0,.84,.23),.12,.16,IRON)
-	_carts.append(cart)
-	_phases.append(posmod(variant,4)*PI*.5)
-	set_clock(_count,0)
 
 func _line(room: Node3D, x: float) -> void:
 	_box(room,Vector3(x,.016,0),Vector3(.13,.024,2.62),WHITE)
 
-func _z(i: int,t: float) -> float:
-	return 2.24*sin(TAU*t/5.0+_phases[i])
+func _z_of(d: Dictionary,t: float) -> float:
+	return float(d["amp"])*sin(TAU*t/float(d["period"])+float(d["phase"]))
 
 func set_clock(room_index: int,t: float) -> void:
-	if room_index>=0 and room_index<_carts.size(): _carts[room_index].position.z = _z(room_index,t)
+	if room_index<0 or room_index>=_dollies.size(): return
+	for d: Dictionary in _dollies[room_index]: d["node"].position.z = _z_of(d,t)
 
 func hazard_at(world_pos: Vector3,room_index: int,t: float) -> bool:
 	if room_index<0 or room_index>=_rooms.size(): return false
+	if room_index>=_dollies.size(): return false
 	var p := _rooms[room_index].to_local(world_pos)
+	if p.y<-.35 or p.y>1.10: return false
 	# Circle vs cart footprint: the same pose as set_clock, even after a cut.
-	var dx := maxf(0,absf(p.x-_carts[room_index].position.x)-.44)
-	var dz := maxf(0,absf(p.z-_z(room_index,t))-.36)
-	return p.y>=-.35 and p.y<=1.10 and dx*dx+dz*dz<=.32*.32
+	for d: Dictionary in _dollies[room_index]:
+		var dx := maxf(0,absf(p.x-d["node"].position.x)-.44)
+		var dz := maxf(0,absf(p.z-_z_of(d,t))-.36)
+		if dx*dx+dz*dz<=.32*.32: return true
+	return false
 
 func _disc(root: Node3D, at: Vector3, radius: float, depth: float, color: Color) -> MeshInstance3D:
 	var mi := _box(root,at,Vector3.ONE,color)
@@ -163,6 +190,11 @@ func _box(root: Node3D, at: Vector3, size: Vector3, color: Color, solid := false
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = color
 		mat.roughness = .90
+		# A little self-light keeps the flat paint readable through the fog
+		# without turning the set into neon.
+		mat.emission_enabled = true
+		mat.emission = color
+		mat.emission_energy_multiplier = .10
 		_inks[color] = mat
 	mi.material_override = _inks[color]
 	root.add_child(mi)

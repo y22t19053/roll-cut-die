@@ -24,6 +24,13 @@ const TUNES := {
 const PRIORITY := {"near":0,"line":1,"draw":2,"choose":3,"pickup":4,"trap":5,"hit":6,"clear":7,"win":8}
 static var _score: AudioStreamWAV
 static var _cues := {}
+static var _danger_stream: AudioStreamWAV
+const DANGER_BEATS := 4.0
+## Bed of tension: a four-beat pulse under the score. It is not a warning label;
+## it says the room is being watched from somewhere close.
+var _danger := AudioStreamPlayer.new()
+var _danger_target := -60.0
+var _ducked := false
 var _music := AudioStreamPlayer.new()
 var _fx := AudioStreamPlayer.new()
 var _lock_until := 0
@@ -46,6 +53,51 @@ func _ready() -> void:
 	_music.volume_db = -12.0
 	_music.stream = _score
 	_music.play()
+	_danger.name = "Tension"
+	_danger.bus = &"Master"
+	add_child(_danger)
+	if _danger_stream == null:
+		_danger_stream = _compose_danger()
+	_danger.stream = _danger_stream
+	_danger.volume_db = -60.0
+	_danger.play()
+
+
+## How close the nearest armed ghost is, 0..1. The score is being listened to
+## from across the room or from inside it; nothing here is a rule.
+func set_danger(v: float) -> void:
+	if not is_node_ready() or _danger.stream == null:
+		return
+	var target := -60.0 if v <= 0.01 else lerpf(-24.0, -9.0, clampf(v, 0.0, 1.0))
+	if absf(target - _danger_target) < 0.4:
+		return
+	_danger_target = target
+	create_tween().tween_property(_danger, "volume_db", target, 0.22)
+
+
+## The board is talking: step the score back so the clack is the loudest thing
+## in the room, then bring it back.
+func duck(on: bool) -> void:
+	if not is_node_ready() or on == _ducked:
+		return
+	_ducked = on
+	var target := -20.0 if on else -12.0
+	create_tween().tween_property(_music, "volume_db", target, 0.18)
+
+
+static func _compose_danger() -> AudioStreamWAV:
+	var buf := PackedFloat32Array()
+	buf.resize(roundi(DANGER_BEATS * BEAT * RATE))
+	for b in int(DANGER_BEATS):
+		var at := roundi(float(b) * BEAT * RATE)
+		var n := ceili(0.42 * RATE)
+		for i in n:
+			var t := float(i) / RATE
+			var s := sin(TAU * 55.0 * t) * 0.55 + sin(TAU * 82.5 * t) * 0.22
+			if b % 2 == 1:
+				s += sin(TAU * 1760.0 * t) * exp(-90.0 * t) * 0.25
+			buf[(at + i) % buf.size()] += s * exp(-9.0 * t) * minf(t / 0.004, 1.0) * 0.5
+	return _wav(buf, true)
 
 func cue(kind: String) -> void:
 	if not is_node_ready() or not _cues.has(kind): return
