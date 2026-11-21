@@ -170,6 +170,21 @@ func _render() -> void:
 	col.add_child(buttons)
 	# One way in, then housekeeping below a ruled line, quieter.
 	buttons.add_child(_new_game_key())
+	var rules = load("res://scripts/relay/relay_rules.gd")
+	var modes := OptionButton.new()
+	modes.name = "Difficulty"
+	modes.tooltip_text = "通关当前难度以解锁下一档" if zh else "Clear a difficulty to unlock the next one"
+	for i in 3:
+		var text: String = (["新手", "专家", "大师"] if zh else ["Novice", "Expert", "Master"])[i]
+		var available: bool = rules.unlocked(i)
+		if not available:
+			text += (["", " · 新手通关解锁", " · 专家通关解锁"] if zh else ["", " · clear Novice", " · clear Expert"])[i]
+		modes.add_item(text, i)
+		modes.set_item_disabled(i, not available)
+	if not rules.unlocked(rules.selected_mode): rules.selected_mode = 0
+	modes.select(rules.selected_mode)
+	modes.item_selected.connect(func(i: int) -> void: rules.selected_mode = i)
+	buttons.add_child(modes)
 	var rule := ColorRect.new()
 	rule.color = Color(UiKit.DIM, 0.35)
 	rule.custom_minimum_size = Vector2(220, 2)
