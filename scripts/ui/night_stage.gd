@@ -51,11 +51,49 @@ func _draw() -> void:
 	if w < 8.0 or h < 8.0:
 		return
 	var t := STILL_TIME if still else _t
+	_draw_relay_poster(w, h, t)
+
+
+func _draw_relay_poster(w: float, h: float, t: float) -> void:
+	draw_rect(Rect2(0, 0, w, h), Color("191a19"))
+	var o := Vector2(w * 0.49, h * 0.40)
+	var u := Vector2(w * 0.42, -h * 0.17)
+	var v := Vector2(w * 0.05, h * 0.32)
+	var slab := PackedVector2Array([o, o + u, o + u + v, o + v])
+	var shadow := PackedVector2Array([o+v, o+u+v, o+u+v+Vector2(0, 36), o+v+Vector2(0, 57)])
+	draw_colored_polygon(shadow, Color("35302b"))
+	draw_colored_polygon(slab, Color("b2a68d"))
+	for i in 10:
+		var f := float(i) / 9.0
+		draw_line(o+u*f, o+u*f+v, Color("797365"), 1.0, true)
+	for f in [0.07, 0.93]:
+		draw_line(o+u*f+v*0.10, o+u*f+v*0.90, Color("f4dfaa"), 5.0, true)
+	var island := o + u * 0.42 + v * 0.39
+	draw_colored_polygon(PackedVector2Array([island, island+u*.22, island+u*.22+v*.22, island+v*.22]), Color("392d28"))
+	var colors := [Color("f3af64"), Color("89e3df"), Color("ed8aa9")]
+	for i in colors.size():
+		var color: Color = colors[i]
+		var f: float = [0.31, 0.68, 0.51][i] + sin(t * 0.36 + i * 2.0) * 0.10
+		var lane: float = [0.22, 0.76, 0.86][i]
+		var at := o + u * float(f) + v * lane
+		var dir := -1.0 if i == 1 else 1.0
+		for j in 5:
+			var tail := at - u * dir * (j + 1) * 0.035
+			draw_circle(tail, 3.0, Color(color, 0.63 - j * 0.11))
+		draw_line(at, at - Vector2(0, h * 0.046), color, 8.0, true)
+		draw_circle(at - Vector2(0, h * 0.053), h * 0.009, color)
+		draw_arc(at, 14, 0, TAU, 24, color, 2, true)
+	for i in 13:
+		var x := w * 0.49 + i * w * 0.035
+		for y in [h * .13, h * .81]:
+			draw_rect(Rect2(x, y, w * .016, h * .014), Color("4d4940"))
+
+
+func _draw_legacy(w: float, h: float, t: float) -> void:
 	var grid_y := h * 0.15
 	var horizon := h * 0.60
 	var cove := h * 0.68
 	var wall_x := w * 0.76
-
 	draw_rect(Rect2(0, 0, w, h), BLACK)
 	# Cyc wall: brightest left of centre where the work light reaches it.
 	var lit_x := w * 0.14

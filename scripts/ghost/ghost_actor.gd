@@ -39,6 +39,9 @@ var take_id := 0
 var playing := false
 var spent := false
 var playhead := 0.0
+## Relay never retires a successful strip until the room is cut.
+var loop_strip := false
+var strip_age := 0.0
 
 var _danger: Area3D
 var _visual: Node3D
@@ -54,6 +57,7 @@ func setup(t: Variant, id: int) -> void:
 	track = t
 	take_id = id
 	playhead = 0.0
+	strip_age = 0.0
 	playing = true
 	spent = false
 	_armed = false
@@ -193,13 +197,16 @@ func _on_body_entered(body: Node3D) -> void:
 func _physics_process(dt: float) -> void:
 	if track == null or not playing:
 		return
+	strip_age += dt
 	playhead += dt
+	if loop_strip and track.duration() > 0.0:
+		playhead = fposmod(playhead, track.duration())
 	var s: Dictionary = track.sample_at(playhead)
 	global_position = s["position"]
 	if _visual != null:
 		_visual.rotation.y = s["facing"]
 	if not _armed:
-		if playhead >= warmup_seconds:
+		if (strip_age if loop_strip else playhead) >= warmup_seconds:
 			_armed = true
 			if _danger != null:
 				_danger.set_deferred("monitoring", true)
@@ -208,7 +215,7 @@ func _physics_process(dt: float) -> void:
 			_set_alpha(ARMED_ALPHA)
 		else:
 			_set_alpha(WARMUP_ALPHA * clampf(playhead / maxf(warmup_seconds,0.001), 0.0, 1.0))
-	if track.duration() > 0.0 and playhead > track.duration():
+	if not loop_strip and track.duration() > 0.0 and playhead > track.duration():
 		_finish()
 
 

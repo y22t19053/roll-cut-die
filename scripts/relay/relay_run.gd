@@ -9,8 +9,8 @@ const Ghost = preload("res://scripts/ghost/ghost_actor.gd")
 const Rules = preload("res://scripts/relay/relay_rules.gd")
 const Splice = preload("res://scripts/relay/safety_splice.gd")
 const Loc = preload("res://scripts/core/loc.gd")
-const MODULES := 7
-const KINDS := ["tee", "cross", "zig"]
+const MODULES := 5
+const KINDS := ["s", "h", "u", "l", "n", "x"]
 const TOUCH := 0.77
 const GRACE := 0.75
 const PASSES := 4
@@ -20,7 +20,7 @@ var cards: Array = []
 var desk: CanvasLayer
 var score: Node
 
-enum Mode { PLAY, PICK, CUT, DONE, LOST }
+enum Mode { PLAY, PICK, CUT, DONE, LOST, ITEM }
 var phase := Mode.PLAY
 var player := Player.new()
 var rig := Rig.new()
@@ -136,13 +136,15 @@ func _restart_actors() -> void:
 		old.queue_free()
 	_actors.clear()
 	for tr in tracks.slice(room_track_start):
-		if elapsed >= tr.duration(): continue
+		if tr.duration() <= 0.0: continue
 		var g := Ghost.new()
-		add_child(g)
+		g.loop_strip = true
 		g.warmup_seconds = GRACE
 		g.setup(tr,tr.take_id)
-		g.playhead = elapsed
-		g.global_position = tr.sample_at(elapsed).position
+		add_child(g)
+		g.strip_age = elapsed
+		g.playhead = fposmod(elapsed, tr.duration())
+		g.global_position = tr.sample_at(g.playhead).position
 		_actors.append(g)
 
 func _sample() -> void:
@@ -197,7 +199,7 @@ func _finish_leg() -> void:
 		score.cue("line")
 		_start_leg(not returning)
 		return
-	phase = Mode.DONE if segments.size() == MODULES else Mode.PICK
+	phase = Mode.DONE if segments.size() == MODULES else Mode.ITEM
 	_freeze()
 	_show_target()
 	if phase == Mode.DONE:
@@ -205,21 +207,29 @@ func _finish_leg() -> void:
 		score.cue("win")
 		desk.show_result(true, Loc.language == "zh")
 	else:
-		cards.clear()
-		var deck := ["straight","tee","cross","zig"]
-		var reward_slot := _rng.randi_range(0,2)
-		for i in 3:
-			cards.append({"kind":deck.pop_at(_rng.randi_range(0,deck.size()-1)),"variant":_rng.randi_range(0,1),"splice":i==reward_slot})
 		score.cue("clear")
-		desk.show_draw(cards, Loc.language == "zh")
+		desk.show_items(Loc.language == "zh")
 
 func _pick_card(i: int) -> void:
+	if phase == Mode.ITEM and i >= 0 and i < 3:
+		match i:
+			0: splice.offer()
+			1: mark_stock += 1
+			2: cut_stock += 1
+		score.cue("pickup")
+		phase = Mode.PICK
+		cards.clear()
+		var deck := KINDS.duplicate()
+		for _slot in 3:
+			cards.append({"kind": deck.pop_at(_rng.randi_range(0, deck.size() - 1)), "variant": _rng.randi_range(0, 1)})
+		desk.show_draw(cards, Loc.language == "zh")
+		_refresh()
+		return
 	if phase != Mode.PICK or i < 0 or i >= cards.size(): return
 	var c: Dictionary = cards[i]
 	var room: Dictionary = $Rooms.append_room(c.kind,c.variant)
 	segments.append(room)
-	if c.splice: splice.offer()
-	score.cue("pickup" if c.splice else "choose")
+	score.cue("choose")
 	room_track_start = tracks.size()
 	room_pass = 0
 	player.teleport(room.start,player.facing)
@@ -252,7 +262,7 @@ func _physics_process(dt: float) -> void:
 	$Rooms.set_clock(segments.size()-1,elapsed)
 	if grace <= 0:
 		for g in _actors:
-			if not g.spent and g.playhead >= GRACE and g.global_position.distance_to(player.global_position) < Ghost.DANGER_RADIUS + Player.RADIUS:
+			if not g.spent and g.strip_age >= GRACE and g.global_position.distance_to(player.global_position) < Ghost.DANGER_RADIUS + Player.RADIUS:
 				if _hit(g.take_id): return
 				break
 		if $Rooms.hazard_at(player.global_position,segments.size()-1,elapsed):

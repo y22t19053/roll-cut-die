@@ -6,6 +6,28 @@ const FLAT := Color("847362")
 const WHITE := Color("f3dfad")
 const IRON := Color("333139")
 const SET_INKS := {"straight":Color("bd5743"),"tee":Color("4f9187"),"cross":Color("bb914d"),"zig":Color("8075a3")}
+## Plan view, north to south. Dots are walkable lanes; # becomes solid scenery.
+## The outer columns are mouths, not decoration: the S must double back twice.
+const LANES := {
+	"s": ["......#","#####.#","#.....#","#.#####","#......"],
+	"h": ["#.###.#","#.###.#",".......","#.###.#","#.###.#"],
+	"u": ["..###..","#.###.#","#.###.#","#.###.#","#.....#"],
+	"l": ["..#####","#.#####","#.#####","#.#####","#......"],
+	"n": ["#..##..","#...#.#","#.#...#","#.##..#","..###.#"],
+	"x": ["..###..","#..#..#","##...##","#..#..#","..###.."],
+}
+## Five-by-five stencils: dots are walkable cells (1.12 m, actor Ø0.64).
+## West/east vestibules run along the open ends, so rotated letters still join
+## the original finish lines without punching a shortcut through their walls.
+const LETTERS := {
+	"s": [".....", ".####", ".....", "####.", "....."],
+	"h": [".###.", ".###.", ".....", ".###.", ".###."],
+	"u": [".###.", ".###.", ".###.", ".###.", "....."],
+	"l": [".####", ".####", ".####", ".####", "....."],
+	"n": ["..##.", "...#.", ".#...", ".##..", ".###."],
+	"x": ["..#..", "#...#", "##.##", "#...#", "..#.."]
+}
+const TILE := 1.12
 var _count := 0
 var _cap: Node3D
 var _inks := {}
@@ -27,9 +49,49 @@ func append_room(kind: String, variant: int) -> Dictionary:
 		_box(room,Vector3(4.5,.48,z*2.94),Vector3(9,.96,.12),FLAT,true)
 		_box(room,Vector3(4.5,.91,z*2.94),Vector3(8.84,.09,.14),ink)
 		# Twin grip bays make a narrow throat at each end, not a sealed door.
-		for x: float in [.58,8.42]:
-			_box(room,Vector3(x,.34,z*2.16),Vector3(1.16,.68,1.68),ink,true)
-			_box(room,Vector3(x,.70,z*2.16),Vector3(1.12,.04,1.64),IRON)
+		var bay := .60 if LANES.has(kind) else 1.16
+		for x: float in [bay*.5,LENGTH-bay*.5]:
+			_box(room,Vector3(x,.34,z*2.16),Vector3(bay,.68,1.68),ink,true)
+			_box(room,Vector3(x,.70,z*2.16),Vector3(bay-.04,.04,1.64),IRON)
+	if LANES.has(kind):
+		_letter_lanes(room, LANES[kind], hand, ink)
+	else:
+		_island(room, kind, hand, ink)
+	var cart := Node3D.new()
+	cart.name = "CrossTrackDolly"
+	room.add_child(cart)
+	cart.position.x = 2.30 if hand>0 else 6.70
+	if LANES.has(kind): cart.position.x = 1.70 if hand>0 else 7.30
+	_finish_cart(room, cart, ink, variant)
+	if _count==0:
+		_buffer(room,0,-1)
+		_line(room,0)
+	if is_instance_valid(_cap):
+		for part: MeshInstance3D in _cap.find_children("*","MeshInstance3D",true,false): part.mesh = null
+		_cap.get_parent().remove_child(_cap)
+		_cap.queue_free()
+	_cap = _buffer(room,LENGTH,1)
+	_line(room,LENGTH)
+	_count += 1
+	var end := room.to_global(Vector3(LENGTH,.05,0))
+	var stops: Array[Vector3] = [end]
+	return {"start":room.to_global(Vector3(0,.05,0)),"end":end,"stops":stops}
+
+func _letter_lanes(room: Node3D, rows: Array, hand: int, ink: Color) -> void:
+	# Consolidate horizontal wall runs; leave open vestibules to turn at either seam.
+	for row in rows.size():
+		var x := 0
+		while x < 7:
+			if rows[row][x] != "#":
+				x += 1
+				continue
+			var first := x
+			while x < 7 and rows[row][x] == "#": x += 1
+			var width := (x-first)*0.68
+			var z := (row-2)*1.12*hand
+			_box(room, Vector3(2.12+first*.68+width*.5,.36,z), Vector3(width,.72,1.12), ink, true)
+
+func _island(room: Node3D, kind: String, hand: int, ink: Color) -> void:
 	var island := Vector3(4.5,.34,hand*.15)
 	_box(room,island,Vector3(2.28,.68,1.30),ink,true)
 	var top := island+Vector3.UP*.34
@@ -51,10 +113,8 @@ func append_room(kind: String, variant: int) -> Dictionary:
 			_box(room,top+Vector3.UP*.29,Vector3(.94,.52,.5),ink)
 			_disc(room,top+Vector3(0,.31,.34),.18,.25,IRON)
 			for x in [-.23,.23]: _disc(room,top+Vector3(x,.69,0),.21,.24,IRON)
-	var cart := Node3D.new()
-	cart.name = "CrossTrackDolly"
-	room.add_child(cart)
-	cart.position.x = 2.30 if hand>0 else 6.70
+
+func _finish_cart(room: Node3D, cart: Node3D, ink: Color, variant: int) -> void:
 	for x in [-.33,.33]:
 		_box(room,Vector3(cart.position.x+x,.015,0),Vector3(.045,.025,5.32),IRON)
 		for z in [-.28,.28]: _disc(cart,Vector3(x,.14,z),.14,.1,IRON).rotation.y = PI/2
@@ -65,19 +125,6 @@ func append_room(kind: String, variant: int) -> Dictionary:
 	_carts.append(cart)
 	_phases.append(posmod(variant,4)*PI*.5)
 	set_clock(_count,0)
-	if _count==0:
-		_buffer(room,0,-1)
-		_line(room,0)
-	if is_instance_valid(_cap):
-		for part: MeshInstance3D in _cap.find_children("*","MeshInstance3D",true,false): part.mesh = null
-		_cap.get_parent().remove_child(_cap)
-		_cap.queue_free()
-	_cap = _buffer(room,LENGTH,1)
-	_line(room,LENGTH)
-	_count += 1
-	var end := room.to_global(Vector3(LENGTH,.05,0))
-	var stops: Array[Vector3] = [end]
-	return {"start":room.to_global(Vector3(0,.05,0)),"end":end,"stops":stops}
 
 func _line(room: Node3D, x: float) -> void:
 	_box(room,Vector3(x,.016,0),Vector3(.13,.024,2.62),WHITE)

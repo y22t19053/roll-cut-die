@@ -149,9 +149,11 @@ func _render() -> void:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 14)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	UiKit.centered(_menu).add_child(col)
+	var placement := UiKit.centered(_menu)
+	placement.anchor_right = 0.49
+	placement.add_child(col)
 
-	var title := UiKit.label("ROLL CUT DIE", 84, UiKit.INK)
+	var title := UiKit.label("ROLL\nCUT DIE", 76, UiKit.INK)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_constant_override("outline_size", 10)
 	col.add_child(title)
