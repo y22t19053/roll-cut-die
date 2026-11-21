@@ -124,6 +124,7 @@ func _interact() -> void:
 	elif power_cut and not carrying and _near(SetPlan.DECK):
 		carrying = true
 		_sync_reel()
+		hud.flash(_words("原片已卸下 · 送到 35 mm 放映间", "Master reel in hand · Return to 35 mm"), 2.2, "pickup")
 	elif carrying and _near(SetPlan.BOOTH):
 		screened = true
 		_complete_leg("screen_master")

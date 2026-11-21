@@ -246,14 +246,14 @@ func set_hint(text: String) -> void:
 	hint_label.text = text
 
 
-func flash(text: String, seconds: float = 2.2) -> void:
+func flash(text: String, seconds: float = 2.2, event_kind: String = "") -> void:
 	banner.text = text
 	_banner_left = seconds
 	_banner_hold = seconds
 	if text.is_empty():
 		_end_banner()
 		return
-	var kind := _classify(text, seconds)
+	var kind := event_kind if CUE_INK.has(event_kind) else _classify(text, seconds)
 	var ink: Color = CUE_INK.get(kind, INK)
 	banner.add_theme_color_override("font_color", ink)
 	accent.color = ink
