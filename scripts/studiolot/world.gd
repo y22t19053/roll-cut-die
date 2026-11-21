@@ -32,6 +32,7 @@ var _reels: Array = []
 var _reel_caption: Label3D
 var _screen_t := 0.0
 var _screen_total := 0.0
+var _slips := {} # Projectionist's delivery slips, keyed by actual completed take ID.
 var _new_armed_ms := -100000
 
 
@@ -289,6 +290,7 @@ func _interact() -> void:
 			hand_sound = arg
 			_flash(func() -> String: return _words("声带在手：", "Sound roll in hand: ") + _site(arg))
 		"deliver":
+			_slips[GameSession.takes.take_index] = {"image": hand_image, "sound": hand_sound}
 			if hand_image != "":
 				images[hand_image] = true
 			if hand_sound != "":
@@ -303,6 +305,7 @@ func _interact() -> void:
 		"screen":
 			has_print = false
 			screened = true
+			_slips[GameSession.takes.take_index] = {"print": true}
 			_complete_leg("screen")
 			_start_screening()
 			return
@@ -420,6 +423,17 @@ func ending_lines() -> PackedStringArray:
 		% [_reels.size(), MarkLedger.clock(_screen_total), t.outtakes.size()])
 	return lines
 
+func _delivery_credit(take_id: int) -> String:
+	var slip: Dictionary = _slips.get(take_id, {})
+	if slip.get("print", false):
+		return _words("拷贝送达", "PRINT DELIVERY")
+	var parts := PackedStringArray()
+	for channel in ["image", "sound"]:
+		var site := str(slip.get(channel, ""))
+		if site != "":
+			parts.append(_site(site) + (_words("画面", " PICTURE") if channel == "image" else _words("声带", " SOUND")))
+	return " / ".join(parts)
+
 func _render_ending() -> void:
 	hud.set_case_lines(ending_lines())
 	_set_hint(_idle_hint)
@@ -436,7 +450,7 @@ func _process(dt: float) -> void:
 		var local: float = _screen_t - float(reel.start)
 		var dur: float = reel.track.duration()
 		if local >= 0.0 and local < dur:
-			caption = "TAKE %02d   %s" % [reel.take, MarkLedger.clock(local)]
+			caption = "TAKE %02d   %s\n%s" % [reel.take, MarkLedger.clock(local), _delivery_credit(reel.take)]
 		for k in reel.nodes.size():
 			var node: MeshInstance3D = reel.nodes[k]
 			node.visible = local >= 0.0
