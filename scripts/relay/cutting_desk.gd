@@ -15,6 +15,7 @@ var _passes := 1
 var _marks := 0
 var _cuts := 0
 var _splice := false
+var _items := false
 var _cards := []
 var _message := ""
 var _remaining := 0.0
@@ -44,8 +45,13 @@ func update_run(room:int,total:int,pass_no:int,pass_total:int,mark_stock:int,cut
 	_refresh()
 
 func show_draw(cards:Array,zh:bool) -> void:
-	_zh=zh; _result=-1; _cards=cards.slice(0,3); _hover=-1; _age=0
+	_items=false; _zh=zh; _result=-1; _cards=cards.slice(0,3); _hover=-1; _age=0
 	_refresh()
+
+## Shares picked(index) with the map picker: 0 splice, 1 MARK, 2 CUT.
+func show_items(zh:bool) -> void:
+	_items=true; _zh=zh; _result=-1; _hover=-1; _age=0
+	_cards=["splice","mark","cut"]; _refresh()
 
 func show_message(text:String) -> void:
 	_message=text; _remaining=3.0; _refresh()
@@ -116,9 +122,11 @@ class Sheet extends Control:
 		if not d._cards.is_empty():
 			rect(0,0,w,h,Color("101817cf"))
 			var left:=card(0).position.x
-			text(left,h*.5-105,word("剪辑台   /   接哪一段？","CUTTING DESK   /   Choose the next strip"),22,PAPER)
-			for i in d._cards.size(): draw_strip(i)
-			text(left,h*.5+122,word("点选胶片，或按 1 / 2 / 3","Click a strip, or press 1 / 2 / 3"),16,PAPER)
+			text(left,h*.5-105,word("道具盘   /   带走一件","SUPPLY TRAY   /   Take one") if d._items else word("剪辑台   /   接哪一段？","CUTTING DESK   /   Choose the next strip"),22,PAPER)
+			for i in d._cards.size():
+				if d._items: draw_supply(i)
+				else: draw_strip(i)
+			text(left,h*.5+122,word("点选，或按 1 / 2 / 3","Click your pick, or press 1 / 2 / 3"),16,PAPER)
 		elif d._result>=0:
 			var x:=w*.5-192;var y:=h*.5-60
 			rect(x,y,384,120,INK)
@@ -134,15 +142,29 @@ class Sheet extends Control:
 		var d=owner_desk; var r:=card(i);var x:=r.position.x;var y:=r.position.y
 		var selected:bool=i==d._hover
 		var data:Dictionary=d._cards[i];var kind:=str(data.get("kind","straight"))
-		var title:String={"tee":word("丁字支棚","T-JUNCTION"),"cross":word("十字支棚","CROSSING"),"zig":word("折线通道","DOGLEG"),"straight":word("直棚","STRAIGHT")}.get(kind,kind)
+		var title:String=word("棚型  ","SET  ")+kind.to_upper()
 		rect(x+3,y+5,196,170,Color("101210"));rect(x,y,196,170,AMBER if selected else PAPER)
 		for j in 11:
 			for edge in [4,158]:rect(x+7+j*17,y+edge,9,7,INK)
 		rect(x+8,y+17,180,84,INK)
-		var pts:=PackedVector2Array([Vector2(22,60),Vector2(174,60)])
-		if kind=="zig":pts=PackedVector2Array([Vector2(22,60),Vector2(56,60),Vector2(56,44),Vector2(98,44),Vector2(98,77),Vector2(142,77),Vector2(142,60),Vector2(174,60)])
-		for k in pts.size():pts[k]+=Vector2(x,y)
-		draw_polyline(pts,MINT,4,true)
-		if kind in ["tee","cross"]:draw_line(Vector2(x+98,y+37),Vector2(x+98,y+(82 if kind=="cross" else 60)),MINT,4,true)
+		# Each line is one continuous stroke, in a 3x3 contact-print grid.
+		var diagrams:={"s":[[2,0,3,5,8,6]],"h":[[0,6],[3,5],[2,8]],"u":[[0,6,8,2]],"l":[[0,6,8]],"n":[[6,0,8,2]],"x":[[0,8],[6,2]]}
+		for stroke:Array in diagrams.get(kind.to_lower(),[[3,5]]):
+			var pts:=PackedVector2Array()
+			for cell:int in stroke: pts.append(Vector2(x+61+37*(cell%3),y+32+27*floori(cell/3.0)))
+			draw_polyline(pts,MINT,4,true)
 		text(x+11,y+126,"%02d"%(i+1),17,INK);text(x+47,y+126,title,19,INK)
-		if data.get("splice",false):text(x+47,y+149,word("附安全接片","+ SAFETY SPLICE"),14,INK)
+
+	func draw_supply(i:int) -> void:
+		var r:=card(i); var x:=r.position.x; var y:=r.position.y
+		var selected:bool=i==owner_desk._hover
+		var names:=[word("保险接片","Safety splice"),word("补打点","Spare MARK"),word("补剪","Spare CUT")]
+		var stamps:=["1.5 s", "+1 MARK", "+1 CUT"]
+		var first:=[word("下次撞上旧条里的人，","Hit a past take?"),word("多一次手动打点。","One extra MARK."),word("多一次主动剪辑。","One extra CUT.")]
+		var second:=[word("免死，原地续拍 1.5 秒。","Keep rolling 1.5 s."),word("按 M 留下自己的落点。","Press M to mark."),word("选好落点，确认才花。","Spend on confirm.")]
+		rect(x+3,y+5,196,170,Color("101210"));rect(x,y,196,170,AMBER if selected else PAPER)
+		rect(x,y,196,28,INK);text(x+10,y+20,"PROP  /  0%d"%(i+1),14,MINT)
+		text(x+12,y+57,names[i],20,INK)
+		draw_line(Vector2(x+12,y+68),Vector2(x+184,y+68),Color("837e70"),1)
+		text(x+12,y+94,first[i],15,INK);text(x+12,y+114,second[i],15,INK)
+		rect(x+12,y+131,170,28,INK);text(x+23,y+151,stamps[i],17,MINT)
