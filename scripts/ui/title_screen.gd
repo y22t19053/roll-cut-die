@@ -12,13 +12,18 @@ const Loc = preload("res://scripts/core/loc.gd")
 const Logger = preload("res://scripts/core/logger.gd")
 const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
 const ConfirmBox = preload("res://scripts/ui/confirm_box.gd")
+const NightStage = preload("res://scripts/ui/night_stage.gd")
+const NightStageMusic = preload("res://scripts/ui/night_stage_music.gd")
 
 const BACKLOT_SCENE := "res://scenes/backlot/backlot.tscn"
 const PLAY_TEXT_X := 98
 
 var settings_panel: Control
 var confirm: Control
+var stage: NightStage
+var music: NightStageMusic
 var _menu: Control
+var _motion_toggle: Button
 var _in_credits := false
 var _status_key := ""
 var _summary: Dictionary = {}
@@ -28,11 +33,16 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# Coming back from a paused take must never leave the tree frozen.
 	get_tree().paused = false
-	var bg := ColorRect.new()
-	bg.color = Color(0.035, 0.038, 0.045)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bg)
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# The night shoot: drawn backdrop (frozen when Reduce motion is saved on)
+	# and the quiet score, on Master so saved mute / volume apply from sample one.
+	stage = NightStage.new()
+	stage.name = "NightStage"
+	stage.still = _reduced()
+	add_child(stage)
+	music = NightStageMusic.new()
+	music.name = "Music"
+	add_child(music)
+	GameSession.settings_changed.connect(_on_setting_changed)
 	_menu = Control.new()
 	_menu.name = "Menu"
 	_menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -41,7 +51,7 @@ func _ready() -> void:
 	settings_panel = SettingsPanel.new()
 	settings_panel.name = "Settings"
 	add_child(settings_panel)
-	settings_panel.closed.connect(func() -> void: UiKit.focus_first(_menu))
+	settings_panel.closed.connect(_focus_menu)
 	confirm = ConfirmBox.new()
 	confirm.name = "Confirm"
 	add_child(confirm)
@@ -49,8 +59,73 @@ func _ready() -> void:
 	GameSession.language_changed.connect(_on_language_changed)
 	_summary = GameSession.save_summary()
 	_render()
-	UiKit.focus_first(_menu)
+	_focus_menu()
 	Logger.info("title ready (save: %s)" % ("ok" if _summary["ok"] else str(_summary["reason"])))
+
+
+func _reduced() -> bool:
+	return bool(GameSession.settings.get("reduce_motion", false))
+
+
+## PLAY keeps first focus even though the motion row sits above it.
+func _focus_menu() -> void:
+	var play := _menu.find_child("Play", true, false) as Button
+	if play != null and play.is_visible_in_tree() and not play.disabled:
+		play.grab_focus()
+	else:
+		UiKit.focus_first(_menu)
+
+
+func _on_setting_changed(key: String, _value: Variant) -> void:
+	if key != "reduce_motion":
+		return
+	stage.still = _reduced()
+	if is_instance_valid(_motion_toggle):
+		_motion_toggle.text = _motion_toggle_text()
+
+
+func _motion_toggle_text() -> String:
+	if Loc.language == "zh":
+		return "静态背景：" + ("开" if _reduced() else "关")
+	return "Static backdrop: " + ("On" if _reduced() else "Off")
+
+
+func _open_motion_settings() -> void:
+	settings_panel.tab = "general"
+	settings_panel.open()
+
+
+## Brief bilingual motion notice with the static switch and a way into the
+## existing Settings (General > Reduce motion), placed before PLAY.
+func _motion_row() -> Control:
+	var box := VBoxContainer.new()
+	box.name = "MotionNotice"
+	box.add_theme_constant_override("separation", 6)
+	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var zh := Loc.language == "zh"
+	var note := UiKit.label(
+		"提示：背景与游戏含缓慢的镜头与灯光运动，可能引起眩晕。无闪烁。" if zh
+		else "Notice: slow camera and light motion here and in play may cause dizziness. No flashing.",
+		16, UiKit.INK)
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.custom_minimum_size = Vector2(620, 0)
+	box.add_child(note)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 16)
+	box.add_child(row)
+	_motion_toggle = _secondary(UiKit.button(_motion_toggle_text(),
+		func() -> void: GameSession.set_setting("reduce_motion", not _reduced())))
+	_motion_toggle.name = "StaticBackdrop"
+	row.add_child(_motion_toggle)
+	var link := _secondary(UiKit.button("动效设置…" if zh else "Motion settings…", _open_motion_settings))
+	link.name = "MotionSettings"
+	row.add_child(link)
+	for b: Button in [_motion_toggle, link]:
+		b.custom_minimum_size = Vector2(230, 36)
+		b.add_theme_font_size_override("font_size", 17)
+	return box
 
 
 func _on_language_changed(_lang: String) -> void:
@@ -62,7 +137,7 @@ func _rerender() -> void:
 	_render()
 	confirm.relocalize()
 	if not settings_panel.is_open() and not confirm.is_open():
-		UiKit.focus_first(_menu)
+		_focus_menu()
 
 
 func _render() -> void:
@@ -83,8 +158,9 @@ func _render() -> void:
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(tag)
 	var gap := Control.new()
-	gap.custom_minimum_size = Vector2(0, 26)
+	gap.custom_minimum_size = Vector2(0, 4)
 	col.add_child(gap)
+	col.add_child(_motion_row())
 
 	var buttons := VBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 12)
@@ -92,7 +168,7 @@ func _render() -> void:
 	col.add_child(buttons)
 	# Transport first: one deck PLAY key that rolls the Backlot rescue when it
 	# ships, else a studio New Game (same confirm path as the New slate). It is
-	# the first button in the tree, so UiKit.focus_first lands on it.
+	# named "Play", which is what _focus_menu looks for.
 	# Then the studio takes (continue / new) as slates with an orange ink edge;
 	# housekeeping (settings / quit) sits below a ruled line, quieter.
 	if ResourceLoader.exists("res://scenes/studiolot/world.tscn"):
@@ -284,16 +360,26 @@ func _switch_language(lang: String) -> void:
 	GameSession.set_language(lang)
 
 
+## Every exit from the title goes through here so the score is cut before the
+## scene swap; if the swap is refused the title stays, so the score resumes.
+func _leave(path: String) -> Error:
+	music.halt()
+	var err := get_tree().change_scene_to_file(path)
+	if err != OK:
+		music.start()
+	return err
+
+
 func _on_studiolot() -> void:
 	GameSession.request_new_game()
-	if get_tree().change_scene_to_file("res://scenes/studiolot/world.tscn") != OK:
+	if _leave("res://scenes/studiolot/world.tscn") != OK:
 		_status_key = "error.scene"
 		_rerender()
 
 
 func _on_backlot() -> void:
 	GameSession.request_new_game()
-	var err := get_tree().change_scene_to_file(BACKLOT_SCENE)
+	var err := _leave(BACKLOT_SCENE)
 	if err != OK:
 		_status_key = "error.scene"
 		_rerender()
@@ -306,7 +392,7 @@ func _on_continue() -> void:
 		_summary = {"ok": false, "reason": reason}
 		_status_key = _reason_key(reason)
 		_render()
-		UiKit.focus_first(_menu)
+		_focus_menu()
 		return
 	_open_studio()
 
@@ -322,7 +408,7 @@ func _on_new_game_answer(yes: bool) -> void:
 	if yes:
 		_start_new()
 	else:
-		UiKit.focus_first(_menu)
+		_focus_menu()
 
 
 func _start_new() -> void:
@@ -331,12 +417,12 @@ func _start_new() -> void:
 
 
 func _open_studio() -> void:
-	var err := get_tree().change_scene_to_file(GameSession.GAME_SCENE)
+	var err := _leave(GameSession.GAME_SCENE)
 	if err != OK:
 		Logger.error("cannot open studio: %s" % error_string(err))
 		_status_key = "error.scene"
 		_render()
-		UiKit.focus_first(_menu)
+		_focus_menu()
 
 
 func _unhandled_input(event: InputEvent) -> void:
