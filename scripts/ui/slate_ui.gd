@@ -61,7 +61,7 @@ func is_running() -> bool:
 ## corner and subline follow the language and re-render on a switch.
 func play_roll(take_index: int) -> void:
 	_take = take_index
-	_run("roll", 1.95, [
+	_run("roll", 0.46, [
 		{"at": 0.0, "fn": func() -> void:
 			board.headline = "ROLL."
 			_apply_text()},
@@ -74,7 +74,7 @@ func play_roll(take_index: int) -> void:
 ## Deliberate cut: no death wording, the player did this.
 func play_cut(take_index: int) -> void:
 	_take = take_index
-	_run("cut", 1.35, [
+	_run("cut", 0.23, [
 		{"at": 0.0, "fn": func() -> void:
 			board.headline = "CUT!"
 			_apply_text()},
@@ -198,7 +198,7 @@ func _process(dt: float) -> void:
 		board.stick = lerpf(_stick_from, _stick_to, a * a)
 
 	var fade_in := 0.10
-	var fade_out := 0.30
+	var fade_out := 0.10 if _kind in ["roll", "cut"] else 0.30
 	if _t < fade_in:
 		board.alpha = _t / fade_in
 	elif _t > _dur - fade_out:
