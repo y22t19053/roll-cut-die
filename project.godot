@@ -29,6 +29,10 @@ window/size/resizable=true
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[gui]
+
+theme/custom_font="res://assets/fonts/RCD-Noto.otf"
+
 [physics]
 
 common/physics_ticks_per_second=60
