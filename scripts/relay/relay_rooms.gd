@@ -35,7 +35,7 @@ const MODS := {
 	"throat": {"zh":"窄喉","en":"THROAT","period":5.0,"amp":2.24,"twin":false,"throat":1.0,"dollies":1},
 }
 
-func append_room(kind: String, variant: int, mod := "", final := false, event := "") -> Dictionary:
+func append_room(kind: String, variant: int, mod := "", final := false, event := "", hurry := 1.0) -> Dictionary:
 	assert(is_inside_tree(), "Mount RelayRooms before requesting world positions")
 	var spec: Dictionary = MODS.get(mod, MODS[""])
 	var room := Node3D.new()
@@ -75,7 +75,7 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		_finish_cart(room, cart, ink, variant + i*2)
 		_cart_patch(cart, ink)
 		room_dollies.append({"node":cart,"phase":posmod(variant+i*2,4)*PI*.5,
-			"period":float(spec["period"]),"amp":float(spec["amp"])})
+			"period":float(spec["period"])/maxf(hurry,0.1),"amp":float(spec["amp"])})
 	if event == "extra":
 		# A dolly rented for the day: one more body on the track, faster than the
 		# house one and out of phase, parked across the middle of the set.
@@ -85,7 +85,7 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		extra.position.x = LENGTH*.5
 		_finish_cart(room, extra, ink, variant + 1)
 		_cart_patch(extra, ink)
-		room_dollies.append({"node":extra,"phase":PI*.5,"period":3.1,"amp":2.24})
+		room_dollies.append({"node":extra,"phase":PI*.5,"period":3.1/maxf(hurry,0.1),"amp":2.24})
 	_dollies.append(room_dollies)
 	set_clock(_count,0.0)
 	if event == "relight":

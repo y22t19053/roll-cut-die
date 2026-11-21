@@ -356,6 +356,16 @@
 - **代价与边界**：事件只属于一棚，随 `segments[].event` 进存档；`relight` 的光斑是「画在甲板上的」，主光阴影会压掉真实点光（实测像素：车旁 0.212 比 3.5 m 外 0.251 更暗），所以必须两个一起做才读得出来。
 - **实现位置**：`scripts/relay/relay_rooms.gd`（`append_room(..., event)`、`OmniLight3D`、光斑 `pool`）、`scripts/relay/relay_run.gd`（`_roll_event`、`_event_line`、`leg_event`、碰撞跳过、存档字段）、`tests/test_relay.gd`（三条事件的断言）。
 
+## D-034 · 最后一棚一定不干净：必带一个事件，推轨快 25%
+- **状态**：CONFIRMED（2026-11-22，创作者要求「最后一节要是能让人死了七次终于冲线」）
+- **决策**：
+  - 最后一棚（`segments.size() == MODULES - 1`）不再走 `_roll_event()` 的概率：如果随机结果是「干净」，就强制成 `extra` 或 `relight`（各 50%）。理由：这是全剧唯一一棚，玩家要么过去要么过不去，不能是普通的一棚。
+  - 最后一棚的所有推轨周期除以 `hurry = 1.25`（正车 5.0 s → 4.0 s；`extra` 的临时车 3.1 s → 2.48 s）。摆幅不变，所以「节奏更快」而不是「摆得更远」——玩家练的是时机，不是重新学距离。
+  - 冲线板（`_finish_line`）与场记单（`_show_sheet`）不变：先摇 `CUT!` 0.72 s，再进结算。
+- **为什么不是加敌人 / 加趟数**：加敌人是堆量，加趟数会拖长单局（已经 10–15 分钟）；加快同一台车的周期只改一个决定（什么时候过），仍然可学、可预测、可以失败后重来修正。
+- **实现位置**：`scripts/relay/relay_run.gd::_pick_card`（强制事件 + `hurry`）、`scripts/relay/relay_rooms.gd::append_room(..., hurry)`（`period / maxf(hurry, 0.1)`）。
+- **实测**：最后一棚 `periods = [4.0, 4.0]`（twin + hurry），前一棚 `[5.0]`；`segments[-1].final == true`、`event == "relight"`；截图 `final_escalated.png`。
+
 ## 变更规则
 
 1. 新增决策 → 追加条目，编号连续，不得改写历史条目。

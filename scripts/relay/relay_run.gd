@@ -623,7 +623,12 @@ func _pick_card(i: int) -> void:
 	var c: Dictionary = cards[i]
 	var last := segments.size() == MODULES - 1
 	leg_event = _roll_event()
-	var room: Dictionary = $Rooms.append_room(c.kind,c.variant,str(c.get("mod","")),last,leg_event)
+	if last and leg_event == "":
+		# The last set never plays clean: it is the one where you either cross or
+		# do not, so the crew always adds something to it.
+		leg_event = "extra" if _rng.randf() < 0.5 else "relight"
+	var hurry := 1.25 if last else 1.0
+	var room: Dictionary = $Rooms.append_room(c.kind,c.variant,str(c.get("mod","")),last,leg_event,hurry)
 	segments.append(room)
 	if leg_event != "":
 		_hint("event_" + leg_event, _event_line(leg_event, true), _event_line(leg_event, false))
