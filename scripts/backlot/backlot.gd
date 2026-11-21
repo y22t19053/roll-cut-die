@@ -10,6 +10,12 @@ var screened := false
 var reel: MeshInstance3D
 var carry_reel: MeshInstance3D
 var projection: Label3D
+## Every cut of the rescue: the first five-shot edit and any recut forked from it.
+const RecutLedger = preload("res://scripts/backlot/recut_ledger.gd")
+const RECUT_ORDINAL := 3 # A recut keeps successes 1-2 and reshoots from here.
+var recut := RecutLedger.new()
+## Mission state the shot in progress was entered with; archived with its success.
+var _entry := {}
 
 func _ready() -> void:
 	GameSession.reset_run()
@@ -73,6 +79,8 @@ func _spool(parent: Node, at: Vector3) -> MeshInstance3D:
 
 func _begin_take() -> void:
 	carrying = false
+	_entry = _mission_state()
+	recut.stand(_entry)
 	# Different crew positions and hand-offs; never mirror the recorded world.
 	spawn_pos = [SetPlan.DOCK, SetPlan.BOOTH_EXIT, SetPlan.DECK, Vector3(18,0.05,25.8), Vector3(28,0.05,5.6)][mini(shot,Shot.SCREEN)]
 	super._begin_take()
@@ -182,9 +190,17 @@ func _complete_leg(result: String) -> void:
 	player.set_frozen(true)
 	_freeze_world()
 	_finish_take()
+	var take: int = GameSession.takes.take_index
+	var ghost := {}
+	if not GameSession.ghosts.is_empty() and int(GameSession.ghosts[-1].get("take", 0)) == take:
+		ghost = GameSession.ghosts[-1]
+	recut.record_success(take, _entry, ghost)
 	shot += 1
+	recut.stand(_mission_state())
+	projection.text = "END  /  %03d" % recut.active
 	_sync_reel()
-	_set_hint(func() -> String: return _words("原片已上银幕。空格回标题。", "The master is on screen. SPACE: title.") if screened else _words("本镜完成。空格交班。", "Shot complete. SPACE: hand off."))
+	_update_hud()
+	_set_hint(_idle_hint)
 
 func _retake() -> void:
 	if screened and phase == Phase.COMPLETE:
@@ -200,3 +216,124 @@ func _load_latest_state() -> void:
 
 func _commit_state() -> void:
 	pass
+
+# --- recut ---------------------------------------------------------------
+
+## Branch-local scene state only. Retake stock and the take counter are global
+## and are never stored in, or restored from, a cut.
+func _mission_state() -> Dictionary:
+	return {"shot": shot, "power_cut": power_cut, "screened": screened, "carrying": carrying}
+
+## The slate is not holding a live take: after a success, after a death, or with
+## the CUT panel open. The same moments SPACE or the pause menu are available.
+func _can_switch_cut() -> bool:
+	if paused:
+		return false
+	return phase == Phase.COMPLETE or phase == Phase.DEAD or (phase == Phase.CUT and cut_panel.is_open())
+
+func _can_fork() -> bool:
+	return screened and phase == Phase.COMPLETE and not paused and recut.success_count(recut.active) >= RECUT_ORDINAL
+
+## X on a finished cut: keep it, and start a new cut just before `ordinal`.
+func fork_before(ordinal: int = RECUT_ORDINAL) -> bool:
+	if not _can_fork():
+		return false
+	var made := recut.fork(recut.active, ordinal)
+	if made.is_empty():
+		return false
+	_enter_cut(made.entry)
+	var words := [int(made.cut), ordinal]
+	_flash(func() -> String: return _words("第 %03d 版：从第 %d 镜重来，前面的照旧。", "Cut %03d: reshooting from shot %d. Earlier shots stand.") % words, 3.0)
+	return true
+
+## V: step to another cut. A finished cut is screened; an unfinished one resumes
+## as a new take at the entry of its next shot.
+func view_cut(cut: int) -> bool:
+	if not _can_switch_cut() or cut == recut.active:
+		return false
+	var state := recut.open(cut)
+	if state.is_empty():
+		return false
+	_enter_cut(state)
+	return true
+
+func _enter_cut(state: Dictionary) -> void:
+	_clear_preview_stills()
+	if cut_panel.is_open():
+		cut_panel.close()
+	cut_cursor = -1
+	rig.camera.current = true
+	rig.set_physics_process(true)
+	shot = int(state.shot)
+	power_cut = bool(state.power_cut)
+	screened = bool(state.screened)
+	carrying = false
+	# Only this cut's own successes walk the set, on the tracks they recorded.
+	GameSession.ghosts.clear()
+	GameSession.ghosts.append_array(recut.ghosts(recut.active))
+	GameSession.ghosts_changed.emit(GameSession.ghosts.size())
+	projection.text = "END  /  %03d" % recut.active
+	if screened:
+		_screen_cut()
+	else:
+		GameSession.takes.retake() # Next id in the one global sequence; stock untouched.
+		_begin_take()
+
+## A finished cut on view: its recorded performers replay, nothing is live.
+func _screen_cut() -> void:
+	phase = Phase.COMPLETE
+	recorder.recording = false
+	_freeze_world()
+	_clear_ghosts()
+	_spawn_ghosts()
+	if not ghost_nodes.is_empty():
+		var last = ghost_nodes[-1].track
+		var pose: Dictionary = last.sample_at(last.duration())
+		player.teleport(pose.position, float(pose.get("facing", player.facing)))
+	player.set_frozen(true)
+	marks.clear()
+	_sync_beacons()
+	_death_fn = Callable()
+	hud.clear_death()
+	slate.hide_slate()
+	_sync_reel()
+	_update_hud()
+	_set_hint(_idle_hint)
+
+func _idle_hint() -> String:
+	var other := _words("　V：看别的版本", "   V: other cut") if recut.cut_count() > 1 else ""
+	if phase == Phase.DEAD:
+		return Loc.ui("hint.retake") + other
+	if not screened:
+		return _words("本镜完成。空格交班。", "Shot complete. SPACE: hand off.") + other
+	var line := _words("原片已上银幕。空格：就用这版　X：从第 %d 镜重剪", "The master is on screen. SPACE: keep this ending   X: recut from shot %d") % RECUT_ORDINAL
+	if recut.cut_count() > 1:
+		line = _words("第 %03d 版　", "Cut %03d   ") % recut.active + line
+	return line + other
+
+func _render_status() -> void:
+	if recut.cut_count() <= 1:
+		super._render_status()
+		return
+	var text := Loc.ui("status.rolling")
+	if _status_fn.is_valid():
+		text = _status_fn.call()
+	hud.set_take(GameSession.takes.take_index, GameSession.ghost_count(), text + _words("　第 %03d 版", "   CUT %03d") % recut.active)
+
+func _on_slate_finished(kind: String) -> void:
+	if kind == "die" and phase != Phase.DEAD:
+		return # A cut was opened while the DIE slate was still closing.
+	super._on_slate_finished(kind)
+	if kind == "die" and recut.cut_count() > 1:
+		_set_hint(_idle_hint)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		match (event as InputEventKey).physical_keycode:
+			KEY_X:
+				if fork_before():
+					return
+			KEY_V:
+				if recut.cut_count() > 1 and view_cut(recut.next_cut()):
+					return
+	super._unhandled_input(event)

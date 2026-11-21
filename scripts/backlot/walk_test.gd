@@ -104,4 +104,31 @@ func run() -> void:
 	studio._interact()
 	var ok: bool = not failed and studio.screened and root.get_node("GameSession").takes.history.size() == 5
 	print("BACKLOT_WALK_CUT_SCREEN: ",ok)
+	if not ok: quit(1); return
+	var gs := root.get_node("GameSession")
+	var original: Array = studio.recut.takes(1).duplicate()
+	var stock: int = gs.takes.retake_stock
+	var last_id: int = gs.takes.take_index
+	await press_key(KEY_X)
+	await live()
+	ok = studio.recut.active == 2 and studio.shot == 2 and studio.power_cut and not studio.screened and studio.ghost_nodes.size() == 2 and gs.takes.take_index == last_id + 1 and gs.takes.retake_stock == stock and studio.recut.takes(2) == original.slice(0, 2) and studio.recut.takes(1) == original
+	print("RECUT_FROM_THIRD: ", ok)
+	if not ok: quit(1); return
+	await press_key(KEY_C)
+	for i in 240:
+		await physics_frame
+		if studio.cut_panel.is_open(): break
+	await press_key(KEY_V)
+	ok = studio.recut.active == 1 and studio.screened and studio.ghost_nodes.size() == 5 and studio.recut.takes(1) == original and gs.takes.retake_stock == stock
+	print("REVIEW_ORIGINAL_FIVE: ", ok)
 	quit(0 if ok else 1)
+
+func press_key(code: int) -> void:
+	for down in [true, false]:
+		var key := InputEventKey.new()
+		key.physical_keycode = code
+		key.keycode = code
+		key.pressed = down
+		Input.parse_input_event(key)
+		await process_frame
+		await process_frame
