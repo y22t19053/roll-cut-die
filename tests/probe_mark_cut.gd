@@ -197,6 +197,8 @@ func _main() -> void:
 	_check("camera back on the rig", rig.camera.current)
 	_check("player on the mark", player.global_position.distance_to(mark_pos) < 0.01,
 		"%.3f m" % player.global_position.distance_to(mark_pos))
+	for actor in main.npcs:
+		_check("patrol phase restored exactly: " + str(actor.npc_id), actor.mark_phase() == point.npc_phases[actor.npc_id])
 	_check("facing restored", absf(angle_difference(float(player.facing), mark_facing)) < 0.001)
 	_check("camera yaw restored", absf(angle_difference(float(rig.yaw), mark_yaw)) < 0.001)
 	for i in 15:

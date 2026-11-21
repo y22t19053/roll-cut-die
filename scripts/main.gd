@@ -405,14 +405,17 @@ func _snapshot() -> Dictionary:
 	for actor in ghost_nodes:
 		frames[actor.take_id] = actor.still_frame()
 	var npc_frames := {}
+	var npc_phases := {}
 	for actor in npcs:
 		npc_frames[actor.npc_id] = actor.still_frame()
+		npc_phases[actor.npc_id] = actor.mark_phase()
 	var evidence_frames := {}
 	for id in evidence_props:
 		evidence_frames[id] = evidence_props[id].still_frame()
 	return {
 		"evidence_frames": evidence_frames,
 		"npc_frames": npc_frames,
+		"npc_phases": npc_phases,
 		"ghost_frames": frames,
 		"kind": "checkpoint",
 		"no": 0,
@@ -588,15 +591,10 @@ func _cut_to(p: Dictionary) -> void:
 		g.playing = false
 		g.playhead = wt
 		g.global_position = g.track.sample_at(wt)["position"]
-	# NPCs are stepped, not teleported: their own _physics_process at the same
-	# tick rate is the only way to land on the exact pose they had then.
-	var step := 1.0 / float(Engine.physics_ticks_per_second)
+	# Restore the leg and remaining wait, without simulating the entire take again.
 	for n: Node in npcs:
-		n.reset_phase()
-		n.set_active(true)
-		for _i in int(round(wt / step)):
-			n._physics_process(step)
 		n.set_active(false)
+		n.restore_phase(point.npc_phases[n.npc_id])
 
 	player.teleport(point["pos"], float(point["facing"]))
 	player.set_frozen(true)

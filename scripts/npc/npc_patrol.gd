@@ -133,6 +133,20 @@ func _build() -> void:
 func still_frame() -> Dictionary:
 	return {"pose": global_transform, "visual_pose": _visual.transform, "name": display_name}
 
+func mark_phase() -> Dictionary:
+	return {"leg": _leg, "dir": _dir, "dist": _dist, "dwell": _dwell_left,
+		"traveled": traveled, "facing": facing, "position": global_position}
+
+func restore_phase(p: Dictionary) -> void:
+	_leg = p.leg
+	_dir = p.dir
+	_dist = p.dist
+	_dwell_left = p.dwell
+	traveled = p.traveled
+	facing = p.facing
+	global_position = p.position
+	_visual.rotation.y = facing
+
 func make_still(frame: Dictionary) -> Node3D:
 	var still := Node3D.new()
 	var visual := _visual.duplicate(0) as Node3D
