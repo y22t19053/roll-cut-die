@@ -238,6 +238,23 @@ func _main() -> void:
 		await physics_frame
 	_check("on release camera coasts in the recorded direction", rig.is_physics_processing() and signf(angle_difference(mark_yaw, rig.yaw)) == signf(marked_w) and absf(rig.active().w) < absf(marked_w))
 	_check("production save requests intercepted", main.intercepted_writes > 0, str(main.intercepted_writes))
+	_check("only committed MARK and CUT charged", takes.mark_stock == takes.INITIAL_MARKS - 1 and takes.cut_stock == takes.INITIAL_CUTS - 1)
+	var current_save: Dictionary = gs.to_dict()
+	gs.from_dict({"mark_stock": 900, "cut_stock": 900})
+	_check("restore cannot mint editing supplies", takes.mark_stock == current_save.mark_stock and takes.cut_stock == current_save.cut_stock)
+	gs.from_dict({"take_index": 2})
+	_check("legacy fields optional", takes.mark_stock == current_save.mark_stock and takes.cut_stock == current_save.cut_stock)
+	takes.mark_stock = 0
+	takes.cut_stock = 0
+	await _tap(KEY_M)
+	_check("empty MARK creates no anchor", main.marks.count() == 1)
+	await _tap(KEY_C)
+	await _wait_until(func() -> bool: return panel.is_open(), 4000)
+	await _tap(KEY_1)
+	await _tap(KEY_SPACE)
+	_check("empty CUT can preview but not rewind", panel.is_open() and main.cut_cursor == 0 and takes.take_index == take0 + 1 and panel.footer_label.text.contains("No CUTs left"))
+	await _tap(KEY_C)
+	_check("leave preview on same rolling take for free", not panel.is_open() and takes.can_act() and main._world_running and main.recorder.recording and not player.frozen and takes.outtakes.size() == 0 and takes.retake_stock == stock0)
 	main.queue_free()
 	await process_frame
 	print("")

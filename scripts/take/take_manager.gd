@@ -41,6 +41,11 @@ var outtakes: Array = []
 ## The size is a placeholder; running out does not end the run yet.
 const RETAKE_STOCK := 5
 var retake_stock := RETAKE_STOCK
+# Per-production consumables; never part of a MARK or branch snapshot.
+const INITIAL_MARKS := 6
+const INITIAL_CUTS := 3
+var mark_stock := INITIAL_MARKS
+var cut_stock := INITIAL_CUTS
 
 
 func _init() -> void:
@@ -100,25 +105,24 @@ func die(source: String) -> bool:
 func manual_cut() -> bool:
 	if state != State.ROLLING:
 		return false
-	outtakes.append({
-		"take": take_index,
-		"kind": "cut",
-		"source": "",
-		"at": elapsed,
-	})
-	_set_state(State.CUT)
-	take_cut.emit()
+	_set_state(State.CUT) # Preview is not yet an outtake.
 	return true
+
+
+func cancel_cut_preview() -> void:
+	if state == State.CUT:
+		_set_state(State.ROLLING)
 
 
 ## Leave CUT by resuming from a chosen point: the cut take stays an outtake
 ## (now naming where it resumed), the next take starts on that point's clock,
 ## and the Retake stock is untouched. Returns the new take index, or -1.
 func resume_after_cut(point_label: String, resume_time: float) -> int:
-	if state != State.CUT:
+	if state != State.CUT or cut_stock <= 0:
 		return -1
-	if not outtakes.is_empty() and str(outtakes[-1].get("kind", "")) == "cut":
-		outtakes[-1]["resume"] = point_label
+	cut_stock -= 1
+	outtakes.append({"take":take_index, "kind":"cut", "source":"", "at":elapsed, "resume":point_label})
+	take_cut.emit()
 	retake()
 	elapsed = maxf(resume_time, 0.0)
 	return take_index

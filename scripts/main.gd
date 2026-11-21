@@ -60,6 +60,8 @@ var marks = MarkLedger.new()
 var beacons: Array = []
 ## Row selected in the CUT panel, -1 = free view.
 var cut_cursor := -1
+var _pre_preview_velocity := Vector3.ZERO
+var _playing_before_preview: Array = []
 
 var spawn_pos := Vector3(2.0, 0.05, 16.6)
 var report_pos := Vector3.ZERO
@@ -430,6 +432,11 @@ func _npc_label_fn(npc_id: String) -> Callable:
 func _manual_cut() -> void:
 	if phase != Phase.ROLLING or paused or bool(player.get("frozen")):
 		return
+	_pre_preview_velocity = player.velocity
+	_playing_before_preview.clear()
+	for g in ghost_nodes:
+		if g.playing:
+			_playing_before_preview.append(g)
 	phase = Phase.CUT
 	rig.set_physics_process(false) # Keep the last live shot fixed while the editor is open.
 	player.set_frozen(true)
@@ -489,10 +496,15 @@ func _snapshot() -> Dictionary:
 func _mark() -> void:
 	if phase != Phase.ROLLING or paused or bool(player.get("frozen")):
 		return
+	if GameSession.takes.mark_stock <= 0:
+		_flash(func() -> String: return Loc.t({"en":"No MARKs left.", "zh":"标记已用完。"}))
+		return
 	if not marks.add(_snapshot()):
 		var full := [marks.count(), marks.capacity]
 		_flash(func() -> String: return Loc.ui("flash.marks_full", full))
 		return
+	GameSession.takes.mark_stock -= 1
+	_commit_state()
 	_sync_beacons()
 	var used := [marks.count(), marks.capacity]
 	_flash(func() -> String: return Loc.ui("flash.mark", used), 1.4)
@@ -518,12 +530,12 @@ func _sync_beacons() -> void:
 func _open_cut_panel() -> void:
 	cut_cursor = -1
 	cut_panel.open(_cut_title(), _cut_rows(), _cut_footer())
-	_set_hint(func() -> String: return Loc.ui("hint.cut_panel"))
+	_set_hint(func() -> String: return Loc.t({"en":"↑/↓ Preview   ·   SPACE Confirm   ·   C Close & continue", "zh":"↑/↓ 预览   ·   空格确认   ·   C 关闭并继续"}))
 
 
 func _cut_title() -> String:
 	var t = GameSession.takes
-	return Loc.ui("cut.title", [t.take_index, t.retake_stock, marks.count(), marks.capacity])
+	return Loc.t({"en":"TAKE %02d   |   MARK %d   ·   CUT %d   ·   RETAKES %d", "zh":"第 %02d 条   |   标记 %d   ·   喊卡 %d   ·   重拍 %d"}) % [t.take_index, t.mark_stock, t.cut_stock, t.retake_stock]
 
 
 func _cut_rows() -> PackedStringArray:
@@ -549,11 +561,12 @@ func _point_label(p: Dictionary) -> String:
 
 func _cut_footer() -> String:
 	var pts: Array = marks.points()
+	var cost := Loc.t({"en":"Free preview. Confirm: spend 1 CUT; discard everything after this point.", "zh":"预览免费。确认消耗 1 次喊卡，放弃此节点之后的进度。"}) if GameSession.takes.cut_stock > 0 else Loc.t({"en":"No CUTs left. Preview freely; press C to continue this take.", "zh":"喊卡已用完。仍可预览；按 C 关闭，继续当前这一条。"})
 	if cut_cursor < 0 or cut_cursor >= pts.size():
-		return Loc.ui("cut.free")
+		return Loc.ui("cut.free") + "\n" + cost
 	var p: Dictionary = pts[cut_cursor]
 	return Loc.ui("cut.preview", [_point_label(p), rad_to_deg(float(p["facing"])),
-		rad_to_deg(float(p["cam_yaw"])), rad_to_deg(float(p["cam_roll"])), float(p["world_t"])])
+		rad_to_deg(float(p["cam_yaw"])), rad_to_deg(float(p["cam_roll"])), float(p["world_t"])]) + "\n" + cost
 
 
 func _cut_input(code: int) -> void:
@@ -567,7 +580,11 @@ func _cut_input(code: int) -> void:
 			_select_point(0 if cut_cursor < 0 else mini(cut_cursor + 1, n - 1))
 		KEY_ESCAPE:
 			_select_point(-1)
+		KEY_C:
+			_cancel_cut_preview()
 		KEY_SPACE:
+			if GameSession.takes.cut_stock <= 0:
+				return # Do not dispatch to a scene's item-restoration override.
 			if cut_cursor >= 0:
 				_cut_to(marks.points()[cut_cursor])
 			else:
@@ -575,6 +592,26 @@ func _cut_input(code: int) -> void:
 		_:
 			if code >= KEY_1 and code <= KEY_9 and code - KEY_1 < n:
 				_select_point(code - KEY_1)
+
+
+## Return to the live take without rebuilding its recording or resetting clocks.
+func _cancel_cut_preview() -> void:
+	_select_point(-1)
+	cut_panel.close()
+	GameSession.takes.cancel_cut_preview()
+	phase = Phase.ROLLING
+	_world_running = true
+	recorder.recording = true
+	rig.set_physics_process(true)
+	player.set_frozen(false)
+	player.velocity = _pre_preview_velocity
+	for n in npcs:
+		n.set_active(true)
+	for g in _playing_before_preview:
+		g.playing = true
+	_playing_before_preview.clear()
+	_set_hint(Callable())
+	_update_hud()
 
 
 ## Real preview: the camera goes where the point's camera was. Player, world
@@ -676,6 +713,8 @@ func _cut_to(p: Dictionary) -> void:
 	rig.restore_mark_motion(point)
 	rig.set_physics_process(false) # Do not consume the saved momentum behind the slate.
 
+	_commit_state()
+	_playing_before_preview.clear()
 	_resume_point = point
 	phase = Phase.ROLLING
 	slate.play_roll(idx)

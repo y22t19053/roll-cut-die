@@ -39,8 +39,7 @@ static func run(h, _tree = null) -> void:
 	# --- manual cut --------------------------------------------------------
 	h.ok("cut while rolling", m.manual_cut())
 	h.eq("state is CUT", m.state, TakeManager.State.CUT)
-	h.eq("two outtakes", m.outtakes.size(), 2)
-	h.eq("cut kind", str(m.outtakes[1]["kind"]), "cut")
+	h.eq("preview leaves outtakes untouched", m.outtakes.size(), 1)
 	h.ok("cannot cut twice", not m.manual_cut())
 	m.retake()
 	h.eq("third take", m.take_index, 3)

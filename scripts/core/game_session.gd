@@ -300,6 +300,8 @@ func to_dict() -> Dictionary:
 	return {
 		"take_index": takes.take_index,
 		"retake_stock": takes.retake_stock,
+		"mark_stock": takes.mark_stock,
+		"cut_stock": takes.cut_stock,
 		"history": takes.history.duplicate(true),
 		"outtakes": takes.outtakes.duplicate(true),
 		"case": case_state.to_dict(),
@@ -313,6 +315,11 @@ func to_dict() -> Dictionary:
 func from_dict(d: Dictionary) -> void:
 	if d.is_empty():
 		return
+	# Continue starts with a fresh ledger. In-run restores can only lower it;
+	# legacy/malformed fields leave the existing stock untouched.
+	for key in ["mark_stock", "cut_stock"]:
+		if typeof(d.get(key)) in [TYPE_INT, TYPE_FLOAT]:
+			takes.set(key, clampi(int(d[key]), 0, int(takes.get(key))))
 	var stored_stock: Variant = d.get("retake_stock", takes.retake_stock)
 	if typeof(stored_stock) in [TYPE_FLOAT, TYPE_INT]:
 		takes.retake_stock = maxi(0, int(stored_stock))
