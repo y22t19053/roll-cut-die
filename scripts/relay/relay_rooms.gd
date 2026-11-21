@@ -1,89 +1,111 @@
 extends Node3D
-## Seven 3m bays per room. Only the temporary terminal buffer is replaced;
-## rooms, props and their original wall bodies survive every append.
-const CELL := 3.0
-const LENGTH := 21.0
-const DECK := Color("555456")
-const FLAT := Color("746854")
-const WARM := Color("e3a559")
-const COOL := Color("72b8b4")
+## Repeatable nine-metre soundstages. Each seam is one continuous finish line.
+const LENGTH := 9.0
+const DECK := Color("514f50")
+const FLAT := Color("847362")
+const WHITE := Color("f3dfad")
+const IRON := Color("333139")
+const SET_INKS := {"straight":Color("bd5743"),"tee":Color("4f9187"),"cross":Color("bb914d"),"zig":Color("8075a3")}
 var _count := 0
 var _cap: Node3D
 var _inks := {}
+var _rooms: Array[Node3D] = []
+var _carts: Array[Node3D] = []
+var _phases: Array[float] = []
 
 func append_room(kind: String, variant: int) -> Dictionary:
 	assert(is_inside_tree(), "Mount RelayRooms before requesting world positions")
 	var room := Node3D.new()
-	room.name = "Bay%d_%s" % [_count+1, kind]
-	room.position.x = _count * LENGTH
+	room.name = "Bay%d_%s" % [_count+1,kind]
+	room.position.x = _count*LENGTH
 	add_child(room)
-	var tiles := {}
-	var marks: Array[Vector2i] = []
-	var side := 1 if posmod(variant,2)==0 else -1
-	# Pattern coordinates are hand-authored, then mirrored as one piece.
+	_rooms.append(room)
+	var ink: Color = SET_INKS.get(kind,SET_INKS.straight)
+	var hand := 1 if posmod(variant,2)==0 else -1
+	_box(room,Vector3(4.5,-.12,0),Vector3(9,.24,6),DECK,true)
+	for z in [-1,1]:
+		_box(room,Vector3(4.5,.48,z*2.94),Vector3(9,.96,.12),FLAT,true)
+		_box(room,Vector3(4.5,.91,z*2.94),Vector3(8.84,.09,.14),ink)
+		# Twin grip bays make a narrow throat at each end, not a sealed door.
+		for x: float in [.58,8.42]:
+			_box(room,Vector3(x,.34,z*2.16),Vector3(1.16,.68,1.68),ink,true)
+			_box(room,Vector3(x,.70,z*2.16),Vector3(1.12,.04,1.64),IRON)
+	var island := Vector3(4.5,.34,hand*.15)
+	_box(room,island,Vector3(2.28,.68,1.30),ink,true)
+	var top := island+Vector3.UP*.34
 	match kind:
-		"tee":
-			_strip(tiles,0,6,0)
-			for z in [1,2]: tiles[Vector2i(3,z*side)] = true
-			marks.append(Vector2i(3,2*side))
-		"cross":
-			_strip(tiles,0,6,0)
-			for z in [-2,-1,1,2]: tiles[Vector2i(3,z)] = true
-			marks.assign([Vector2i(3,2*side), Vector2i(3,-2*side)])
-		"zig":
-			_strip(tiles,0,1,0)
-			_strip(tiles,1,3,side)
-			_strip(tiles,3,5,-side)
-			_strip(tiles,5,6,0)
-			tiles[Vector2i(3,0)] = true
-			marks.assign([Vector2i(2,side), Vector2i(4,-side)])
-		_: # A clear sightline end-to-end, with a side passage around the flat.
-			_strip(tiles,0,6,0)
-			_strip(tiles,1,5,2*side)
-			for x in [1,5]: tiles[Vector2i(x,side)] = true
-	var stops: Array[Vector3] = []
-	for cell: Vector2i in tiles:
-		var p := _center(cell)
-		_box(room,p+Vector3.DOWN*.12,Vector3(3,.24,3),DECK,true)
-		for dir: Vector2i in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
-			if tiles.has(cell+dir): continue
-			if (cell == Vector2i.ZERO and dir == Vector2i.LEFT) or (cell == Vector2i(6,0) and dir == Vector2i.RIGHT): continue
-			var lateral := dir.x != 0
-			var offset := Vector3(dir.x,0,dir.y)*1.48
-			var size := Vector3(.12,1.15,3) if lateral else Vector3(3,1.15,.12)
-			_box(room,p+offset+Vector3.UP*.575,size,FLAT,true)
-			if cell.y != 0:
-				var rail := Vector3(.15,.085,2.85) if lateral else Vector3(2.85,.085,.15)
-				_box(room,p+offset+Vector3.UP*1.03,rail,WARM if cell.y*side>0 else COOL)
-	# Scenic panels stand outside the rail, never inside either lane.
-	var first_mark := Vector2i(3,2*side) if kind != "zig" else Vector2i(2,side)
-	var flat := _center(first_mark)+Vector3(0,0,1.70*side)
-	_box(room,flat+Vector3.UP*.85,Vector3(2.48,1.70,.16),Color("536c69") if side>0 else Color("8c6553"))
-	for x: float in [-1.08,1.08]:
-		_box(room,flat+Vector3(x,.85,-side*.105),Vector3(.085,1.68,.07),Color("bb9b70"))
-	_box(room,flat+Vector3(0,1.04,-side*.11),Vector3(2.43,.09,.065),Color("bb9b70")).rotation.z = side*.30
-	for cell: Vector2i in marks:
-		var p := _center(cell)
-		stops.append(room.to_global(p+Vector3.UP*.05))
-		# Gaffer's tape cross, flush with the deck. No trigger physics.
-		_box(room,p+Vector3.UP*.013,Vector3(.16,.018,1.20),WARM)
-		_box(room,p+Vector3.UP*.016,Vector3(1.20,.018,.16),WARM)
-	if _count == 0: _buffer(room,0,-1)
+		"tee": # Fresnel lamp and lit face
+			_box(room,top+Vector3.UP*.24,Vector3(.11,.48,.11),IRON)
+			_box(room,top+Vector3.UP*.59,Vector3(.52,.48,.60),ink)
+			_disc(room,top+Vector3(0,.59,.32),.2,.06,WHITE)
+		"cross": # Two wound film reels and a crank
+			for x in [-.38,.38]:
+				_disc(room,top+Vector3(x,.37,0),.35,.25,IRON)
+				_disc(room,top+Vector3(x,.37,.14),.11,.04,ink)
+		"zig": # Slated clapstick with diagonal chalk bars
+			_box(room,top+Vector3.UP*.40,Vector3(1.25,.79,.12),IRON)
+			var stick := _box(room,top+Vector3(-.01,.92,0),Vector3(1.25,.13,.14),ink)
+			stick.rotation.z = .19
+			for x in [-.44,-.13,.18,.49]: _box(stick,Vector3(x,0,.076),Vector3(.10,.13,.012),WHITE).rotation.z = -.3
+		_: # Camera body, lens and twin magazines
+			_box(room,top+Vector3.UP*.29,Vector3(.94,.52,.5),ink)
+			_disc(room,top+Vector3(0,.31,.34),.18,.25,IRON)
+			for x in [-.23,.23]: _disc(room,top+Vector3(x,.69,0),.21,.24,IRON)
+	var cart := Node3D.new()
+	cart.name = "CrossTrackDolly"
+	room.add_child(cart)
+	cart.position.x = 2.30 if hand>0 else 6.70
+	for x in [-.33,.33]:
+		_box(room,Vector3(cart.position.x+x,.015,0),Vector3(.045,.025,5.32),IRON)
+		for z in [-.28,.28]: _disc(cart,Vector3(x,.14,z),.14,.1,IRON).rotation.y = PI/2
+	_box(cart,Vector3(0,.28,0),Vector3(.88,.17,.72),ink)
+	_box(cart,Vector3(0,.53,0),Vector3(.14,.38,.15),IRON)
+	_box(cart,Vector3(0,.83,0),Vector3(.58,.34,.35),ink)
+	_disc(cart,Vector3(0,.84,.23),.12,.16,IRON)
+	_carts.append(cart)
+	_phases.append(posmod(variant,4)*PI*.5)
+	set_clock(_count,0)
+	if _count==0:
+		_buffer(room,0,-1)
+		_line(room,0)
 	if is_instance_valid(_cap):
+		for part: MeshInstance3D in _cap.find_children("*","MeshInstance3D",true,false): part.mesh = null
 		_cap.get_parent().remove_child(_cap)
 		_cap.queue_free()
 	_cap = _buffer(room,LENGTH,1)
-	_box(room,Vector3(LENGTH-.07,.012,0),Vector3(.12,.02,2.82),COOL)
+	_line(room,LENGTH)
 	_count += 1
 	var end := room.to_global(Vector3(LENGTH,.05,0))
-	stops.append(end)
+	var stops: Array[Vector3] = [end]
 	return {"start":room.to_global(Vector3(0,.05,0)),"end":end,"stops":stops}
 
-func _strip(tiles: Dictionary, lo: int, hi: int, z: int) -> void:
-	for x in range(lo,hi+1): tiles[Vector2i(x,z)] = true
+func _line(room: Node3D, x: float) -> void:
+	_box(room,Vector3(x,.016,0),Vector3(.13,.024,2.62),WHITE)
 
-func _center(cell: Vector2i) -> Vector3:
-	return Vector3((cell.x+.5)*CELL,0,cell.y*CELL)
+func _z(i: int,t: float) -> float:
+	return 2.24*sin(TAU*t/5.0+_phases[i])
+
+func set_clock(room_index: int,t: float) -> void:
+	if room_index>=0 and room_index<_carts.size(): _carts[room_index].position.z = _z(room_index,t)
+
+func hazard_at(world_pos: Vector3,room_index: int,t: float) -> bool:
+	if room_index<0 or room_index>=_rooms.size(): return false
+	var p := _rooms[room_index].to_local(world_pos)
+	# Circle vs cart footprint: the same pose as set_clock, even after a cut.
+	var dx := maxf(0,absf(p.x-_carts[room_index].position.x)-.44)
+	var dz := maxf(0,absf(p.z-_z(room_index,t))-.36)
+	return p.y>=-.35 and p.y<=1.10 and dx*dx+dz*dz<=.32*.32
+
+func _disc(root: Node3D, at: Vector3, radius: float, depth: float, color: Color) -> MeshInstance3D:
+	var mi := _box(root,at,Vector3.ONE,color)
+	var wheel := CylinderMesh.new()
+	wheel.radial_segments = 14
+	wheel.top_radius = radius
+	wheel.bottom_radius = radius
+	wheel.height = depth
+	mi.mesh = wheel
+	mi.rotation.x = PI/2
+	return mi
 
 func _buffer(room: Node3D, x: float, direction: int) -> Node3D:
 	var node := Node3D.new()
