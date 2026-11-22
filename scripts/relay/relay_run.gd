@@ -14,6 +14,7 @@ const CameraMath = preload("res://scripts/camera/camera_math.gd")
 const SlateUI = preload("res://scripts/ui/slate_ui.gd")
 const FrameFX = preload("res://scripts/relay/frame_fx.gd")
 const Save = preload("res://scripts/relay/relay_save.gd")
+const TouchPad = preload("res://scripts/relay/touch_pad.gd")
 const MODULES := 12
 ## The shapes the run draws from. I, L and O come first because they are the three
 ## honest answers to "what happens when the crew rebuilds it the other way round?":
@@ -84,6 +85,7 @@ var cards: Array = []
 var desk: CanvasLayer
 var slate: CanvasLayer
 var pause_ui: CanvasLayer
+var touch: Node2D
 var fx: Node
 var score: Node
 ## Last distance to each ghost, so a close pass can be told from a clean one.
@@ -220,6 +222,19 @@ func _ready() -> void:
 	# distance rings stay out of the frame, only the recorded stills are drawn.
 	_preview_camera.cull_mask &= ~Ghost.LIVE_LAYER
 	rig.camera.make_current()
+	# Touch controls sit above the set and under the cards: a thumb may never cover
+	# a sheet the player is reading. Nothing here changes a rule — it sends the same
+	# keycodes and the same four world directions.
+	var pad_layer := CanvasLayer.new()
+	pad_layer.name = "TouchLayer"
+	pad_layer.layer = 6
+	add_child(pad_layer)
+	touch = TouchPad.new()
+	touch.name = "TouchPad"
+	touch.relay = self
+	touch.player = player
+	touch.rig = rig
+	pad_layer.add_child(touch)
 	rig.reduce_motion = GameSession.settings.reduce_motion
 	rig.roll_scale = GameSession.settings.roll_scale
 	var env := Environment.new()
@@ -1369,6 +1384,16 @@ func _unhandled_key_input(e: InputEvent) -> void:
 			"LENS TILT: ON" if rig.tilt_enabled else "LENS TILT: OFF")
 		_notice_left = 2.0
 		return
+	_press(key)
+
+
+## One path for both hands: the pad synthesises the same keycodes the keyboard
+## sends, so a thumb cannot drift into a second set of rules.
+func touch_key(key: int) -> void:
+	_press(key)
+
+
+func _press(key: int) -> void:
 	# Whatever else is on screen, ESC always does something. On the cutting desk it
 	# leaves the desk (the old behaviour, and the cheapest way out); everywhere
 	# else it opens the pause menu, including while a card is up — a card that
@@ -1434,6 +1459,10 @@ func _unhandled_key_input(e: InputEvent) -> void:
 				_notice_left = 2.5
 	_refresh()
 
+## The set is framed for 53 deg at 12 m, and every screen this ships to is held
+## sideways — a laptop lid, or a phone turned landscape. The phone does not get a
+## different camera: it gets the same frame, scaled down, plus a pad. Distance is
+## presentation only, and the player can pinch it either way at any time.
 func _refresh() -> void:
 	var zh := Loc.language == "zh"
 	desk.set_hud_scale(float(GameSession.settings.get("hud_scale", 1.0)))

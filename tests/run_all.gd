@@ -37,6 +37,7 @@ const MODULES := [
 	["scene", preload("res://tests/test_scene.gd")],
 	["relay_death", preload("res://tests/test_relay_death.gd")],
 	["relay_walk", preload("res://tests/test_relay_walk.gd")],
+	["touch_pad", preload("res://tests/test_touch_pad.gd")],
 ]
 
 var _finished := false

@@ -41,6 +41,9 @@ var push := Vector3.ZERO
 var roll_mode := RollModes.CHASE
 ## Optional Vector2 driving the player instead of the keyboard (tests, replays).
 var input_override: Variant = null
+## Additive axis from the on-screen pad (§touch): same four world directions as
+## the keys, so a thumb and a keyboard are the same input, not two rule sets.
+var touch_vec := Vector2.ZERO
 
 var _visual: Node3D
 var _last_intent := Vector3.ZERO
@@ -139,7 +142,12 @@ func _read_input() -> Vector2:
 		return input_override
 	var x := Input.get_action_strength("move_right") - Input.get_action_strength("move_left")
 	var y := Input.get_action_strength("move_back") - Input.get_action_strength("move_forward")
-	return Vector2(x, y)
+	var out := Vector2(x, y) + touch_vec
+	# Two thumbs on the same stick, or a stick plus a key: still one direction at
+	# full speed. Never 1.4x because two devices agree.
+	if out.length() > 1.0:
+		out = out.normalized()
+	return out
 
 
 func _physics_process(dt: float) -> void:
