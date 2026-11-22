@@ -45,6 +45,7 @@ var _keys := {}
 ## Per room: the mezzanine — a catwalk you can be up on while the deck sweeps under you.
 var _mezz := {}
 var _wires := {}
+var _notes := {}
 ## You are on the hook when you stand on the painted mark: the rig does the rest.
 func wire_at(world_pos: Vector3, room_index: int) -> bool:
 	if not _wires.has(room_index): return false
@@ -268,6 +269,7 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 	if _count==0:
 		_buffer(room,0,-1)
 		_line(room,0)
+	_dress(room, kind, ink, variant)
 	if is_instance_valid(_cap):
 		for part: MeshInstance3D in _cap.find_children("*","MeshInstance3D",true,false): part.mesh = null
 		_cap.get_parent().remove_child(_cap)
@@ -281,6 +283,58 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 	# from the same choices it was made of.
 	return {"start":room.to_global(Vector3(0,.05,0)),"end":end,"stops":stops,
 		"kind":kind,"variant":variant,"mod":mod,"final":final,"event":event}
+
+## Every family gets its own furniture and its own floor inlay, so the five sets
+## are five places rather than five wall layouts. Nothing here is solid: dressing
+## must never change a route or a timing, only what the room looks like.
+func _dress(room: Node3D, kind: String, ink: Color, variant: int) -> void:
+	var side := 1.0 if variant % 2 == 0 else -1.0
+	# A strip of paint down the lane: this is the family's colour on the deck.
+	_box(room, Vector3(LENGTH * 0.5, .011, side * 2.62), Vector3(LENGTH - 1.2, .02, .30), ink.darkened(0.35))
+	# One call note per set, near the far end and off the lane. Walking over it is
+	# the only "lore" in the game: no dialogue, no menu, just the paperwork the
+	# crew left on the deck.
+	_box(room, Vector3(7.25, .014, 2.24), Vector3(.42, .02, .30), Color("e9dfc4"))
+	_box(room, Vector3(7.55, .20, 2.42), Vector3(.05, .40, .05), IRON)
+	_box(room, Vector3(7.55, .42, 2.42), Vector3(.13, .10, .13), Color("ffde79"))
+	_notes[_count] = Vector3(7.25, .05, 2.24)
+	match kind:
+		"i":
+			# A strip room: lighting stands and cable runs, nothing else.
+			for x: float in [2.2, 6.8]:
+				_box(room, Vector3(x, 1.05, -2.62), Vector3(.09, 2.1, .09), IRON)
+				_box(room, Vector3(x, 2.12, -2.62), Vector3(.34, .10, .34), Color("ffde79"))
+			_box(room, Vector3(LENGTH * 0.5, .06, 2.55), Vector3(LENGTH - 2.4, .10, .16), IRON)
+		"l":
+			# A corner room: crates stacked where the crew dumped them.
+			_box(room, Vector3(1.6, .30, 2.35), Vector3(.9, .58, .9), FLAT)
+			_box(room, Vector3(1.7, .78, 2.40), Vector3(.7, .44, .7), FLAT.darkened(0.12))
+			_box(room, Vector3(2.5, .22, 2.55), Vector3(1.1, .42, .7), WHITE.darkened(0.55))
+			_box(room, Vector3(7.4, .45, -2.45), Vector3(.5, .9, .5), IRON)
+		"o":
+			# A ring room: the scaffold that will be taken down tonight.
+			for x: float in [2.9, 5.4, 7.9]:
+				_box(room, Vector3(x, .95, -2.55), Vector3(.10, 1.9, .10), IRON)
+			_box(room, Vector3(5.4, 1.92, -2.55), Vector3(5.4, .07, .07), IRON)
+			_box(room, Vector3(3.0, 1.30, 2.50), Vector3(2.6, 2.2, .06), ink.darkened(0.55))
+		"h":
+			# Two lanes: an overhead rail with sandbags, the way a flat is braced.
+			_box(room, Vector3(LENGTH * 0.5, 2.30, 0), Vector3(LENGTH - 1.0, .10, .10), IRON)
+			for x: float in [2.4, 4.6, 6.8]:
+				_box(room, Vector3(x, 2.05, 0), Vector3(.24, .40, .18), FLAT.darkened(0.2))
+			_box(room, Vector3(1.2, .55, -2.55), Vector3(.8, 1.1, .5), FLAT)
+		_:
+			# Two bends: a duct and a painted mark where a rig used to stand.
+			_box(room, Vector3(LENGTH * 0.5, .32, side * 2.55), Vector3(LENGTH - 1.6, .55, .5), IRON)
+			_box(room, Vector3(7.2, .02, -side * 2.1), Vector3(1.4, .02, 1.4), ink.darkened(0.45))
+
+## The paperwork on the deck. Returns true while the player is standing on it.
+func note_at(world_pos: Vector3, room_index: int) -> bool:
+	if not _notes.has(room_index): return false
+	var room: Node3D = _rooms[room_index]
+	if room == null: return false
+	var p: Vector3 = room.to_local(world_pos)
+	return p.y < 0.6 and Vector2(p.x, p.z).distance_to(Vector2(float(_notes[room_index].x), float(_notes[room_index].z))) < 0.55
 
 func _letter_lanes(room: Node3D, rows: Array, hand: int, ink: Color) -> void:
 	# Consolidate horizontal wall runs; leave open vestibules to turn at either seam.

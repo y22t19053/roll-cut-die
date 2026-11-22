@@ -63,6 +63,7 @@ var _seen_hints := {}
 ## Ghosts the tape handed you back inside of. They stop counting until you
 ## step out: a respawn is never the player's mistake.
 var _inside := {}
+var _notes_read := {}
 ## The projection a MARK leaves: the colour of the film, never the paint of the
 ## set. Alpha stays low so a MARK can never be mistaken for an obstacle.
 const STILL_INK := Color(0.55, 0.95, 0.85)
@@ -990,7 +991,29 @@ func _physics_process(dt: float) -> void:
 		_show_target()
 	_track_gaps()
 	_first_lessons()
+	_read_note()
 	_refresh()
+
+## The only lore in the game: a call note left on the deck. One per set, read by
+## walking over it, said once, never repeated in that run.
+func _read_note() -> void:
+	if not $Rooms.note_at(player.global_position, segments.size() - 1): return
+	var key := segments.size()
+	if _notes_read.has(key): return
+	_notes_read[key] = true
+	var lines := [
+		"通告：今天补第一条。上一条被剪了，剪的人没留名。",
+		"地上那圈胶带是昨天的走位。标得比你准。",
+		"灯不够了。场务说再拍两条就收，他没说拍不拍得完。",
+		"门那头是交货口。过线，这一卷就不是你的了。",
+	]
+	var en := [
+		"Call sheet: one take to reshoot today. The last one was cut, and nobody signed it.",
+		"The tape on the deck is where they stood yesterday. They stood it better.",
+		"Not enough light left. The gaffer says two more takes, and does not say two more of what.",
+		"Past that door is the delivery bay. Cross the line and this reel is somebody else's.",
+	]
+	_show_notice(_w(lines[clampi(act, 0, 3)], en[clampi(act, 0, 3)]), 5.0)
 
 ## The nearest ghost sets the tension bed; the moment a close pass becomes a
 ## clean one, a single click says so. Nothing here scores, slows or pushes.
