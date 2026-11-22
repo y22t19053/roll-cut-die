@@ -561,8 +561,27 @@ func _first_lessons() -> void:
 		_hint("lesson_cut", "按 C 看一眼自己留下的落点。看片不要钱。",
 			"C shows where your own takes stopped. Looking is free.")
 	if not returning and tracks.size() >= 2:
+		_demo_mark()
 		_hint("lesson_mark", "M 在这里留一个落点。失手会自动回到最近的落点。",
 			"M leaves a mark here. A collision returns you to the last one.")
+
+
+## Before telling anyone what M does, show one appearing at their feet. A mark is
+## a small thing on a busy deck, and the sentence alone leaves them looking for it.
+var _mark_demo := false
+
+func _demo_mark() -> void:
+	if _mark_demo: return
+	_mark_demo = true
+	var beacon := MarkBeacon.new()
+	beacon.setup(1, to_local(player.global_position))
+	beacon.scale = Vector3.ONE * 0.02
+	add_child(beacon)
+	var tw := create_tween()
+	tw.tween_property(beacon, "scale", Vector3.ONE, 0.22)
+	tw.tween_interval(0.85)
+	tw.tween_property(beacon, "scale", Vector3.ONE * 0.02, 0.40)
+	tw.tween_callback(beacon.queue_free)
 
 func _clear_spot(pos: Vector3) -> Vector3:
 	var room_index := segments.size() - 1
@@ -1285,7 +1304,7 @@ func _refresh() -> void:
 		var price := _w("剪回去：少 %.1f 秒走位" % lost, "SPLICE BACK: %.1f s of walking" % lost)
 		if back > 0:
 			price += _w("，本棚回到第 %d 趟" % (back + 1), ", back to pass %d" % (back + 1))
-		_hud.text = _w("剪辑台　↑ ↓　%02d / %02d", "CUT DESK   ↑ ↓   %02d / %02d") % [_selected+1, anchors.size()] + "\n%s · TAKE %02d · %.1fs\n" % [tag,p.leg,p.time] + price + "\n" + _w("空格：剪回　−1 CUT", "SPACE: splice   −1 CUT")
+		_hud.text = _w("剪辑台　↑ ↓　%02d / %02d", "CUT DESK   ↑ ↓   %02d / %02d") % [_selected+1, anchors.size()] + "\n%s · TAKE %02d · %.1fs\n" % [tag,p.leg,p.time] + price + "\n" + _w("空格：剪回　−1 CUT　·　C 退出（看片不要钱）", "SPACE: splice   −1 CUT   ·   C to back out (looking is free)")
 	if _notice_left > 0:
 		desk.show_message(_notice)
 		_notice_left = 0
