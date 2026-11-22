@@ -233,11 +233,9 @@ func _ready() -> void:
 	# Sample after the actual player and camera have stepped.
 	process_physics_priority = 5
 	_start_leg(false)
-	# Once the board has closed, tell them how long the job is. Nobody should have
-	# to guess the run's length from the HUD.
-	get_tree().create_timer(0.95).timeout.connect(func() -> void:
-		if is_inside_tree() and phase == Mode.PLAY:
-			_hint("shape", "四节十二棚。最后一棚要冲线。", "Four acts, twelve sets. The last one is the gate."))
+	# The length of the job is on the title's start caption and in the pause page.
+	# It is not the first thing to say here: the first thing is "walk to the line",
+	# and two notices on top of each other is how a tutorial stops being read.
 
 func _w(zh: String, en: String) -> String:
 	return zh if Loc.language == "zh" else en
@@ -499,7 +497,7 @@ func _restore(i: int) -> void:
 	else:
 		_sample() # No old room, objective, inventory or success is rolled back.
 		elapsed += 0.011 # Preserve a jump instead of interpolating a long false walk.
-	player.teleport(p.pos,p.facing)
+	player.teleport(_clear_spot(p.pos), p.facing)
 	rig.setup(player)
 	rig.restore_mark_motion(p)
 	_sample()
@@ -510,9 +508,41 @@ func _restore(i: int) -> void:
 	_wire_used = false
 	desk.clear_sheet()
 	score.resume_beds()
-	grace = act_grace
+	# A respawn you cannot act on is not a respawn. The checkpoint is where the
+	# take was, not a promise that the truck has left it.
+	grace = maxf(act_grace, 2.0)
 	_arrival_locked = player.global_position.distance_to(route[cursor]) <= TOUCH
 	_show_target()
+
+## Nudges a respawn out of whatever is standing on it. Being put back down inside
+## a passing truck is what a player reads as "the controls stopped working", and
+## three of those in a row is a bug report, not a difficulty curve.
+## The first two sets are the tutorial, and the tutorial is four sentences shown
+## when the thing they describe is on screen. Nothing here is a menu.
+func _first_lessons() -> void:
+	if phase != Mode.PLAY or act > 0 or segments.size() > 2: return
+	if elapsed > 0.8 and not returning:
+		_hint("lesson_line", "走到亮起来的那条线。", "Walk to the line that is lit.")
+	if returning and elapsed > 0.8:
+		_hint("lesson_back", "过了。回头，走到另一头那条线。", "Across. Now turn around for the line at the far end.")
+	if returning and tracks.size() >= 1:
+		_hint("lesson_ghost", "迎面过来的是你上一趟的录像。撞上就死。", "That is your last take, walking back. Touch it and you are done.")
+	if not returning and tracks.size() >= 1:
+		_hint("lesson_cut", "按 C 能看一眼自己留下的落点。看片不要钱。", "C shows where your own takes stopped. Looking is free.")
+	if not returning and tracks.size() >= 2:
+		_hint("lesson_mark", "M 在这里留一个落点。失手会自动回到最近的落点。", "M leaves a mark here. A collision returns you to the last one.")
+
+func _clear_spot(pos: Vector3) -> Vector3:
+	var room_index := segments.size() - 1
+	if room_index < 0: return pos
+	for dz: float in [0.0, 0.55, -0.55, 1.05, -1.05]:
+		for dx: float in [0.0, 0.5, -0.5, 1.0, -1.0]:
+			var spot := pos + Vector3(dx, 0.0, dz)
+			if $Rooms.hazard_at(spot, room_index, elapsed): continue
+			if $Rooms.crew_at(spot, room_index): continue
+			if $Rooms.goof_at(spot, room_index): continue
+			return spot
+	return pos
 
 func _show_target() -> void:
 	_lamp.visible = phase == Mode.PLAY
@@ -565,6 +595,7 @@ func _finish_leg() -> void:
 		phase = Mode.ITEM
 		score.cue("clear")
 		desk.show_items(Loc.language == "zh")
+		_hint("lesson_item", "先拿一件东西，再选下一棚。", "Take one thing, then pick the next set.")
 
 ## The last line of the run. A wrap is loud on purpose: the run's whole promise
 ## is that the crossing is worth the takes it cost.
@@ -811,6 +842,7 @@ func _pick_card(i: int) -> void:
 		phase = Mode.PICK
 		cards = _offer_doors()
 		desk.show_draw(cards, Loc.language == "zh")
+		_hint("lesson_pick", "这三张是下一棚。按 1 / 2 / 3 或点一下。", "Three sets for the next one. Press 1 / 2 / 3 or click.")
 		_refresh()
 		return
 	if phase != Mode.PICK or i < 0 or i >= cards.size(): return
@@ -953,6 +985,7 @@ func _physics_process(dt: float) -> void:
 		_checkpoint(false)
 		_show_target()
 	_track_gaps()
+	_first_lessons()
 	_refresh()
 
 ## The nearest ghost sets the tension bed; the moment a close pass becomes a
