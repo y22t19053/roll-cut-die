@@ -878,6 +878,23 @@ _plans[i] = {"entry": Vector3, "exit": Vector3}
 
 **留下的不一致**：底部事件提示还写着「场务在跑。他不会为你停。」——现在他会停。已记进 `docs/DEAI_TASKS.md` 的待改清单，等作者改写文案时一起动。
 
+# D-063 · 地板与墙第一次是「拍出来的」，不是算出来的
+
+**状态**：CONFIRMED（真机截图 `m25_sdxl.png`：甲板上有拼板缝、拖痕与污渍；墙是刷过漆的胶合板纹）。
+
+**触发**：作者把 D: 盘接回来了（136 GB 模型库包括 `sd_xl_base_1.0`、`RealVisXL_V5.0_fp16`、`Juggernaut-XL`、ControlNet/IPAdapter/LoRA）。法庭判词的第二条条件正是「D 盘到位后一周内启动真贴图替换，且只改 `_surface()`」——现在可以履行。
+
+**做法**：本机没有 ComfyUI 安装，所以走 diffusers：
+
+- `tools/make_textures_sdxl.py`：`StableDiffusionXLPipeline.from_single_file(D:\ComfyModels\checkpoints\RealVisXL_V5.0_fp16.safetensors)`，768²、24 步、CFG 5.5。8 GB 显存下必须 `enable_model_cpu_offload()`——1024² 直接 `CUDA error: out of memory`。
+- `tileable()`：取八分之一边带做镜像-平均，接缝不显眼（拼板线本身是图里的内容，不是重复痕迹）。
+- `as_mask()`：把出图压成**近白 multiply mask**（灰度 1–99 百分位归一到 0.76/0.80–1.0）。因为 `relay_rooms._surface()` 是 `albedo_color * albedo_texture`，成品颜色会被二次压暗——这条在 D-027 已经踩过一次。
+- 输出 `assets/textures/deck_ai.png`（甲板）与 `assets/textures/wall.png`（墙/侧板）。`_surface()` 一行没改，它本来就有「有就用、没有就程序化」的回退链。
+
+**打包**：Godot 不会把没被编辑器扫过的 PNG 当资源带走，所以 `export_presets.cfg` 的 `include_filter` 显式加上这两个文件名；运行时由 `_load_or_grain()` 的 `Image.load_png_from_buffer` 分支读取。
+
+**还没做**：家具/道具/人物没有贴图（仍然是纯色块，这是下一步）；两张图是各自一次生成的，没有做「同一次拍摄」的一致性（甲板是水泥色，墙是米色，都还说得过去）；真人没看过。
+
 ## 变更规则
 1. 新增决策 → 追加条目，编号连续，不得改写历史条目。
 2. 推翻旧决策 → 新条目 + 在旧条目上标 `SUPERSEDED by D-0xx`，保留原文。
