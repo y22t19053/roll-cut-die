@@ -29,12 +29,14 @@ func _ready() -> void:
 
 ## Board width and top-left corner for a viewport, sized so the board plus the
 ## fully open stick fit between TOP_CLEAR and BOTTOM_CLEAR.
+## The board is a lower-third card now: the death frame is the thing being read,
+## so the board sits under it and the top two thirds stay clear. The open stick
+## still rises into frame, but only for the moment it takes to shut.
 static func board_layout(vp: Vector2) -> Dictionary:
-	var room := maxf(vp.y - TOP_CLEAR - BOTTOM_CLEAR, 1.0)
-	var bw := minf(minf(vp.x * 0.64, 760.0), room / (stick_reach(1.0) + HEIGHT_FRAC))
-	var reach := stick_reach(bw)
-	var spare := room - reach - bw * HEIGHT_FRAC
-	return {"width": bw, "origin": Vector2((vp.x - bw) * 0.5, TOP_CLEAR + reach + spare * 0.5)}
+	var bw := minf(minf(vp.x * 0.52, 660.0), vp.y * 0.62)
+	var bh := bw * HEIGHT_FRAC
+	var origin := Vector2((vp.x - bw) * 0.5, vp.y * 0.665 - bh * 0.5)
+	return {"width": bw, "origin": origin}
 
 
 ## How far above the board's top edge the fully open stick's far corner rises.
@@ -49,7 +51,10 @@ func _draw() -> void:
 	var vp := size
 	if vp.x < 4.0 or vp.y < 4.0:
 		return
-	draw_rect(Rect2(Vector2.ZERO, vp), Color(0.02, 0.02, 0.025, 0.60 * alpha))
+	# The dip is weighted to the lower third: the frame that killed you stays
+	# readable above the board instead of being dimmed with it.
+	draw_rect(Rect2(Vector2.ZERO, vp), Color(0.02, 0.02, 0.025, 0.14 * alpha))
+	draw_rect(Rect2(0.0, vp.y * 0.56, vp.x, vp.y * 0.44), Color(0.02, 0.02, 0.025, 0.58 * alpha))
 
 	var layout := board_layout(vp)
 	var bw: float = layout["width"]

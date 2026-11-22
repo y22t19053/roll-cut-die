@@ -14,15 +14,21 @@ const CameraMath = preload("res://scripts/camera/camera_math.gd")
 const SlateUI = preload("res://scripts/ui/slate_ui.gd")
 const FrameFX = preload("res://scripts/relay/frame_fx.gd")
 const Save = preload("res://scripts/relay/relay_save.gd")
-const MODULES := 6
+const MODULES := 12
 const KINDS := ["s", "h", "u", "l", "n", "x"]
-## A run is three acts of two sets. The seam between acts is the only place the
-## player is asked to sign something: a shorter act, a longer one, or an act with
-## no mercy at all. Everything else is decided at a door.
-const ACTS := 3
-const SETS_PER_ACT := 2
+## A run is four acts of three sets: two quick sets and one long take. The long
+## take is the only one allowed to hurt, and it is the one with the gate in it.
+## Four acts, not three: the room count is what makes a run ten minutes long, and
+## short sets never ask the player to walk the same floor five times.
+const ACTS := 4
+const SETS_PER_ACT := 3
+const SHORT_PASSES := 2
+const LONG_PASSES := 5
 const TOUCH := 0.77
-const GRACE := 0.75
+## A respawn is not a punishment: the tape hands you back with time to see where
+## you are. The grace is part of the set now, so a respawn never asks for a blind
+## dodge.
+const GRACE := 1.2
 const PASSES := 4
 ## A run is a seed and six sets in three acts: the seed is printed on the call
 ## sheet so two runs can be compared, replayed or argued about.
@@ -135,6 +141,8 @@ func _ready() -> void:
 		# The first set is the tutorial: the same dolly, running slow enough that
 		# a player can watch it cross once and then walk through the gap.
 		segments.append($Rooms.append_room("straight",0,"",false,"",0.72))
+		# The opening set is the short one: two legs, one dolly, nothing else.
+		required_passes = _slot_passes()
 		Save.clear() # A new run throws away the one that was left open.
 	player.name = "Player"
 	add_child(player)
@@ -205,11 +213,19 @@ func _ready() -> void:
 func _w(zh: String, en: String) -> String:
 	return zh if Loc.language == "zh" else en
 
+## The way out and the way back are not the same walk. Going out the lamp sits on
+## the south wall, coming back it sits on the north one, so the return trip is a
+## different read of the same floor instead of a mirror of the first leg.
+const LANE := 2.10
+
+
 func _start_leg(back: bool) -> void:
 	returning = back
 	route.clear()
 	var room := segments.back() as Dictionary
-	route.append(room.start if back else room.end)
+	var target: Vector3 = (room.start if back else room.end) as Vector3
+	target.z = LANE if back else -LANE
+	route.append(target)
 	cursor = 0
 	_arrival_locked = false
 	phase = Mode.PLAY
@@ -482,6 +498,7 @@ func _finish_leg() -> void:
 		act += 1
 		cards = _offer_contracts()
 		score.cue("clear")
+		score.set_act(act)
 		desk.show_draw(cards, Loc.language == "zh")
 		desk.show_message(_w("第 %d 节。签一张。" % (act + 1), "Act %d. Sign one." % (act + 1)))
 		_hint("act_%d" % act, _act_line(act, true), _act_line(act, false))
@@ -493,12 +510,14 @@ func _finish_leg() -> void:
 ## The last line of the run. A wrap is loud on purpose: the run's whole promise
 ## is that the crossing is worth the takes it cost.
 func _finish_line() -> void:
-	score.cue("win")
 	score.resume_beds()
 	slate.play_wrap(_w("全部接通", "ANSWER PRINT"), _w("这一卷是你的", "this reel is yours"))
 	rig.add_shake(0.7)
 	fx.flash(Color("ffeec4"), 0.46, 0.06, 0.42)
 	_hint("finish", "冲线。这一卷是你的。", "Across the line. This reel is yours.")
+	# The board closes first and the clack answers it; the four rising notes come
+	# in behind that, so the last thing under the gate is the score, not the UI.
+	get_tree().create_timer(0.34).timeout.connect(func() -> void: score.cue("win"))
 	# The board names the crossing first; the call sheet comes in after the clack
 	# has landed, the way a wrap is called before the paperwork.
 	get_tree().create_timer(0.72).timeout.connect(func() -> void: _show_sheet(true))
@@ -532,23 +551,33 @@ func _apply_contract(id: String) -> void:
 			act_grace = 0.30
 	score.cue("pickup")
 
-## Three doors, three stakes. A short set is quick and pays nothing; a long one
-## costs legs and pays a supply. The condition is on the door, never a surprise
-## after the pick.
+## Three doors, and the choice is never "how much walking": the length is the
+## set's place in the act. What the doors sell is what the crew does to the floor
+## and what the set pays for it.
+func _slot_passes() -> int:
+	return LONG_PASSES if segments.size() % SETS_PER_ACT == SETS_PER_ACT - 1 else SHORT_PASSES
+
+
 func _offer_doors() -> Array:
 	var tier := segments.size() - 1
 	var deck := KINDS.duplicate()
-	var stakes := [[3, ""], [PASSES, ""], [PASSES + 1, "mark"]]
-	if tier >= 2:
-		stakes = [[3, ""], [PASSES + 1, "cut"], [PASSES + 1, "mark"]]
+	var pool: Array = ["relight", "extra", "guide"]
+	var events: Array = []
+	for k in 2:
+		events.append(pool.pop_at(_rng.randi_range(0, pool.size() - 1)))
+	var passes := _slot_passes()
+	var rewards: Array = ["", "mark", "cut" if tier >= 2 else "splice"]
 	var out: Array = []
 	for slot in 3:
-		var st: Array = stakes[slot]
 		var door := {"kind": deck.pop_at(_rng.randi_range(0, deck.size() - 1)),
 			"variant": _rng.randi_range(0, 1), "mod": _roll_mod(tier, slot),
-			"passes": int(st[0]), "reward": str(st[1])}
+			"passes": passes, "reward": str(rewards[slot]),
+			"event": "" if slot == 0 else str(events[slot - 1])}
 		door["mod_label"] = _mod_label(str(door["mod"]))
-		door["stake_label"] = _stake_label(int(door["passes"]), str(door["reward"]))
+		if str(door["event"]) != "":
+			var tag := _event_short(str(door["event"]))
+			door["mod_label"] = tag if str(door["mod_label"]) == "" else (str(door["mod_label"]) + " · " + tag)
+		door["stake_label"] = _stake_label(int(door["passes"]), str(door["reward"]), str(door["event"]))
 		out.append(door)
 	return out
 
@@ -566,13 +595,23 @@ func _roll_mod(tier: int, _slot := 0) -> String:
 	return "clean"
 
 
-func _stake_label(passes: int, reward: String) -> String:
+func _stake_label(passes: int, reward: String, _event := "") -> String:
+	# One short line: the card is 196 px wide, so the price has to read at a
+	# glance rather than spell itself out.
 	var base := _w("%d 趟", "%d legs") % passes
 	match reward:
-		"mark": return base + _w("　多给 1 MARK", "   +1 MARK")
-		"cut": return base + _w("　多给 1 CUT", "   +1 CUT")
-		"splice": return base + _w("　送一片接片", "   free splice")
-	return base + _w("　无补给", "   no supply")
+		"mark": return base + _w(" · +1 MARK", " · +1 MARK")
+		"cut": return base + _w(" · +1 CUT", " · +1 CUT")
+		"splice": return base + _w(" · 接片", " · splice")
+	return base + _w(" · 无补给", " · none")
+
+
+func _event_short(event: String) -> String:
+	match event:
+		"relight": return _w("带灯", "lamped")
+		"extra": return _w("多一台车", "extra dolly")
+		"guide": return _w("旧我示范", "ghost walks it")
+	return ""
 
 func _mod_label(mod: String) -> String:
 	match mod:
@@ -624,17 +663,21 @@ func _pick_card(i: int) -> void:
 	if phase != Mode.PICK or i < 0 or i >= cards.size(): return
 	var c: Dictionary = cards[i]
 	var last := segments.size() == MODULES - 1
-	leg_event = _roll_event()
+	leg_event = str(c.get("event", ""))
 	if last and leg_event == "":
 		# The last set never plays clean: it is the one where you either cross or
 		# do not, so the crew always adds something to it.
 		leg_event = "extra" if _rng.randf() < 0.5 else "relight"
-	var hurry := 1.25 if last else 1.0
+	# The last two sets are the endgame: the crew speeds the dollies up before it
+	# starts dressing them, so the last set is faster *and* busier.
+	var hurry := 1.0
+	if last: hurry = 1.25
+	elif segments.size() >= MODULES - 2: hurry = 1.12
 	var room: Dictionary = $Rooms.append_room(c.kind,c.variant,str(c.get("mod","")),last,leg_event,hurry)
 	segments.append(room)
 	if leg_event != "":
 		_hint("event_" + leg_event, _event_line(leg_event, true), _event_line(leg_event, false))
-	required_passes = int(c.get("passes",PASSES))
+	required_passes = int(c.get("passes", _slot_passes()))
 	if act_mod == "rush": required_passes = maxi(required_passes - 1, 2)
 	elif act_mod == "overtime": required_passes += 1
 	match str(c.get("reward","")):
@@ -756,6 +799,7 @@ func _hit(source: int) -> bool:
 		_restore(last_anchor)
 		_hint("first_death", "撞上就重来一条，别的什么都不扣。", "A collision costs one take and nothing else.")
 		desk.show_message(_death_line(source))
+		_hold_until_board()
 	return true
 
 
@@ -890,7 +934,23 @@ func _board_cut() -> void:
 	score.duck(true)
 	slate.play_cut(n, _w("第 %02d 条" % n, "TAKE %02d" % n))
 
+## A death board is short on purpose: the player is looking at the frame that got
+## them, so the board never covers it and never keeps the controls.
 func _board_die() -> void:
 	var n := maxi(live.take_id,1)
 	score.duck(true)
 	slate.play_die(n, _w("第 %02d 条" % n, "TAKE %02d" % n))
+
+
+## Hold the controls until the board is gone. A respawn that hands you a frozen
+## screen and a live keyboard at the same time is how a fair death becomes a
+## blind one.
+func _hold_until_board() -> void:
+	if not slate.is_running(): return
+	var was_frozen := player.frozen
+	player.set_frozen(true)
+	rig.set_physics_process(false)
+	await slate.sequence_finished
+	if phase == Mode.PLAY:
+		player.set_frozen(was_frozen)
+		rig.set_physics_process(true)

@@ -366,8 +366,19 @@
 - **实现位置**：`scripts/relay/relay_run.gd::_pick_card`（强制事件 + `hurry`）、`scripts/relay/relay_rooms.gd::append_room(..., hurry)`（`period / maxf(hurry, 0.1)`）。
 - **实测**：最后一棚 `periods = [4.0, 4.0]`（twin + hurry），前一棚 `[5.0]`；`segments[-1].final == true`、`event == "relight"`；截图 `final_escalated.png`。
 
-## 变更规则
+## D-035 · 一局是四节十二棚，短场两趟、长镜五趟（CONFIRMED，2026-11-22）
 
+**决策**：`MODULES 12`、`ACTS 4`、`SETS_PER_ACT 3`；每节里前两棚是短场（`SHORT_PASSES 2`）、第三棚是长镜（`LONG_PASSES 5`，冲线门只在全局最后一棚）。门卡不再卖「几趟」，改卖「剧组怎么布置这一棚」（快车/双推轨/窄喉/空棚 + 一个事件）与「给什么补给」。
+
+**理由**：试玩原话「来回走五趟还是那种 U 型的，太他妈折磨了」「第三关脑子要炸」。走同一块地板的次数是折磨来源，棚的数量才是时长来源——四节十二棚把单棚走路压到两趟，把一局拉长到 12 个不同的房间。
+
+**其它同批改动**：`GRACE 0.75 → 1.2`（复活真的能看清再动）；死亡板 `2.05 → 1.20 s`、只占画面下 1/3、scrim 只压下方 44%；`_hold_until_board()` 在板播完之前冻住玩家与相机（不再盲操作）；出程目标贴 z=−2.10、回程贴 z=+2.10（`const LANE := 2.10`），回程不再是去程的镜像；开局第一棚 `hurry 0.72`。
+
+**实现位置**：`scripts/relay/relay_run.gd`（`MODULES/ACTS/SETS_PER_ACT/SHORT_PASSES/LONG_PASSES/GRACE/LANE`、`_slot_passes()`、`_offer_doors()`、`_stake_label()`、`_start_leg()`、`_hold_until_board()`）、`scripts/ui/slate_ui.gd`（`play_die` 时长）、`scripts/ui/slate_board.gd`（`board_layout()` 改成下三分之一、scrim 分上下两段）。
+
+**实测**：`tests/run_all.gd` 462 断言全绿；真机第一棚 `required_passes == 2`、门卡显示「2 趟 · 无补给 / 2 趟 · +1 MARK / 2 趟 · 接片」、死亡板播放期间 `player.frozen == true`、板结束后自动解冻。
+
+## 变更规则
 1. 新增决策 → 追加条目，编号连续，不得改写历史条目。
 2. 推翻旧决策 → 新条目 + 在旧条目上标 `SUPERSEDED by D-0xx`，保留原文。
 3. 只改实现不改决策 → 只更新条目里的「实现位置」。

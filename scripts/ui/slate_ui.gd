@@ -98,11 +98,11 @@ func play_die(take_index: int, corner := "", subline := "") -> void:
 	_take = take_index
 	_corner_text = corner
 	_subline_text = subline
-	_run("die", 2.05, [
+	_run("die", 1.20, [
 		{"at": 0.0, "fn": func() -> void:
 			board.headline = "DIE."
 			_apply_text()},
-		{"at": 0.62, "fn": func() -> void:
+		{"at": 0.26, "fn": func() -> void:
 			board.headline = "CUT!"
 			_animate_stick(0.0, 0.06)
 			_clack_now(0.0)},

@@ -31,6 +31,7 @@ const DANGER_BEATS := 4.0
 var _danger := AudioStreamPlayer.new()
 var _danger_target := -60.0
 var _ducked := false
+var _act_lift := 0.0
 var _music := AudioStreamPlayer.new()
 var _fx := AudioStreamPlayer.new()
 var _lock_until := 0
@@ -102,12 +103,19 @@ func set_danger(v: float) -> void:
 		return
 	var calm_target := lerpf(-22.0, -31.0, w)
 	var tense_target := -60.0 if w <= 0.02 else lerpf(-24.0, -12.0, w)
+	# The last act never goes fully quiet: the room has been counting takes.
+	tense_target += _act_lift
 	if absf(calm_target - _calm_db) >= 0.5:
 		_calm_db = calm_target
 		create_tween().tween_property(_calm, "volume_db", calm_target, 0.35)
 	if absf(tense_target - _tense_db) >= 0.5:
 		_tense_db = tense_target
 		create_tween().tween_property(_tense, "volume_db", tense_target, 0.35)
+
+
+## The last act does not go quiet: the room has been counting takes all along.
+func set_act(n: int) -> void:
+	_act_lift = clampf(float(n) * 1.4, 0.0, 3.2)
 
 
 ## The board is talking: step the score back so the clack is the loudest thing
