@@ -265,7 +265,12 @@ func _start_leg(back: bool) -> void:
 	# The lamp sits on one wall going out and the other coming back, so the return
 	# trip is a different read of the floor instead of a mirror of the first leg.
 	# It is built in the room's own frame: the crew may have turned the set.
-	var local := Vector3(0.0 if back else SET_LENGTH, 0.0, LANE if back else -LANE)
+	# The room says where its doors are; the light line and the crossing test read
+	# the same plan, so a set may put its exit off the centre line.
+	var ri := segments.size() - 1
+	var plan: Dictionary = $Rooms.plan(ri)
+	var local: Vector3 = plan.get("entry", Vector3(0.0, 0.05, 0.0)) if back else plan.get("exit", Vector3(SET_LENGTH, 0.05, 0.0))
+	local.z += LANE if back else -LANE
 	route.append(room_node.to_global(local) if room_node != null else local)
 	cursor = 0
 	_arrival_locked = false
@@ -976,9 +981,8 @@ func _physics_process(dt: float) -> void:
 	# The line is read in the room's own frame, not in world x: once the crew turns
 	# the set the finish line is no longer the same wall, and a world-axis test
 	# would count the crossing the moment the room moved.
-	var room_now := $Rooms.get_child(segments.size() - 1) as Node3D
-	var lp: Vector3 = room_now.to_local(player.global_position) if room_now != null else player.global_position
-	var inside := lp.x <= 0.1 if returning else lp.x >= SET_LENGTH - 0.1
+	var ri_now := segments.size() - 1
+	var inside: bool = $Rooms.crossed(player.global_position, ri_now, returning)
 	if not inside: _arrival_locked = false
 	if inside and not _arrival_locked:
 		cursor += 1

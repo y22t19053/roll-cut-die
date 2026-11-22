@@ -283,5 +283,29 @@ static func run(h, tree = null) -> void:
 	h.ok("the flight is long enough to matter", (ride["from"] as Vector3).distance_to(ride["to"] as Vector3) > 6.0)
 	h.ok("the flight clears the dolly band", (ride["from"] as Vector3).y > 1.10)
 
+	# The room reports its own doors, and the crossing test reads that plan. These
+	# pin the straight behaviour first, then the off-axis one, so a later plan
+	# cannot quietly move the finish line out from under the light.
+	var plain_plan: Dictionary = rooms.plan(0)
+	h.near("a straight set enters at its near seam", float((plain_plan["entry"] as Vector3).x), 0.0, 0.001)
+	h.near("a straight set leaves at its far seam", float((plain_plan["exit"] as Vector3).x), 9.0, 0.001)
+	h.near("a straight set leaves on the centre line", float((plain_plan["exit"] as Vector3).z), 0.0, 0.001)
+	var straight: Node3D = rooms._rooms[0]
+	h.ok("standing on the far line crosses it",
+		rooms.crossed(straight.to_global(Vector3(9.02, 0.05, 0.40)), 0, false))
+	h.ok("two metres short does not",
+		not rooms.crossed(straight.to_global(Vector3(7.0, 0.05, 0.40)), 0, false))
+	h.ok("the near seam ends a return leg",
+		rooms.crossed(straight.to_global(Vector3(0.02, 0.05, -0.40)), 0, true))
+	rooms.append_room("i", 1, "")
+	var hollow_room: int = rooms._count - 1
+	var hollow_plan: Dictionary = rooms.plan(hollow_room)
+	h.ok("a hollow set enters low and leaves high",
+		float((hollow_plan["entry"] as Vector3).z) < -1.0 and float((hollow_plan["exit"] as Vector3).z) > 1.0)
+	h.ok("its far line is where the plan says it is",
+		rooms.crossed(rooms._rooms[hollow_room].to_global(Vector3(9.0, 0.05, 1.95)), hollow_room, false))
+	h.ok("its centre is not the door any more",
+		not rooms.crossed(rooms._rooms[hollow_room].to_global(Vector3(9.0, 0.05, -1.6)), hollow_room, false))
+
 	rooms.queue_free()
 	h.finish()
