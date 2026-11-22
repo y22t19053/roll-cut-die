@@ -511,7 +511,9 @@ static func _surface(color: Color) -> Texture2D:
 		if _deck_tex == null: _deck_tex = _load_or_grain("res://assets/textures/deck_ai.png")
 		return _deck_tex
 	if color == IRON:
-		if _flat_tex == null: _flat_tex = _load_or_grain("res://assets/textures/flat.png")
+		# Painted steel: the dolly is the thing you must read at twelve metres, so it
+		# gets a surface of its own instead of the wall's plywood.
+		if _flat_tex == null: _flat_tex = _load_or_grain("res://assets/textures/metal.png")
 		return _flat_tex
 	if _wall_tex == null: _wall_tex = _load_or_grain("res://assets/textures/wall.png")
 	return _wall_tex
