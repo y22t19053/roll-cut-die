@@ -92,7 +92,24 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 	var ink: Color = SET_INKS.get(kind, LETTER_INKS.get(kind, SET_INKS.straight))
 	var hand := 1 if posmod(variant,2)==0 else -1
 	_box(room,Vector3(4.5,-.12,0),Vector3(9,.24,6),DECK,true)
+	# One family opens a pocket in its side wall. The dollies never reach into it,
+	# so it is a real place to stand and let a pass go by — that is the whole
+	# reason to make the plan irregular instead of just re-arranging the inside.
+	var pocket := kind == "l"
 	for z in [-1,1]:
+		if pocket and z == hand:
+			for sx: float in [1.5, 7.5]:
+				_box(room,Vector3(sx,.48,z*2.94),Vector3(3.0,.96,.12),FLAT,true)
+				_box(room,Vector3(sx,.91,z*2.94),Vector3(2.9,.09,.14),ink)
+			var pz: float = z*3.70
+			_box(room,Vector3(4.5,-.12,pz),Vector3(3.0,.24,1.52),DECK,true)
+			_box(room,Vector3(4.5,.48,pz+z*0.76),Vector3(3.0,.96,.12),FLAT,true)
+			for px: float in [3.0,6.0]:
+				_box(room,Vector3(px,.48,pz),Vector3(.12,.96,1.52),FLAT,true)
+			# A painted frame around the opening: the eye needs to know that this
+			# gap is a way through and not a seam in the wall.
+			_box(room,Vector3(4.5,1.02,z*2.94),Vector3(3.2,.08,.16),WHITE)
+			continue
 		_box(room,Vector3(4.5,.48,z*2.94),Vector3(9,.96,.12),FLAT,true)
 		_box(room,Vector3(4.5,.91,z*2.94),Vector3(8.84,.09,.14),ink)
 		# Twin grip bays make a narrow throat at each end, not a sealed door.
