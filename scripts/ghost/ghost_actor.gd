@@ -51,6 +51,7 @@ var _ring: MeshInstance3D
 var _ring_mat: StandardMaterial3D
 var _alpha := 0.0
 var _armed := false
+var _notches: Array = []
 
 
 func setup(t: Variant, id: int) -> void:
@@ -66,6 +67,8 @@ func setup(t: Variant, id: int) -> void:
 		_danger.monitoring = false
 	if _label != null:
 		_label.text = "TAKE %02d" % take_id
+	if _ring_mat != null:
+		_build_notches()
 
 
 func _ready() -> void:
@@ -76,6 +79,31 @@ func _hue() -> Color:
 	# Stable per take, so the third take's two ghosts are told apart instantly.
 	var h := fmod(0.55 + 0.13 * float(take_id), 1.0)
 	return Color.from_hsv(h, 0.45, 1.0)
+
+
+## Colour alone cannot carry this: one notch on the floor ring per take number,
+## at fixed angles, so "which past take is this" is countable in greyscale too.
+func _build_notches() -> void:
+	for n in _notches:
+		if is_instance_valid(n):
+			n.queue_free()
+	_notches.clear()
+	if _ring_mat == null:
+		return
+	var count: int = clampi(take_id, 1, 6)
+	for i in count:
+		var notch := MeshInstance3D.new()
+		notch.name = "TakeNotch%d" % (i + 1)
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.10, 0.02, 0.045)
+		notch.mesh = bm
+		notch.material_override = _ring_mat
+		var ang := TAU * float(i) / 6.0 - PI * 0.5
+		notch.position = Vector3(cos(ang) * (DANGER_RADIUS + 0.045), 0.018, sin(ang) * (DANGER_RADIUS + 0.045))
+		notch.rotation.y = -ang
+		notch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(notch)
+		_notches.append(notch)
 
 
 func _build() -> void:
@@ -135,6 +163,7 @@ func _build() -> void:
 	_ring.material_override = _ring_mat
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_ring)
+	_build_notches()
 
 	mesh.layers = LIVE_LAYER
 	_ring.layers = LIVE_LAYER

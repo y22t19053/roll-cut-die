@@ -176,6 +176,17 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		# the crew, the dolly and your own past all pass straight through you.
 		var key_z := 2.1
 		_box(room, Vector3(2.2, .012, key_z), Vector3(KEY_RADIUS*2.0, .024, KEY_RADIUS*2.0), Color("2f8f4e"))
+		# Four white corner brackets, so the safe square is still a safe square
+		# when green and white look the same to the person standing on it.
+		var arm := KEY_RADIUS * 0.55
+		for sx: float in [-1.0, 1.0]:
+			for sz: float in [-1.0, 1.0]:
+				var cx: float = 2.2 + sx * (KEY_RADIUS - arm * 0.5)
+				var cz: float = key_z + sz * (KEY_RADIUS - arm * 0.5)
+				_box(room, Vector3(cx, .018, key_z + sz * (KEY_RADIUS - .035)),
+					Vector3(arm, .026, .07), WHITE)
+				_box(room, Vector3(2.2 + sx * (KEY_RADIUS - .035), .018, cz),
+					Vector3(.07, .026, arm), WHITE)
 		_box(room, Vector3(2.2, .80, key_z + 0.78), Vector3(2.9, 1.6, .06), Color("3fae60"))
 		_box(room, Vector3(2.2, .02, key_z + 0.78), Vector3(2.9, .04, .06), Color("22262a"))
 		_keys[_count] = Vector2(2.2, key_z)

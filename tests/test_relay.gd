@@ -6,6 +6,7 @@ extends RefCounted
 const Rules = preload("res://scripts/relay/relay_rules.gd")
 const Splice = preload("res://scripts/relay/safety_splice.gd")
 const Track = preload("res://scripts/ghost/ghost_track.gd")
+const Ghost = preload("res://scripts/ghost/ghost_actor.gd")
 const Rooms = preload("res://scripts/relay/relay_rooms.gd")
 const Save = preload("res://scripts/relay/relay_save.gd")
 const Player = preload("res://scripts/player/player.gd")
@@ -97,6 +98,25 @@ static func run(h, tree = null) -> void:
 	h.eq("twin room has two dollies", rooms._dollies[1].size(), 2)
 	rooms.append_room("s", 0, "clean")
 	h.eq("empty room has none", rooms._dollies[2].size(), 0)
+
+	# Colour is not the only way to tell two past takes apart: each take gets one
+	# notch on its floor ring, at a fixed angle, so the count reads in greyscale.
+	var one = Ghost.new()
+	one.setup(null, 1)
+	tree.root.add_child(one)
+	var three = Ghost.new()
+	three.setup(null, 3)
+	tree.root.add_child(three)
+	var notches_one := 0
+	for c in one.get_children():
+		if str(c.name).begins_with("TakeNotch"): notches_one += 1
+	var notches_three := 0
+	for c in three.get_children():
+		if str(c.name).begins_with("TakeNotch"): notches_three += 1
+	h.eq("the first take has one notch", notches_one, 1)
+	h.eq("the third take has three notches", notches_three, 3)
+	one.queue_free()
+	three.queue_free()
 	rooms.append_room("s", 0, "fast")
 	h.near("fast dolly runs a 3.4 s lap", float(rooms._dollies[3][0]["period"]), 3.4, 0.001)
 	rooms.append_room("s", 0, "throat")
