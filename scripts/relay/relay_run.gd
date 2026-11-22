@@ -1193,9 +1193,9 @@ func _show_sheet(won: bool) -> void:
 		desk.show_call_sheet(_w("全部接通","ANSWER PRINT"), lines, true, Loc.language == "zh")
 	else:
 		lines.insert(0,_w("最后一趟没走出来。","The last take never made it out."))
-		# The story of a failed run is one sentence: the take was wasted, the crew
-		# keeps going, you come back and shoot it again.
-		lines.insert(1,_w("这条废了。场务会剪掉它，明天再来一条。","That take is wasted. The crew will cut it, and you shoot again tomorrow."))
+		# One sentence, one person, one time. A failed run should read like a note
+		# left by somebody who was there, not like a system message about a score.
+		lines.insert(1,_w("场务把这条剪了。他说明天再来。","The stagehand cut this one. He says come back tomorrow."))
 		desk.show_call_sheet(_w("这卷到头了","END OF REEL"), lines, false, Loc.language == "zh")
 
 ## ESC is the only key that stops the clock. Everything else in this game is a

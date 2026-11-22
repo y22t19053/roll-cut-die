@@ -367,6 +367,10 @@ func _dress(room: Node3D, kind: String, ink: Color, variant: int) -> void:
 			for x: float in [2.4, 4.6, 6.8]:
 				_box(room, Vector3(x, 2.05, 0), Vector3(.24, .40, .18), FLAT.darkened(0.2))
 			_box(room, Vector3(1.2, .55, -2.55), Vector3(.8, 1.1, .5), FLAT)
+			# A brace that came down and stayed: solid, off the walk line (the lane
+			# sits at ±0.40, this starts at 1.15), so it takes a corner away without
+			# ever blocking the route the light draws.
+			_box(room, Vector3(4.6, .36, 1.45), Vector3(1.40, .72, .60), FLAT, true)
 		_:
 			# Two bends: a duct and a painted mark where a rig used to stand.
 			_box(room, Vector3(LENGTH * 0.5, .32, side * 2.55), Vector3(LENGTH - 1.6, .55, .5), IRON)
