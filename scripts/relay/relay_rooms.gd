@@ -6,9 +6,16 @@ const FLAT := Color("847362")
 const WHITE := Color("f3dfad")
 const IRON := Color("333139")
 const SET_INKS := {"straight":Color("bd5743"),"tee":Color("4f9187"),"cross":Color("bb914d"),"zig":Color("8075a3")}
-const LETTER_INKS := {"s": Color("b96452"), "h": Color("579888"), "u": Color("c59c59"), "l": Color("8776a8"), "n": Color("6288ae"), "x": Color("a57b58")}
+const LETTER_INKS := {"s": Color("b96452"), "h": Color("579888"), "u": Color("c59c59"), "l": Color("8776a8"), "n": Color("6288ae"), "x": Color("a57b58"), "i": Color("7d8a96"), "o": Color("a8874f")}
 ## Plan view, north to south. Dots are walkable lanes; # becomes solid scenery.
 ## The outer columns are mouths, not decoration: the S must double back twice.
+##
+## Every shape here has to answer one question the turn asks: after the crew
+## rebuilds the set the other way round, can you still read the way through?
+## i is a single bar across the middle — turning it changes nothing, and that is
+## the point of the shape (a breather). l keeps its corner in a different corner
+## after a turn. o keeps its ring but swaps which side you went round. h and s are
+## the two-lane shapes that turn into their own mirror.
 const LANES := {
 	"s": ["......#","#####.#","#.....#","#.#####","#......"],
 	"h": ["#.###.#","#.###.#",".......","#.###.#","#.###.#"],
@@ -16,6 +23,8 @@ const LANES := {
 	"l": ["..#####","#.#####","#.#####","#.#####","#......"],
 	"n": ["#..##..","#...#.#","#.#...#","#.##..#","..###.#"],
 	"x": ["..###..","#..#..#","##...##","#..#..#","..###.."],
+	"i": [".......",".......","#######",".......","......."],
+	"o": [".#####.",".#...#.",".#...#.",".#...#.",".#####."],
 }
 var _count := 0
 var _cap: Node3D

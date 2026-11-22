@@ -114,7 +114,7 @@ class Sheet extends Control:
 	func word(zh:String,en:String) -> String: return zh if owner_desk._zh else en
 	func card(i:int) -> Rect2:
 		var n:int=owner_desk._cards.size()
-		return Rect2(w*0.5-n*103+i*206+5,h*0.5-83,196,170)
+		return Rect2(w*0.5-n*103+i*206+5,h*0.5-94,196,188)
 	func _gui_input(e:InputEvent) -> void:
 		if owner_desk._cards.is_empty():return
 		if not (e is InputEventMouseMotion or e is InputEventMouseButton): return
@@ -179,7 +179,7 @@ class Sheet extends Control:
 		var d=owner_desk; var r:=card(i); var x:=r.position.x; var y:=r.position.y
 		var selected:bool=i==d._hover
 		var data:Dictionary=d._cards[i]
-		rect(x+3,y+5,196,170,Color("101210"));rect(x,y,196,170,AMBER if selected else PAPER)
+		rect(x+3,y+5,196,188,Color("101210"));rect(x,y,196,188,AMBER if selected else PAPER)
 		# A contract is a page of the call sheet, not a strip of film: ruled
 		# paper, a stamped price, and the act it covers written on the line.
 		rect(x,y,196,26,INK)
@@ -196,12 +196,12 @@ class Sheet extends Control:
 		var selected:bool=i==d._hover
 		var data:Dictionary=d._cards[i];var kind:=str(data.get("kind","straight"))
 		var title:String=word("棚型  ","SET  ")+kind.to_upper()
-		rect(x+3,y+5,196,170,Color("101210"));rect(x,y,196,170,AMBER if selected else PAPER)
+		rect(x+3,y+5,196,188,Color("101210"));rect(x,y,196,188,AMBER if selected else PAPER)
 		for j in 11:
-			for edge in [4,158]:rect(x+7+j*17,y+edge,9,7,INK)
+			for edge in [4,176]:rect(x+7+j*17,y+edge,9,7,INK)
 		rect(x+8,y+17,180,84,INK)
 		# Each line is one continuous stroke, in a 3x3 contact-print grid.
-		var diagrams:={"s":[[2,0,3,5,8,6]],"h":[[0,6],[3,5],[2,8]],"u":[[0,6,8,2]],"l":[[0,6,8]],"n":[[6,0,8,2]],"x":[[0,8],[6,2]]}
+		var diagrams:={"s":[[2,0,3,5,8,6]],"h":[[0,6],[3,5],[2,8]],"u":[[0,6,8,2]],"l":[[0,6,8]],"n":[[6,0,8,2]],"x":[[0,8],[6,2]],"i":[[1,7]],"o":[[0,2,8,6,0]]}
 		for stroke:Array in diagrams.get(kind.to_lower(),[[3,5]]):
 			var pts:=PackedVector2Array()
 			for cell:int in stroke: pts.append(Vector2(x+61+37*(cell%3),y+32+27*floori(cell/3.0)))
@@ -213,6 +213,9 @@ class Sheet extends Control:
 		var stake := str(data.get("stake_label",""))
 		if stake != "":
 			text(x+11,y+153,stake,13,INK)
+		var note := str(data.get("turn_note",""))
+		if note != "":
+			text(x+11,y+172,note,12,Color("4b4740"))
 
 	func draw_supply(i:int) -> void:
 		var r:=card(i); var x:=r.position.x; var y:=r.position.y
@@ -221,7 +224,7 @@ class Sheet extends Control:
 		var stamps:=["1.5 s", "+1 MARK", "+1 CUT"]
 		var first:=[word("下次撞上旧条里的人，","Hit a past take?"),word("多一次手动打点。","One extra MARK."),word("多一次主动剪辑。","One extra CUT.")]
 		var second:=[word("免死，原地续拍 1.5 秒。","Keep rolling 1.5 s."),word("按 M 留下自己的落点。","Press M to mark."),word("选好落点，确认才花。","Spend on confirm.")]
-		rect(x+3,y+5,196,170,Color("101210"));rect(x,y,196,170,AMBER if selected else PAPER)
+		rect(x+3,y+5,196,188,Color("101210"));rect(x,y,196,188,AMBER if selected else PAPER)
 		rect(x,y,196,28,INK);text(x+10,y+20,"PROP  /  0%d"%(i+1),14,MINT)
 		text(x+12,y+57,names[i],20,INK)
 		draw_line(Vector2(x+12,y+68),Vector2(x+184,y+68),Color("837e70"),1)

@@ -15,7 +15,10 @@ const SlateUI = preload("res://scripts/ui/slate_ui.gd")
 const FrameFX = preload("res://scripts/relay/frame_fx.gd")
 const Save = preload("res://scripts/relay/relay_save.gd")
 const MODULES := 12
-const KINDS := ["s", "h", "u", "l", "n", "x"]
+## The shapes the run draws from. I, L and O come first because they are the three
+## honest answers to "what happens when the crew rebuilds it the other way round?":
+## nothing, the corner moves, the other side of the ring. The rest wait in the wings.
+const KINDS := ["l", "i", "o", "h", "s"]
 ## A run is four acts of three sets: two quick sets and one long take. The long
 ## take is the only one allowed to hurt, and it is the one with the gate in it.
 ## Four acts, not three: the room count is what makes a run ten minutes long, and
@@ -580,8 +583,29 @@ func _offer_doors() -> Array:
 			var tag := _event_short(str(door["event"]))
 			door["mod_label"] = tag if str(door["mod_label"]) == "" else (str(door["mod_label"]) + " · " + tag)
 		door["stake_label"] = _stake_label(int(door["passes"]), str(door["reward"]), str(door["event"]))
+		door["turn_note"] = _turn_note(str(door["kind"]))
 		out.append(door)
 	return out
+
+
+## What the shape does after the crew rebuilds the set the other way round. This
+## is the second half of every door: a set you already know is not the same wager
+## as a set that will flip under you the moment you die in it.
+func _turn_note(kind: String) -> String:
+	var zh := Loc.language == "zh"
+	match kind:
+		"i":
+			return "转过来也一样" if zh else "turns to the same set"
+		"l":
+			return "转过来换一角" if zh else "the corner moves"
+		"o":
+			return "转过来换半边" if zh else "the other side of the ring"
+		"h":
+			return "转过来换两条道" if zh else "the two lanes swap"
+		"s":
+			return "转过来换两道弯" if zh else "both bends swap"
+		_:
+			return ""
 
 
 ## Threat climbs with depth. The first set is the teaching one: at most a quick

@@ -113,6 +113,24 @@ static func run(h, tree = null) -> void:
 	h.ok("the last set says it is the last", bool(last_set.get("final", false)))
 	h.eq("a guide set brings no light and no extra dolly", (rooms._dollies[7] as Array).size(), 1)
 
+	# The three shapes that answer the turn three different ways.
+	h.ok("I is a shape", Rooms.LANES.has("i"))
+	h.ok("L is a shape", Rooms.LANES.has("l"))
+	h.ok("O is a shape", Rooms.LANES.has("o"))
+	var bar: Array = Rooms.LANES["i"]
+	var bar_wall := 0
+	for row: String in bar:
+		bar_wall += row.count("#")
+	h.eq("I is one bar across the middle", bar_wall, 7)
+	h.eq("the bar sits on the centre line", bar[0].count("#"), 0)
+	var ring: Array = Rooms.LANES["o"]
+	h.eq("O is a closed ring", ring[2].count("#"), 2)
+	h.eq("O keeps its inside empty", ring[2].substr(2, 3), "...")
+	rooms.append_room("i", 0, "")
+	rooms.append_room("o", 0, "")
+	h.eq("an I room still runs one dolly", (rooms._dollies[8] as Array).size(), 1)
+	h.eq("an O room still runs one dolly", (rooms._dollies[9] as Array).size(), 1)
+
 	# The trolley's danger is its footprint, sampled at the time you ask for.
 	rooms.set_clock(0, 0.0)
 	var cart_x: float = float(rooms._dollies[0][0]["node"].position.x)
