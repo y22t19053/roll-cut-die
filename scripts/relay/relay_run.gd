@@ -65,6 +65,7 @@ var _seen_hints := {}
 var _inside := {}
 var _notes_read := {}
 var _spot_played := false
+var _ghost_passed := false
 ## The projection a MARK leaves: the colour of the film, never the paint of the
 ## set. Alpha stays low so a MARK can never be mistaken for an obstacle.
 const STILL_INK := Color(0.55, 0.95, 0.85)
@@ -542,20 +543,26 @@ func _restore(i: int) -> void:
 ## Nudges a respawn out of whatever is standing on it. Being put back down inside
 ## a passing truck is what a player reads as "the controls stopped working", and
 ## three of those in a row is a bug report, not a difficulty curve.
-## The first two sets are the tutorial, and the tutorial is four sentences shown
-## when the thing they describe is on screen. Nothing here is a menu.
+## The first two sets are the tutorial, and the tutorial is what the room is doing
+## to you right now, said once. Order matters more than wording: each line waits
+## until the thing it names is on screen, and nothing is named before it is seen.
 func _first_lessons() -> void:
 	if phase != Mode.PLAY or act > 0 or segments.size() > 2: return
 	if elapsed > 0.8 and not returning:
 		_hint("lesson_line", "走到亮起来的那条线。", "Walk to the line that is lit.")
 	if returning and elapsed > 0.8:
 		_hint("lesson_back", "过了。回头，走到另一头那条线。", "Across. Now turn around for the line at the far end.")
+	# The ghost is named only after it has walked past you once: naming it first
+	# turns a curiosity into a rule, and the rule into a wall.
+	if not returning and _ghost_passed:
+		_hint("lesson_ghost", "刚才走过去的是你上一趟的录像。撞上就死。",
+			"That one that just walked past was your last take. Touch it and you are done.")
 	if returning and tracks.size() >= 1:
-		_hint("lesson_ghost", "迎面过来的是你上一趟的录像。撞上就死。", "That is your last take, walking back. Touch it and you are done.")
-	if not returning and tracks.size() >= 1:
-		_hint("lesson_cut", "按 C 能看一眼自己留下的落点。看片不要钱。", "C shows where your own takes stopped. Looking is free.")
+		_hint("lesson_cut", "按 C 看一眼自己留下的落点。看片不要钱。",
+			"C shows where your own takes stopped. Looking is free.")
 	if not returning and tracks.size() >= 2:
-		_hint("lesson_mark", "M 在这里留一个落点。失手会自动回到最近的落点。", "M leaves a mark here. A collision returns you to the last one.")
+		_hint("lesson_mark", "M 在这里留一个落点。失手会自动回到最近的落点。",
+			"M leaves a mark here. A collision returns you to the last one.")
 
 func _clear_spot(pos: Vector3) -> Vector3:
 	var room_index := segments.size() - 1
@@ -1012,6 +1019,7 @@ func _physics_process(dt: float) -> void:
 		_checkpoint(false)
 		_show_target()
 	_track_gaps()
+	_watch_ghosts()
 	_first_lessons()
 	_read_note()
 	_brush_spot()
@@ -1028,6 +1036,18 @@ func _brush_spot() -> void:
 	if Vector2(sp.x, sp.z).distance_to(Vector2(player.global_position.x, player.global_position.z)) > 1.5: return
 	_spot_played = true
 	score.family_hit(str((segments.back() as Dictionary).get("kind", "")))
+
+## Did one of your own past takes walk close enough that you would have noticed it?
+## The tutorial uses this instead of "a ghost exists", because a ghost on the far
+## side of the set is not something a first-time player has seen yet.
+func _watch_ghosts() -> void:
+	if _ghost_passed: return
+	for g in _actors:
+		if g.spent: continue
+		if g.global_position.distance_to(player.global_position) < 3.0:
+			_ghost_passed = true
+			return
+
 
 ## The only lore in the game: a call note left on the deck. One per set, read by
 ## walking over it, said once, never repeated in that run.
@@ -1119,9 +1139,12 @@ func _hit(source: int) -> bool:
 		_board_die()
 		# You get to look at where it happened before the run puts you back:
 		# restoring first meant the death spot sat behind the card or off screen.
-		_hint("first_death", "撞上就重来一条，别的什么都不扣。", "A collision costs one take and nothing else.")
 		desk.show_message(_death_line(source))
 		_hold_until_board()
+		# The ring is still on the deck when the board lifts; the sentence lands
+		# after it, so the first thing a new player sees is where it happened.
+		_hint("first_death", "这一条废了。你被送回上一个落点，别的什么都不扣。",
+			"This take is wasted. You go back to the last mark, and nothing else is spent.")
 		_after_death()
 	return true
 
