@@ -208,5 +208,19 @@ static func run(h, tree = null) -> void:
 	var hit_pose: Vector3 = rooms._rooms[dbl_room].to_global(Vector3(dbl_x, 0.05, float(dbl["z"])))
 	h.ok("what the cart looks like is what the cart is", rooms.hazard_at(hit_pose, dbl_room, 2.4) == rooms.hazard_at(hit_pose, dbl_room, 2.4 + stalled))
 
+	# Later acts dress one set with two things at once. Both have to be real
+	# geometry on the same room, not one overriding the other.
+	var both: Dictionary = rooms.append_room("s", 0, "", false, "belt,mezz")
+	var both_room: int = rooms._count - 1
+	h.ok("a stacked set lays the belt", rooms._belts.has(both_room))
+	h.ok("a stacked set also builds the catwalk", rooms._mezz.has(both_room))
+	h.eq("a stacked set still runs one house dolly", (rooms._dollies[both_room] as Array).size(), 1)
+	h.eq("the plan keeps both events", str(both.get("event", "")), "belt,mezz")
+	h.ok("the belt still pushes on a stacked set", rooms.belt_push(rooms._rooms[both_room].to_global(Vector3(4.5, 0.05, 0.0)), both_room) != Vector3.ZERO)
+	rooms.append_room("l", 0, "", false, "key,goof")
+	var key_goof: int = rooms._count - 1
+	h.ok("a keyed set keeps the green square", rooms._keys.has(key_goof))
+	h.ok("a keyed set also keeps the taped patch", rooms._goofs.has(key_goof))
+
 	rooms.queue_free()
 	h.finish()

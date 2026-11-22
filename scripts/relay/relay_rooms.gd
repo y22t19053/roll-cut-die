@@ -1,4 +1,4 @@
-extends Node3D
+﻿extends Node3D
 ## Repeatable nine-metre soundstages. Each seam is one continuous finish line.
 const LENGTH := 9.0
 const DECK := Color("514f50")
@@ -59,6 +59,11 @@ const MODS := {
 	"throat": {"zh":"窄喉","en":"THROAT","period":5.0,"amp":2.24,"twin":false,"throat":1.0,"dollies":1},
 }
 
+func _has(event: String, id: String) -> bool:
+	# One set can be dressed with more than one thing; the id list is comma-joined
+	# so a door card can promise two changes without a second code path.
+	return event == id or event.split(",", false).has(id)
+
 func append_room(kind: String, variant: int, mod := "", final := false, event := "", hurry := 1.0) -> Dictionary:
 	assert(is_inside_tree(), "Mount RelayRooms before requesting world positions")
 	var spec: Dictionary = MODS.get(mod, MODS[""])
@@ -100,7 +105,7 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		_cart_patch(cart, ink)
 		room_dollies.append({"node":cart,"phase":posmod(variant+i*2,4)*PI*.5,
 			"period":float(spec["period"])/maxf(hurry,0.1),"amp":float(spec["amp"])})
-	if event == "extra":
+	if _has(event, "extra"):
 		# A dolly rented for the day: one more body on the track, faster than the
 		# house one and out of phase, parked across the middle of the set.
 		var extra := Node3D.new()
@@ -112,7 +117,7 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		room_dollies.append({"node":extra,"phase":PI*.5,"period":3.1/maxf(hurry,0.1),"amp":2.24})
 	_dollies.append(room_dollies)
 	set_clock(_count,0.0)
-	if event == "relight":
+	if _has(event, "relight"):
 		# The crew hung the lamp on the dolly: the only thing that can kill you is
 		# now the brightest thing in the room, and the walls drop away.
 		for d: Dictionary in room_dollies:
@@ -140,7 +145,7 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 			pool_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			pool.material_override = pool_mat
 			cart_node.add_child(pool)
-	if event == "belt":
+	if _has(event, "belt"):
 		# A belt on the deck. It answers to the stage: turn the set end for end
 		# and it carries you the other way without a single line of new code.
 		var belt_z := 0.0
@@ -150,7 +155,7 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 			_box(room, Vector3(2.4 + i*1.5, .04, belt_z - .44), Vector3(.34, .008, .07), Color("9aa4ad"))
 			_box(room, Vector3(2.4 + i*1.5, .04, belt_z + .44), Vector3(.34, .008, .07), Color("9aa4ad"))
 		_belts[_count] = belt_z
-	if event == "key":
+	if _has(event, "key"):
 		# The green screen. Whatever stands on the key square is not in the plate:
 		# the crew, the dolly and your own past all pass straight through you.
 		var key_z := 2.1
@@ -158,7 +163,7 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		_box(room, Vector3(2.2, .80, key_z + 0.78), Vector3(2.9, 1.6, .06), Color("3fae60"))
 		_box(room, Vector3(2.2, .02, key_z + 0.78), Vector3(2.9, .04, .06), Color("22262a"))
 		_keys[_count] = Vector2(2.2, key_z)
-	if event == "goof":
+	if _has(event, "goof"):
 		# Taped off: this patch is in the shot. Stand in it and the take is gone —
 		# nobody kills you, you just are not in the movie that gets printed.
 		var goof_x := 5.4
@@ -169,7 +174,7 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		_box(room, Vector3(goof_x, .014, goof_z - .30), Vector3(.30, .02, .06), Color("c0503c"))
 		_box(room, Vector3(goof_x, .014, goof_z + .30), Vector3(.30, .02, .06), Color("c0503c"))
 		_goofs[_count] = Vector2(goof_x, goof_z)
-	if event == "double":
+	if _has(event, "double"):
 		# A stand-in left on his mark. The dolly hits him, stalls a beat, and
 		# carries on: the only thing on this set you can bet on instead of dodge.
 		var stand := Node3D.new()
@@ -184,7 +189,7 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		_box(room, Vector3(stand_x, .012, stand_z - .22), Vector3(.34, .02, .05), Color("c0503c"))
 		_box(room, Vector3(stand_x, .012, stand_z + .22), Vector3(.34, .02, .05), Color("c0503c"))
 		_doubles[_count] = {"x": stand_x, "z": stand_z, "stall": 0.0, "held": 0.0, "last": 0.0, "node": stand}
-	if event == "runner":
+	if _has(event, "runner"):
 		# The crew's runner. He has a call to make on the far side and he is not
 		# going to walk around the marks to make it.
 		var body := Node3D.new()
@@ -195,7 +200,7 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		_box(body, Vector3(.16, .74, .19), Vector3(.26, .02, .20), WHITE)
 		body.position = Vector3(4.5, 0.0, -2.6)
 		_runners[_count] = {"node": body, "speed": 1.5}
-	if event == "mezz":
+	if _has(event, "mezz"):
 		# A catwalk over the lane. The deck sweeps under you instead of through you:
 		# you buy the whole dolly lane with the walk up and down the two ramps.
 		var mz0 := -2.7

@@ -19,6 +19,9 @@ const MODULES := 12
 ## honest answers to "what happens when the crew rebuilds it the other way round?":
 ## nothing, the corner moves, the other side of the ring. The rest wait in the wings.
 const KINDS := ["l", "i", "o", "h", "s"]
+## Everything the crew is allowed to do to a set. Acts 1–2 only ever see the
+## first three; later acts draw from all of it and may stack two at once.
+const EVENT_POOL := ["relight", "extra", "guide", "belt", "runner", "goof", "key", "mezz", "double"]
 ## A run is four acts of three sets: two quick sets and one long take. The long
 ## take is the only one allowed to hurt, and it is the one with the gate in it.
 ## Four acts, not three: the room count is what makes a run ten minutes long, and
@@ -573,21 +576,28 @@ func _slot_passes() -> int:
 func _offer_doors() -> Array:
 	var tier := segments.size() - 1
 	var deck := KINDS.duplicate()
-	var pool: Array = ["relight", "extra", "guide"]
+	# Later acts pull from the whole shop, not the three the first act knows, and
+	# by then the crew is willing to dress one set with two things at once.
+	var pool: Array = (EVENT_POOL.slice(0, 3) if tier < 2 else EVENT_POOL).duplicate()
 	var events: Array = []
 	for k in 2:
-		events.append(pool.pop_at(_rng.randi_range(0, pool.size() - 1)))
+		events.append(str(pool.pop_at(_rng.randi_range(0, pool.size() - 1))))
 	var passes := _slot_passes()
 	var rewards: Array = ["", "mark", "cut" if tier >= 2 else "splice"]
 	var out: Array = []
 	for slot in 3:
+		var ev := "" if slot == 0 else str(events[slot - 1])
+		if ev != "" and tier >= 2 and _rng.randf() < 0.55:
+			var second: String = str(pool.pop_at(_rng.randi_range(0, pool.size() - 1)))
+			if second != "":
+				ev = ev + "," + second
 		var door := {"kind": deck.pop_at(_rng.randi_range(0, deck.size() - 1)),
 			"variant": _rng.randi_range(0, 1), "mod": _roll_mod(tier, slot),
 			"passes": passes, "reward": str(rewards[slot]),
-			"event": "" if slot == 0 else str(events[slot - 1])}
+			"event": ev}
 		door["mod_label"] = _mod_label(str(door["mod"]))
 		if str(door["event"]) != "":
-			var tag := _event_short(str(door["event"]))
+			var tag := _events_short(str(door["event"]))
 			door["mod_label"] = tag if str(door["mod_label"]) == "" else (str(door["mod_label"]) + " · " + tag)
 		door["stake_label"] = _stake_label(int(door["passes"]), str(door["reward"]), str(door["event"]))
 		door["stamp"] = _reward_stamp(str(door["reward"]))
@@ -662,9 +672,27 @@ func _event_short(event: String) -> String:
 		"key": return _w("有绿幕", "keyed")
 		"mezz": return _w("搭了二层", "catwalk")
 		"double": return _w("有替身", "stand-in")
-		"key": return _w("有绿幕", "green screen")
-		"mezz": return _w("有二层", "a catwalk")
 	return ""
+
+
+## A door can promise more than one thing the crew did to the set; the label has
+## to say all of them, or the card is lying about what you are walking into.
+func _events_short(event: String) -> String:
+	var out := ""
+	for id in event.split(",", false):
+		var tag := _event_short(id)
+		if tag == "": continue
+		out = tag if out == "" else (out + " · " + tag)
+	return out
+
+
+func _event_lines(event: String, zh: bool) -> String:
+	var out := ""
+	for id in event.split(",", false):
+		var line := _event_line(id, zh)
+		if line == "": continue
+		out = line if out == "" else (out + "\n" + line)
+	return out
 
 func _mod_label(mod: String) -> String:
 	match mod:
@@ -680,15 +708,15 @@ func _mod_label(mod: String) -> String:
 func _roll_event() -> String:
 	if segments.size() <= 1: return "" # The first set teaches the floor; leave it plain.
 	var r := _rng.randf()
-	if r < 0.18: return "relight"
-	if r < 0.36: return "extra"
-	if r < 0.45: return "guide"
-	if r < 0.56: return "belt"
-	if r < 0.67: return "runner"
-	if r < 0.76: return "goof"
-	if r < 0.86: return "key"
-	if r < 0.95: return "mezz"
-	if r < 1.02: return "double"
+	if r < 0.16: return "relight"
+	if r < 0.32: return "extra"
+	if r < 0.40: return "guide"
+	if r < 0.52: return "belt"
+	if r < 0.64: return "runner"
+	if r < 0.73: return "goof"
+	if r < 0.83: return "key"
+	if r < 0.92: return "mezz"
+	if r < 1.01: return "double"
 	return ""
 
 
@@ -741,7 +769,7 @@ func _pick_card(i: int) -> void:
 	var room: Dictionary = $Rooms.append_room(c.kind,c.variant,str(c.get("mod","")),last,leg_event,hurry)
 	segments.append(room)
 	if leg_event != "":
-		_hint("event_" + leg_event, _event_line(leg_event, true), _event_line(leg_event, false))
+		_hint("event_" + leg_event, _event_lines(leg_event, true), _event_lines(leg_event, false))
 	required_passes = int(c.get("passes", _slot_passes()))
 	if act_mod == "rush": required_passes = maxi(required_passes - 1, 2)
 	elif act_mod == "overtime": required_passes += 1
@@ -798,7 +826,7 @@ func _physics_process(dt: float) -> void:
 		for g in _actors:
 			# "guide": the past self walks the route and nobody dies from it. The
 			# set is asking you to watch a crossing before you have to make one.
-			if leg_event == "guide": break
+			if leg_event.split(",", false).has("guide"): break
 			if g.spent or g.strip_age < GRACE: continue
 			var d: float = g.global_position.distance_to(player.global_position)
 			if _inside.get(g.take_id, false):

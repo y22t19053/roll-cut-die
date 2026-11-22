@@ -183,10 +183,21 @@ class Sheet extends Control:
 			text(x+22,y+39,"35 MM   /   " + ("ANSWER PRINT" if d._result==1 else "OUTTAKE"),16,accent)
 			text(x+22,y+89,word("全片接通","PRINT COMPLETE") if d._result==1 else word("这卷到头了","END OF REEL"),32,PAPER)
 		if d._remaining>0 and d._message!="":
-			var span:=minf(w-32,d._font.get_string_size(d._message,HORIZONTAL_ALIGNMENT_LEFT,-1,17).x+32)
 			# One line of type over a soft scrim: enough to read, not a panel.
-			rect((w-span)*.5,h-51,span,36,Color(0.043,0.051,0.055,0.62))
-			draw_string(d._font,Vector2((w-span)*.5+14,h-27),d._message,HORIZONTAL_ALIGNMENT_LEFT,span-24,17,PAPER)
+			# A set can be dressed with two things at once, so the notice can be
+			# two lines; they stack upward from the same baseline.
+			var lines: PackedStringArray = d._message.split("\n", false)
+			var widest := 0.0
+			for line in lines:
+				widest = maxf(widest, d._font.get_string_size(str(line),HORIZONTAL_ALIGNMENT_LEFT,-1,17).x)
+			var span := minf(w-32, widest+32)
+			var lh := 22.0
+			var box_h := lh * float(lines.size()) + 14.0
+			var x0 := (w-span)*.5
+			var y0 := h - 15.0 - box_h
+			rect(x0,y0,span,box_h,Color(0.043,0.051,0.055,0.62))
+			for i in lines.size():
+				draw_string(d._font,Vector2(x0+14,y0+17.0+lh*float(i)),str(lines[i]),HORIZONTAL_ALIGNMENT_LEFT,span-24,17,PAPER)
 	func draw_contract(i:int) -> void:
 		var d=owner_desk; var r:=card(i); var x:=r.position.x; var y:=r.position.y
 		var selected:bool=i==d._hover
