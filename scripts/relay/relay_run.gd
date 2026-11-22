@@ -659,6 +659,9 @@ func _event_short(event: String) -> String:
 		"belt": return _w("有传送带", "on a belt")
 		"runner": return _w("有人在跑", "a runner")
 		"goof": return _w("地上有胶带", "taped off")
+		"key": return _w("有绿幕", "keyed")
+		"mezz": return _w("搭了二层", "catwalk")
+		"double": return _w("有替身", "stand-in")
 		"key": return _w("有绿幕", "green screen")
 		"mezz": return _w("有二层", "a catwalk")
 	return ""
@@ -683,8 +686,9 @@ func _roll_event() -> String:
 	if r < 0.56: return "belt"
 	if r < 0.67: return "runner"
 	if r < 0.76: return "goof"
-	if r < 0.85: return "key"
+	if r < 0.86: return "key"
 	if r < 0.95: return "mezz"
+	if r < 1.02: return "double"
 	return ""
 
 
@@ -696,6 +700,7 @@ func _event_line(event: String, zh: bool) -> String:
 		"belt": return "甲板上铺了一条传送带。它听棚的，不听你的镜头。" if zh else "There is a belt on the deck. It answers to the set, not to your lens."
 		"runner": return "场务在跑。他不会为你停。" if zh else "A runner is crossing. He will not stop for you."
 		"goof": return "地上贴了胶带。站进去，这一条就废了。" if zh else "The deck is taped off. Stand in it and the take is gone."
+		"double": return "剧组留了一个替身站在那条轨道上。推轨会先撞他，停一拍。" if zh else "A stand-in was left on the track. The dolly hits him first and stalls a beat."
 		"key": return "绿幕那一块不在画面里。站上去，谁都碰不到你。" if zh else "The key square is not in the plate. Stand on it and nothing can touch you."
 		"mezz": return "这一棚搭了二层。车从下面过。" if zh else "This set has a catwalk. The dolly goes under you."
 	return ""

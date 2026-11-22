@@ -37,6 +37,7 @@ var _dollies: Array = []
 var _belts := {}
 ## Per room: the crew member who crosses the set and never looks up.
 var _runners := {}
+var _doubles := {}
 ## Per room: where the deck is taped off as a goof (stage-local x, z).
 var _goofs := {}
 ## Per room: the green screen's key square — stand in it and you are not in the plate.
@@ -168,6 +169,21 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		_box(room, Vector3(goof_x, .014, goof_z - .30), Vector3(.30, .02, .06), Color("c0503c"))
 		_box(room, Vector3(goof_x, .014, goof_z + .30), Vector3(.30, .02, .06), Color("c0503c"))
 		_goofs[_count] = Vector2(goof_x, goof_z)
+	if event == "double":
+		# A stand-in left on his mark. The dolly hits him, stalls a beat, and
+		# carries on: the only thing on this set you can bet on instead of dodge.
+		var stand := Node3D.new()
+		stand.name = "Double"
+		room.add_child(stand)
+		_box(stand, Vector3(0, .58, 0), Vector3(.34, 1.10, .26), Color("efe6d2"))
+		_box(stand, Vector3(0, 1.20, 0), Vector3(.22, .22, .22), Color("f6efe0"))
+		var stand_x: float = 2.30 if _count % 2 == 1 else 6.70
+		var stand_z := 1.05
+		stand.position = Vector3(stand_x, 0.0, stand_z)
+		# the mark he was left on
+		_box(room, Vector3(stand_x, .012, stand_z - .22), Vector3(.34, .02, .05), Color("c0503c"))
+		_box(room, Vector3(stand_x, .012, stand_z + .22), Vector3(.34, .02, .05), Color("c0503c"))
+		_doubles[_count] = {"x": stand_x, "z": stand_z, "stall": 0.0, "held": 0.0, "last": 0.0, "node": stand}
 	if event == "runner":
 		# The crew's runner. He has a call to make on the far side and he is not
 		# going to walk around the marks to make it.
@@ -357,9 +373,30 @@ func _line(room: Node3D, x: float, final := false) -> void:
 func _z_of(d: Dictionary,t: float) -> float:
 	return float(d["amp"])*sin(TAU*t/float(d["period"])+float(d["phase"]))
 
+## The double stands on a mark in the dolly's lane. The dolly hits him, stops for a
+## beat, and goes on: one bet you can make about the crew, not about yourself.
+## `stall` is subtracted from the stage clock for both drawing and hazard tests, so
+## what you see is what kills you.
+func _stall_t(room_index: int,t: float) -> float:
+	if not _doubles.has(room_index): return t
+	var d: Dictionary = _doubles[room_index]
+	var dt := maxf(t-float(d["last"]),0.0)
+	d["last"] = t
+	var here := t-float(d["stall"])
+	var touching := false
+	for c: Dictionary in _dollies[room_index]:
+		if absf(_z_of(c,here)-float(d["z"]))<0.55: touching = true
+	if touching and float(d["held"])<0.9:
+		d["stall"] = float(d["stall"])+dt
+		d["held"] = float(d["held"])+dt
+	elif not touching:
+		d["held"] = 0.0
+	return t-float(d["stall"])
+
 func set_clock(room_index: int,t: float) -> void:
 	if room_index<0 or room_index>=_dollies.size(): return
-	for d: Dictionary in _dollies[room_index]: d["node"].position.z = _z_of(d,t)
+	var te := _stall_t(room_index,t)
+	for d: Dictionary in _dollies[room_index]: d["node"].position.z = _z_of(d,te)
 	# The one crew member who does not respect the marks keeps walking across.
 	if _runners.has(room_index):
 		var r: Dictionary = _runners[room_index]
@@ -433,6 +470,9 @@ func hazard_at(world_pos: Vector3,room_index: int,t: float) -> bool:
 	if room_index>=_dollies.size(): return false
 	var p := _rooms[room_index].to_local(world_pos)
 	if p.y<-.35 or p.y>1.10: return false
+	# Read the same stage clock the carts were drawn with, so a stalled cart is
+	# actually where it looks like it is.
+	if _doubles.has(room_index): t -= float(_doubles[room_index]["stall"])
 	# Circle vs cart footprint: the same pose as set_clock, even after a cut.
 	for d: Dictionary in _dollies[room_index]:
 		var dx := maxf(0,absf(p.x-d["node"].position.x)-.44)

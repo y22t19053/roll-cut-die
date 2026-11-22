@@ -192,5 +192,21 @@ static func run(h, tree = null) -> void:
 	h.eq("the belt does not move the catwalk", rooms.belt_push(rooms._rooms[mezz_room].to_global(Vector3(4.5, 1.25, -2.0)), mezz_room), Vector3.ZERO)
 	h.ok("a set with no catwalk is flat", rooms.floor_height(Vector3(mezz_x, 0.05, -2.0), 0) < 0.05)
 
+	# A stand-in on the track: the dolly stops for him and the clock says so.
+	rooms.append_room("s", 0, "", false, "double")
+	var dbl_room: int = rooms._count - 1
+	var dbl: Dictionary = rooms._doubles[dbl_room]
+	h.ok("the stand-in is standing on the track", rooms._doubles.has(dbl_room))
+	# Sweep two full seconds in small steps; the dolly has to reach him at least once.
+	var stalled := 0.0
+	for i in 240:
+		rooms.set_clock(dbl_room, float(i) * 0.01)
+	stalled = float(rooms._doubles[dbl_room]["stall"])
+	h.ok("the dolly stalls when it reaches the stand-in", stalled > 0.05)
+	# The hazard pose has to use the same clock, or the cart is not where it looks.
+	var dbl_x: float = float(dbl["x"])
+	var hit_pose: Vector3 = rooms._rooms[dbl_room].to_global(Vector3(dbl_x, 0.05, float(dbl["z"])))
+	h.ok("what the cart looks like is what the cart is", rooms.hazard_at(hit_pose, dbl_room, 2.4) == rooms.hazard_at(hit_pose, dbl_room, 2.4 + stalled))
+
 	rooms.queue_free()
 	h.finish()
