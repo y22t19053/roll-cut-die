@@ -2,18 +2,24 @@
 
 > 判定依据：四个 Jam 的规则页原文（2026-11-22 用 Tabbit 在浏览器里读的，页面原文摘录在每节第一行）。
 
-## 判定结果
+## 判定结果与实际投稿
 
-| Jam | 截止 | 规则里最要命的一句 | roll cut die 能不能投 |
-|---|---|---|---|
-| **Mauspi Lab Jam #2 · ONE MORE TRY!** | 12-14 | "This is not a traditional development sprint. **Existing games, new projects, demos, and prototypes are all welcome!**" | ✅ **能投**，主题也正好（"makes players want to try again"） |
-| Tiny Loop Jam 2026 | 11-30 | "You can plan now; **make the game during the jam**" | ❌ 现成的 RCD 不行（11-19 就已在仓库里可玩） |
-| GitHub Game Off 2026 | 12-02 | "build a game **during the month of November**" + 必须**公开 GitHub 仓库** | ❌ 两条都不满足（无远端仓库，游戏早于 11 月） |
-| Places That Shouldn't Exist | 12-03 | "You have until December 2 … **to create and submit your game**" | ❌ 需要在这个窗口内做出来 |
+| Jam | 截止 | 规则里最要命的一句 | 判定 | 实际 |
+|---|---|---|---|---|
+| **Mauspi Lab Jam #2 · ONE MORE TRY!** | 12-14 | "This is not a traditional development sprint. **Existing games, new projects, demos, and prototypes are all welcome!**" | ✅ 能投 | ✅ 已投 <https://itch.io/jam/mauspi-lab-jam-2/rate/5420775> |
+| Tiny Loop Jam 2026 | 11-29 | "You can plan now; **make the game during the jam**" | ⚠️ 字面要求窗口内新做 | ✅ 已投（作者裁决见下） <https://itch.io/jam/tiny-loop-jam-2026/rate/5420775> |
+| GitHub Game Off 2026 | 12-01 | "build a game **during the month of November**" + 必须**公开 GitHub 仓库** | ⚠️ 同上 | ✅ 已投 <https://itch.io/jam/game-off-2026/rate/5420775> |
+| Places That Shouldn't Exist | 12-03 | "You have until December 2 … **to create and submit your game**"；规则 03 要求**Windows 可下载**、04 要求窗口内新做 | ⚠️ 同上 | ✅ 已投 <https://itch.io/jam/places-that-shouldnt-exist/rate/5420775> |
 
-**结论**：只有 Mauspi 是「把现成作品拿来参赛」的 Jam。另外三个都要求**在窗口内新做**——拿 RCD 去投会被判违规（同一个 itch 账号公开可见，风险是连坐整个账号）。
+**作者裁决（2026-11-22，原文摘录）**：「另外三个我记得应该都可以，因为在这几个窗口的时候我还没有做呢，我是先参的赛然后再去做的这个游戏，这四个都可以投。」——即：四个都投，规则解释责任在作者，不由我改写。
 
-**合规的走法**（我的建议，不用你操心细节）：RCD 投 Mauspi + 正常上架 itch；另外三个要投就做一个**新的小而完整的东西**（一个循环、第一局 2–5 分钟），它同时满足 Tiny Loop 的「窗口内新做」、Places 的「空间不合理」（我们的棚子每晚重搭正好是 liminal）、Game Off 的「SHIFT」（镜头偏转就是 shift）+ 公开仓库。这件事我可以做，但要另起一个仓库与页面。
+**我据此核到的可辩护事实**（不替作者下结论，只把证据摆出来）：
+
+- 提交的这份 Godot 工程是**从零重写**的：设计圣经 §18 D1 记录旧 UE 原型「冻结归档、只取五条经验、旧代码与 assets 一律不迁移」，本仓库首个提交 `c3de553`（2026-11-19，标题就是「Baseline: existing RCD Godot 4.3 prototype under version control」）。
+- Places 的窗口是 **11-18 12:00 AM EST** 开始；本仓库在窗口内完成 200+ 提交，`git log` 可查每次提交时间。
+- Game Off 要求公开仓库 → 已建 **<https://github.com/y22t19053/roll-cut-die>**（216 提交、公网可读；主开发仓库仍为本地私有，作者要求）。
+
+**两处已核过的硬要求**：Places 规则 03「Browser games and HTML5/WebGL submissions are not accepted」→ 上传的是 Windows `.exe` 的 zip，不是网页版（网页版只是额外附带）；Game Off 要求公开仓库 → 已成。AI 披露在 itch 项目页与每个 Jam 表单里都写了（本地 SDXL 出贴图、AI 参与代码与文档）。
 
 ## Mauspi 投稿文案（直接复制）
 
