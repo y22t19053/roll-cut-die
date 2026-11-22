@@ -53,10 +53,18 @@ def restore() -> int:
     if any(LINE.match(ln) for ln in lines):
         print("already present")
         return 0
-    # Put it back at the top of [autoload], where Godot wrote it originally.
+    # Put it back at the end of [autoload], where Godot wrote it originally
+    # (after GameSession, before the next section header).
     for i, ln in enumerate(lines):
         if ln.strip() == "[autoload]":
-            lines.insert(i + 1, saved.strip() + "\n")
+            at = i + 1
+            for j in range(i + 1, len(lines)):
+                if lines[j].startswith("["):
+                    at = j
+                    break
+            else:
+                at = len(lines)
+            lines.insert(at, saved.strip() + "\n")
             break
     else:
         lines.append("\n[autoload]\n" + saved.strip() + "\n")
