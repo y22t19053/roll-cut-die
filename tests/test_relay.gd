@@ -179,6 +179,13 @@ static func run(h, tree = null) -> void:
 	rooms.append_room("i", 0, "")
 	rooms.append_room("o", 0, "")
 	h.eq("an I room still runs one dolly", (rooms._dollies[8] as Array).size(), 1)
+	# Five families, five sounds: the ear should place the room before the eye does.
+	var Sound = load("res://scripts/relay/relay_sound.gd")
+	for kind: String in ["i", "l", "o", "h", "s"]:
+		var dress = Sound.dress_for(kind)
+		h.ok("the %s room has a sound of its own" % kind, dress != null and dress.get_length() > 1.9)
+	h.ok("wood is not metal", Sound.dress_for("l").data != Sound.dress_for("o").data)
+	h.ok("one loop per family, built once", Sound.dress_for("o") == Sound.dress_for("o"))
 	h.eq("an O room still runs one dolly", (rooms._dollies[9] as Array).size(), 1)
 
 	# The trolley's danger is its footprint, sampled at the time you ask for.

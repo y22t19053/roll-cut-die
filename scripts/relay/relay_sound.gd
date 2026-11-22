@@ -86,6 +86,10 @@ func _ready() -> void:
 		deck.volume_db = float(pair[2])
 		if key != "halt":
 			deck.play()
+	_dress.name = "Dress"
+	_dress.bus = &"Master"
+	_dress.volume_db = -26.0
+	add_child(_dress)
 
 
 ## How close the nearest armed ghost is, 0..1. The score is being listened to
@@ -118,10 +122,13 @@ func set_act(n: int) -> void:
 	_act_lift = clampf(float(n) * 1.4, 0.0, 3.2)
 
 
-## Each family of set has its own pitch for the same two beds, so you hear which
-## kind of room you walked into before you look at it. A strip room sits high and
-## tight; a ring room drags; two lanes hurry. Cheap, and it is the fastest thing
-## the ear can learn.
+## Each family of set has its own pitch for the same two beds, plus one layer of
+## its own sound: the ear should place the room before the eye finishes looking.
+## A strip room is bare and ticking; crates knock wood; the ring rings metal; the
+## rigging thuds and chains; the vents hiss. All five are two-second loops.
+static var _dress_streams := {}
+var _dress := AudioStreamPlayer.new()
+
 func set_family(kind: String) -> void:
 	if not is_node_ready():
 		return
@@ -135,6 +142,10 @@ func set_family(kind: String) -> void:
 	for bed: AudioStreamPlayer in [_calm, _tense]:
 		if bed != null:
 			bed.pitch_scale = p
+	if _dress != null:
+		_dress.stream = dress_for(kind)
+		if not _dress.playing:
+			_dress.play()
 
 
 ## The board is talking: step the score back so the clack is the loudest thing
@@ -284,6 +295,50 @@ static func _add_tick(buf: PackedFloat32Array, at: float) -> void:
 		var t := float(i) / RATE
 		var a := exp(-t / 0.008)
 		buf[(start + i) % buf.size()] += (sin(TAU * 180.0 * t) * 0.5 + sin(TAU * 2400.0 * t) * 0.2) * a * 0.06
+
+
+static func _add_rub(buf: PackedFloat32Array, at: float, dur: float, amp: float, cut: float) -> void:
+	var start := roundi(at * RATE)
+	var n := ceili(dur * RATE)
+	var low := 0.0
+	var a := clampf(cut / RATE * TAU, 0.0, 1.0)
+	for i in n:
+		var noise := randf() * 2.0 - 1.0
+		low += (noise - low) * a
+		var t := float(i) / RATE
+		var env := minf(t / 0.15, 1.0) * minf((dur - t) / 0.2, 1.0)
+		buf[(start + i) % buf.size()] += low * env * amp
+
+
+## One two-second loop per family, synthesised at load time — the ear should place
+## the room before the eye finishes looking. Nothing extra ships for this layer.
+static func dress_for(kind: String) -> AudioStreamWAV:
+	if _dress_streams.has(kind):
+		return _dress_streams[kind]
+	var n := roundi(2.0 * RATE)
+	var buf := PackedFloat32Array()
+	buf.resize(n)
+	match kind:
+		"i":
+			_add_tick(buf, 1.00)
+		"l":
+			_add_pulse(buf, 0.20, 180.0)
+			_add_tick(buf, 0.21)
+			_add_pulse(buf, 0.95, 150.0)
+			_add_tick(buf, 0.96)
+		"o":
+			_add_tone(buf, 0.25, 880.0, 1.60, 0.16)
+			_add_tone(buf, 0.25, 1320.0, 1.60, 0.09)
+		"h":
+			_add_pulse(buf, 0.30, 82.0)
+			for i: int in 4:
+				_add_tick(buf, 0.34 + float(i) * 0.05)
+			_add_pulse(buf, 1.30, 70.0)
+		"s":
+			_add_rub(buf, 0.0, 1.95, 0.05, 700.0)
+	var wav := _wav(buf, true)
+	_dress_streams[kind] = wav
+	return wav
 
 
 func cue(kind: String) -> void:
