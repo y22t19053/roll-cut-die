@@ -127,6 +127,30 @@ var _killer_mark: Node3D = null
 var _cut_velocity := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
 
+## The first four sets are a prologue, not part of the run: one thing per set, no
+## doors, no events the player has not been told about. They are counted in
+## `segments` like everything else, so `_prologue` is what keeps the HUD and the
+## act ladder honest once the real run starts.
+const TUTORIAL := [
+	{"kind": "straight", "event": "", "hurry": 0.72},
+	{"kind": "l", "event": "", "hurry": 1.0},
+	{"kind": "s", "event": "belt", "hurry": 1.0},
+	{"kind": "s", "event": "runner", "hurry": 1.0},
+	{"kind": "h", "event": "", "hurry": 1.0},
+	{"kind": "s", "event": "", "hurry": 1.0},
+	{"kind": "l", "event": "mezz", "hurry": 1.0},
+]
+var _tutorial := 0      # index of the tutorial room being played; 0 once the prologue is over
+var _tut_next := 1      # next tutorial room to build
+var _prologue := 0      # how many sets belong to the prologue
+
+func _in_prologue() -> bool:
+	return _prologue == 0 and not segments.is_empty()
+
+## Sets that count toward the run's four acts. During the prologue this is 0.
+func _sets() -> int:
+	return maxi(segments.size() - _prologue, 0)
+
 var _foley := preload("res://scripts/ui/foley.gd").new()
 
 func _ready() -> void:
@@ -163,10 +187,12 @@ func _ready() -> void:
 		_apply_run(pending_resume)
 		pending_resume = {}
 	else:
-		# The first set is the tutorial: the same dolly, running slow enough that
-		# a player can watch it cross once and then walk through the gap.
+		# The prologue opens with the long straight: one dolly, running slow
+		# enough to watch cross once, and nothing else to learn from it.
 		segments.append($Rooms.append_room("straight",0,"",false,"",0.72))
-		# The opening set is the short one: two legs, one dolly, nothing else.
+		_tutorial = 0
+		_tut_next = 1
+		_prologue = 0
 		required_passes = _slot_passes()
 		Save.clear() # A new run throws away the one that was left open.
 	player.name = "Player"
@@ -352,7 +378,8 @@ func _serialize_run() -> Dictionary:
 	return {"seed": run_seed, "difficulty": difficulty, "required_passes": required_passes,
 		"room_pass": room_pass, "segments": plan, "mark_stock": mark_stock, "cut_stock": cut_stock,
 		"free_cut": free_cut, "splice": splice.has_splice(), "deaths": deaths, "tracks": rec,
-		"room_track_start": room_track_start, "act": act, "act_mod": act_mod, "act_grace": act_grace}
+		"room_track_start": room_track_start, "act": act, "act_mod": act_mod, "act_grace": act_grace,
+		"tutorial": _tutorial, "tut_next": _tut_next, "prologue": _prologue}
 
 
 ## Written between takes, never mid-take: a leg only counts once it is in the can.
@@ -373,6 +400,9 @@ func _apply_run(d: Dictionary) -> void:
 	act = int(d.get("act", 0))
 	act_mod = str(d.get("act_mod", ""))
 	act_grace = float(d.get("act_grace", GRACE))
+	_tutorial = int(d.get("tutorial", -1))
+	_tut_next = int(d.get("tut_next", 0))
+	_prologue = int(d.get("prologue", 0))
 	if bool(d.get("splice", false)): splice.offer()
 	tracks = []
 	for raw in d.get("tracks", []):
@@ -540,30 +570,75 @@ func _restore(i: int) -> void:
 	_arrival_locked = player.global_position.distance_to(route[cursor]) <= TOUCH
 	_show_target()
 
-## Nudges a respawn out of whatever is standing on it. Being put back down inside
-## a passing truck is what a player reads as "the controls stopped working", and
-## three of those in a row is a bug report, not a difficulty curve.
-## The first two sets are the tutorial, and the tutorial is what the room is doing
+## The first four sets are the tutorial, and the tutorial is what the room is doing
 ## to you right now, said once. Order matters more than wording: each line waits
 ## until the thing it names is on screen, and nothing is named before it is seen.
+## Set 1 teaches the line, set 2 teaches M and C, set 3 introduces a deck that is
+## not just a dolly, and set 4 (the drill) says nothing at all.
 func _first_lessons() -> void:
-	if phase != Mode.PLAY or act > 0 or segments.size() > 2: return
-	if elapsed > 0.8 and not returning:
-		_hint("lesson_line", "走到亮起来的那条线。", "Walk to the line that is lit.")
-	if returning and elapsed > 0.8:
-		_hint("lesson_back", "过了。回头，走到另一头那条线。", "Across. Now turn around for the line at the far end.")
-	# The ghost is named only after it has walked past you once: naming it first
-	# turns a curiosity into a rule, and the rule into a wall.
-	if not returning and _ghost_passed:
-		_hint("lesson_ghost", "刚才走过去的是你上一趟的录像。撞上就死。",
-			"That one that just walked past was your last take. Touch it and you are done.")
-	if returning and tracks.size() >= 1:
-		_hint("lesson_cut", "按 C 看一眼自己留下的落点。看片不要钱。",
-			"C shows where your own takes stopped. Looking is free.")
-	if not returning and tracks.size() >= 2:
-		_demo_mark()
-		_hint("lesson_mark", "M 在这里留一个落点。失手会自动回到最近的落点。",
-			"M leaves a mark here. A collision returns you to the last one.")
+	if phase != Mode.PLAY or not _in_prologue(): return
+	if _tutorial == 0:
+		if elapsed > 0.8 and not returning:
+			_hint("lesson_line", "走到亮起来的那条线。", "Walk to the line that is lit.")
+		if returning and elapsed > 0.8:
+			_hint("lesson_back", "过了。回头，走到另一头那条线。", "Across. Now turn around for the line at the far end.")
+		# The ghost is named only after it has walked past you once: naming it first
+		# turns a curiosity into a rule, and the rule into a wall.
+		if _ghost_passed:
+			_hint("lesson_ghost", "刚才走过去的是你上一趟的录像。撞上就死。",
+				"That one that just walked past was your last take. Touch it and you are done.")
+	elif _tutorial == 1:
+		if elapsed > 1.2:
+			_demo_mark()
+			_hint("lesson_mark", "刚才那个点是我替你钉的。按 M 就能自己钉一个。",
+				"That mark was mine. Press M and you can leave your own.")
+		if elapsed > 4.0:
+			_hint("lesson_cut", "按 C 能看见你走过的这几条。看片不要钱。",
+				"C shows the takes you have walked. Looking is free.")
+	elif _tutorial == 2:
+		if elapsed > 0.9:
+			_hint("lesson_belt", "地上的带子在动。它听棚的，不听你。",
+				"The deck is moving. It answers to the set, not to you.")
+	elif _tutorial == 3:
+		if elapsed > 0.9:
+			_hint("lesson_runner", "有人在跑。他不会为你停。",
+				"Somebody is walking through. He will not stop for you.")
+
+
+## Builds the next prologue set and starts it. The plan is fixed on purpose: the
+## opening sets are a lesson, and a lesson that rerolls is not a lesson.
+func _build_tutorial_room() -> void:
+	_freeze()
+	_show_target()
+	if _tut_next >= TUTORIAL.size():
+		# The lesson is over. The sets already standing stay standing; the run
+		# starts counting from whatever the player picks next.
+		_prologue = segments.size()
+		_tutorial = -1
+		_tut_next = 0
+		phase = Mode.ITEM
+		score.cue("clear")
+		desk.show_items(Loc.language == "zh")
+		_hint("tut_over", "教完了。以后每棚会多一点东西，纸上会写。",
+			"That is the lesson. From here the sets get stranger, and the paper says how.")
+		_save_run()
+		_refresh()
+		return
+	var plan: Dictionary = TUTORIAL[_tut_next]
+	var room: Dictionary = $Rooms.append_room(str(plan["kind"]), 0, "", false,
+		str(plan["event"]), float(plan["hurry"]))
+	segments.append(room)
+	_tutorial = _tut_next
+	_tut_next += 1
+	room_pass = 0
+	required_passes = SHORT_PASSES
+	leg_event = str(plan["event"])
+	if leg_event != "":
+		_hint("event_" + leg_event, _event_lines(leg_event, true), _event_lines(leg_event, false))
+	player.teleport(room.start, 0.0)
+	desk.hide_draw()
+	score.set_family(str(plan["kind"]))
+	_start_leg(false)
 
 
 ## Before telling anyone what M does, show one appearing at their feet. A mark is
@@ -621,7 +696,13 @@ func _finish_leg() -> void:
 		score.cue("line")
 		_start_leg(not returning)
 		return
-	if segments.size() >= MODULES:
+	# The prologue hands the run over one set at a time and never asks a question:
+	# no doors, no tray, no contract until the four lessons are done.
+	if _in_prologue():
+		_save_run()
+		_build_tutorial_room()
+		return
+	if _sets() >= MODULES:
 		phase = Mode.DONE
 		_freeze()
 		_show_target()
@@ -631,7 +712,7 @@ func _finish_leg() -> void:
 		return
 	_freeze()
 	_show_target()
-	if segments.size() % SETS_PER_ACT == 0:
+	if _sets() % SETS_PER_ACT == 0:
 		# The seam between acts: sign one thing, and live with it for two sets.
 		phase = Mode.ACT
 		act += 1
@@ -1300,7 +1381,10 @@ func _unhandled_key_input(e: InputEvent) -> void:
 func _refresh() -> void:
 	var zh := Loc.language == "zh"
 	desk.set_hud_scale(float(GameSession.settings.get("hud_scale", 1.0)))
-	desk.update_run(segments.size(),MODULES,mini(room_pass+1,required_passes),required_passes,mark_stock,cut_stock,splice.has_splice(),zh)
+	if _in_prologue():
+		desk.update_run(_tutorial + 1,TUTORIAL.size(),mini(room_pass+1,required_passes),required_passes,mark_stock,cut_stock,splice.has_splice(),zh)
+	else:
+		desk.update_run(_sets(),MODULES,mini(room_pass+1,required_passes),required_passes,mark_stock,cut_stock,splice.has_splice(),zh)
 	_hud.visible = phase == Mode.CUT
 	if _hud.visible:
 		var p := anchors[_selected]
