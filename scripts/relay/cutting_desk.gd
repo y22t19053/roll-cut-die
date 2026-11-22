@@ -26,6 +26,14 @@ var _sheet_won := true
 var _age := 0.0
 var _hover := -1
 var _font := SystemFont.new()
+## Scale for the four HUD numbers only (D-049): 0.8 … 1.5 in the pause menu.
+var _hud := 1.0
+
+func set_hud_scale(v: float) -> void:
+	var c := clampf(v, 0.8, 1.5)
+	if is_equal_approx(c, _hud): return
+	_hud = c
+	_refresh()
 
 func _ready() -> void:
 	layer = 12
@@ -34,6 +42,7 @@ func _ready() -> void:
 	_sheet.owner_desk = self
 	add_child(_sheet)
 	_sheet.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_hud = clampf(float(GameSession.settings.get("hud_scale", 1.0)), 0.8, 1.5)
 	_refresh()
 
 func _refresh() -> void:
@@ -132,14 +141,23 @@ class Sheet extends Control:
 		# HUD: type on the frame, no furniture. Two groups, one hairline each,
 		# so the deck is what you look at and the numbers are what you glance at.
 		var line_y := 34.0
-		draw_line(Vector2(20,line_y+8),Vector2(214,line_y+8),Color(AMBER.r,AMBER.g,AMBER.b,0.55),1.0)
-		text(22,line_y,word("棚 %02d/%02d","SET %02d/%02d")%[d._room,d._rooms],18,PAPER)
-		text(146,line_y,word("过线 %d/%d","LINE %d/%d")%[d._pass,d._passes],18,AMBER)
+		# HUD scale: the same four numbers, at the size the player asked for. Only
+		# the type moves — the cards, the frame and the deck keep their own scale,
+		# because those are the things you look at rather than read.
+		var hs: float = d._hud
+		var fs := int(round(18.0 * hs))
+		var set_text: String = word("棚 %02d/%02d","SET %02d/%02d") % [d._room, d._rooms]
+		var pass_text: String = word("过线 %d/%d","LINE %d/%d") % [d._pass, d._passes]
+		var set_w: float = d._font.get_string_size(set_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var rule_end: float = 22.0 + set_w + 12.0 + d._font.get_string_size(pass_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 8.0
+		draw_line(Vector2(20,line_y+8*hs),Vector2(rule_end,line_y+8*hs),Color(AMBER.r,AMBER.g,AMBER.b,0.55),1.0)
+		text(22,line_y,set_text,fs,PAPER)
+		text(22.0 + set_w + 12.0,line_y,pass_text,fs,AMBER)
 		var stock:String="MARK %d   CUT %d"%[d._marks,d._cuts]
 		if d._splice: stock+=word("   接片","   SPLICE")
-		var sw:float=d._font.get_string_size(stock,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
-		draw_line(Vector2(w-sw-22,line_y+8),Vector2(w-22,line_y+8),Color(MINT.r,MINT.g,MINT.b,0.55),1.0)
-		text(w-sw-20,line_y,stock,18,MINT)
+		var sw:float=d._font.get_string_size(stock,HORIZONTAL_ALIGNMENT_LEFT,-1,fs).x
+		draw_line(Vector2(w-sw-22,line_y+8*hs),Vector2(w-22,line_y+8*hs),Color(MINT.r,MINT.g,MINT.b,0.55),1.0)
+		text(w-sw-20,line_y,stock,fs,MINT)
 		if not d._cards.is_empty():
 			rect(0,0,w,h,Color("101817cf"))
 			var left:=card(0).position.x

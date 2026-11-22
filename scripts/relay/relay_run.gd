@@ -1128,6 +1128,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 
 func _refresh() -> void:
 	var zh := Loc.language == "zh"
+	desk.set_hud_scale(float(GameSession.settings.get("hud_scale", 1.0)))
 	desk.update_run(segments.size(),MODULES,mini(room_pass+1,required_passes),required_passes,mark_stock,cut_stock,splice.has_splice(),zh)
 	_hud.visible = phase == Mode.CUT
 	if _hud.visible:

@@ -43,6 +43,7 @@ var roll_mode: int = RollModes.ORBIT
 var settings := {
 	"language": "zh",
 	"reduce_motion": false,
+	"hud_scale": 1.0,
 	"roll_scale": 1.0,
 	"mouse_sensitivity": 0.0022,
 	"master_volume": 0.8,
@@ -54,6 +55,7 @@ var settings := {
 ## Valid range per numeric preference: [min, max].
 const RANGES := {
 	"roll_scale": [0.0, 1.5],
+	"hud_scale": [0.8, 1.5],
 	"mouse_sensitivity": [0.0005, 0.006],
 	"master_volume": [0.0, 1.0],
 	"max_fps": [0, 240],

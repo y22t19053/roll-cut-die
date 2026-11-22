@@ -45,7 +45,11 @@ func _build() -> void:
 
 ## Rebuilt on open and on language change, so the labels are never stale.
 func refresh() -> void:
-	for c in _col.get_children(): c.queue_free()
+	for c in _col.get_children():
+		# remove_child first: queue_free defers, and a rebuild in the same frame
+		# would otherwise stack the old rows under the new ones for a frame.
+		_col.remove_child(c)
+		c.queue_free()
 	var zh: bool = Loc.language == "zh"
 	var head := UiKit.label("暂停" if zh else "PAUSED", 30, UiKit.INK)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -64,6 +68,8 @@ func refresh() -> void:
 			_col.add_child(info)
 	_col.add_child(_row("继续这一条" if zh else "Back to the take", _resume))
 	var motion_on: bool = bool(GameSession.settings.get("reduce_motion", false))
+	var scale_now: float = float(GameSession.settings.get("hud_scale", 1.0))
+	_col.add_child(_row(("界面大小：%d%%" % roundi(scale_now * 100.0)) if zh else ("HUD SIZE: %d%%" % roundi(scale_now * 100.0)), _cycle_hud_scale))
 	_col.add_child(_row(("减弱动态效果：%s" % ("开" if motion_on else "关")) if zh else ("REDUCE MOTION: %s" % ("ON" if motion_on else "OFF")), _toggle_motion))
 	_col.add_child(_row(("语言：中文" if zh else "LANGUAGE: English"), _toggle_language))
 	_col.add_child(_row("回到标题" if zh else "Back to the title", _leave))
@@ -89,6 +95,21 @@ func close() -> void:
 func _resume() -> void:
 	close()
 	resumed.emit()
+
+## Four stops, like Dead Cells' HUD scale, minus the catalogue. It only ever
+## touches type: the deck, the cards and the criterion of the game stay put.
+const HUD_STEPS := [0.8, 1.0, 1.25, 1.5]
+
+func _cycle_hud_scale() -> void:
+	var now: float = float(GameSession.settings.get("hud_scale", 1.0))
+	var next: float = HUD_STEPS[0]
+	for i in HUD_STEPS.size():
+		if HUD_STEPS[i] > now + 0.001:
+			next = HUD_STEPS[i]
+			break
+	GameSession.set_setting("hud_scale", next)
+	GameSession.save_preferences()
+	refresh()
 
 func _toggle_motion() -> void:
 	var on: bool = not bool(GameSession.settings.get("reduce_motion", false))
