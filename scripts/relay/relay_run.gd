@@ -64,6 +64,7 @@ var _seen_hints := {}
 ## step out: a respawn is never the player's mistake.
 var _inside := {}
 var _notes_read := {}
+var _spot_played := false
 ## The projection a MARK leaves: the colour of the film, never the paint of the
 ## set. Alpha stays low so a MARK can never be mistaken for an obstacle.
 const STILL_INK := Color(0.55, 0.95, 0.85)
@@ -303,6 +304,7 @@ func _start_leg(back: bool) -> void:
 	_clear_killer_mark()
 	score.resume_beds() # The room comes back with the new take.
 	score.set_family(str((segments.back() as Dictionary).get("kind", "")))
+	_spot_played = false
 	grace = act_grace
 	_checkpoint(false)
 	_show_target()
@@ -1012,7 +1014,20 @@ func _physics_process(dt: float) -> void:
 	_track_gaps()
 	_first_lessons()
 	_read_note()
+	_brush_spot()
 	_refresh()
+
+## Each family owns one object in its set (crates, a ring, the rail). Brushing it
+## plays that family's voice once per leg: the loop tells you which room you are
+## in, this tells you where in the room you are.
+func _brush_spot() -> void:
+	if _spot_played: return
+	var ri := segments.size() - 1
+	var sp: Vector3 = $Rooms.spot_at(ri)
+	if sp == Vector3.ZERO: return
+	if Vector2(sp.x, sp.z).distance_to(Vector2(player.global_position.x, player.global_position.z)) > 1.5: return
+	_spot_played = true
+	score.family_hit(str((segments.back() as Dictionary).get("kind", "")))
 
 ## The only lore in the game: a call note left on the deck. One per set, read by
 ## walking over it, said once, never repeated in that run.

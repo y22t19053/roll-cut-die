@@ -49,6 +49,7 @@ var _mezz := {}
 var _wires := {}
 var _notes := {}
 var _plans := {}
+var _spots := {}
 ## You are on the hook when you stand on the painted mark: the rig does the rest.
 func wire_at(world_pos: Vector3, room_index: int) -> bool:
 	if not _wires.has(room_index): return false
@@ -331,6 +332,16 @@ func _dress(room: Node3D, kind: String, ink: Color, variant: int) -> void:
 	_box(room, Vector3(7.55, .20, 2.42), Vector3(.05, .40, .05), IRON)
 	_box(room, Vector3(7.55, .42, 2.42), Vector3(.13, .10, .13), Color("ffde79"))
 	_notes[_count] = Vector3(7.25, .05, 2.24)
+	# The one object in this set that belongs to this family alone. Walking near it
+	# plays the family's voice once — the loop says which room, this says where.
+	var spot := Vector3(3.0, .05, 0.0)
+	match kind:
+		"i": spot = Vector3(2.2, .05, -2.5)
+		"l": spot = Vector3(1.8, .05, 2.35)
+		"o": spot = Vector3(5.4, .05, -2.45)
+		"h": spot = Vector3(1.2, .05, -2.4)
+		"s": spot = Vector3(7.2, .05, -side * 2.1)
+	_spots[_count] = spot
 	match kind:
 		"i":
 			# A strip room: lighting stands and cable runs, nothing else.
@@ -360,6 +371,15 @@ func _dress(room: Node3D, kind: String, ink: Color, variant: int) -> void:
 			# Two bends: a duct and a painted mark where a rig used to stand.
 			_box(room, Vector3(LENGTH * 0.5, .32, side * 2.55), Vector3(LENGTH - 1.6, .55, .5), IRON)
 			_box(room, Vector3(7.2, .02, -side * 2.1), Vector3(1.4, .02, 1.4), ink.darkened(0.45))
+
+## Where this family's signature object stands, in world space. The game plays
+## that family's voice when the player brushes it.
+func spot_at(room_index: int) -> Vector3:
+	if not _spots.has(room_index): return Vector3.ZERO
+	var room: Node3D = _rooms[room_index]
+	if room == null: return Vector3.ZERO
+	return room.to_global(_spots[room_index])
+
 
 ## The paperwork on the deck. Returns true while the player is standing on it.
 func note_at(world_pos: Vector3, room_index: int) -> bool:

@@ -186,6 +186,11 @@ static func run(h, tree = null) -> void:
 		h.ok("the %s room has a sound of its own" % kind, dress != null and dress.get_length() > 1.9)
 	h.ok("wood is not metal", Sound.dress_for("l").data != Sound.dress_for("o").data)
 	h.ok("one loop per family, built once", Sound.dress_for("o") == Sound.dress_for("o"))
+	# The same voice, shorter, for brushing the object that family owns.
+	for kind: String in ["i", "l", "o", "h", "s"]:
+		h.ok("the %s room can answer back" % kind, Sound.hit_for(kind).get_length() < 1.0)
+	var crate_spot: Vector3 = rooms.spot_at(9)
+	h.ok("the crate room knows where its crates are", crate_spot != Vector3.ZERO)
 	h.eq("an O room still runs one dolly", (rooms._dollies[9] as Array).size(), 1)
 
 	# The trolley's danger is its footprint, sampled at the time you ask for.

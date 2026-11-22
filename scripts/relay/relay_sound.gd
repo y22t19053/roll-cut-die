@@ -90,6 +90,10 @@ func _ready() -> void:
 	_dress.bus = &"Master"
 	_dress.volume_db = -26.0
 	add_child(_dress)
+	_dress_fx.name = "DressHit"
+	_dress_fx.bus = &"Master"
+	_dress_fx.volume_db = -14.0
+	add_child(_dress_fx)
 
 
 ## How close the nearest armed ghost is, 0..1. The score is being listened to
@@ -128,6 +132,7 @@ func set_act(n: int) -> void:
 ## rigging thuds and chains; the vents hiss. All five are two-second loops.
 static var _dress_streams := {}
 var _dress := AudioStreamPlayer.new()
+var _dress_fx := AudioStreamPlayer.new()
 
 func set_family(kind: String) -> void:
 	if not is_node_ready():
@@ -339,6 +344,46 @@ static func dress_for(kind: String) -> AudioStreamWAV:
 	var wav := _wav(buf, true)
 	_dress_streams[kind] = wav
 	return wav
+
+
+## The same voice, once, when you actually brush past the thing that owns it. The
+## loop tells you which room you are in; this tells you where in the room you are.
+static func hit_for(kind: String) -> AudioStreamWAV:
+	var key := "hit_" + kind
+	if _dress_streams.has(key):
+		return _dress_streams[key]
+	var n := roundi(0.9 * RATE)
+	var buf := PackedFloat32Array()
+	buf.resize(n)
+	match kind:
+		"i":
+			_add_tick(buf, 0.02)
+		"l":
+			_add_pulse(buf, 0.02, 180.0)
+			_add_tick(buf, 0.03)
+			_add_pulse(buf, 0.16, 150.0)
+		"o":
+			_add_tone(buf, 0.02, 1180.0, 0.80, 0.20)
+			_add_tone(buf, 0.02, 1770.0, 0.70, 0.10)
+		"h":
+			_add_pulse(buf, 0.02, 82.0)
+			for i: int in 3:
+				_add_tick(buf, 0.10 + float(i) * 0.055)
+		"s":
+			_add_rub(buf, 0.02, 0.70, 0.07, 900.0)
+	var wav := _wav(buf, false)
+	_dress_streams[key] = wav
+	return wav
+
+
+## Brush the crates / the ring / the rail: one shot, no repeat inside a second.
+func family_hit(kind: String) -> void:
+	if not is_node_ready(): return
+	var now := Time.get_ticks_msec()
+	if now - int(_last.get("dress", -1000)) < 900: return
+	_last["dress"] = now
+	_dress_fx.stream = hit_for(kind)
+	_dress_fx.play()
 
 
 func cue(kind: String) -> void:
