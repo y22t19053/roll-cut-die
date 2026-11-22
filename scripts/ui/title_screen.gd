@@ -14,6 +14,8 @@ const NightStage = preload("res://scripts/ui/night_stage.gd")
 const NightStageMusic = preload("res://scripts/ui/night_stage_music.gd")
 
 const RUN_SCENE := "res://scenes/relay/run.tscn"
+## Only read for its constants (how many sets a run has), never instantiated.
+const RunScript = preload("res://scripts/relay/relay_run.gd")
 const GLYPH_X := 64
 
 var settings_panel: Control
@@ -140,6 +142,14 @@ func _tagline() -> String:
 	return "Move with WASD or the arrow keys · Go to the lit line"
 
 
+## The premise goes where a person who has never seen the game is already
+## looking. Two lines: what you are doing here, and the two keys that change it.
+func _premise() -> String:
+	if Loc.language == "zh":
+		return "你在补拍一条镜头。棚里的人不会为你停下来。\nC 剪回 · M 落点 · 空格 确认"
+	return "You are reshooting a take. The crew will not stop for you.\nC to cut back · M to leave a mark · SPACE to confirm"
+
+
 func _render() -> void:
 	UiKit.clear(_menu)
 	if _in_credits:
@@ -161,6 +171,10 @@ func _render() -> void:
 	tag.name = "Tagline"
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(tag)
+	var premise := UiKit.label(_premise(), 16, UiKit.DIM)
+	premise.name = "Premise"
+	premise.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(premise)
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(0, 4)
 	col.add_child(gap)
@@ -199,7 +213,7 @@ func _render() -> void:
 	# What the player has done before: a record, never a head start.
 	var ran: Dictionary = rules.meta()
 	var record := UiKit.label(
-		("已跑 %d 卷 · 最远 %d / %d 棚" if zh else "%d runs · best set %d / %d") % [int(ran["runs"]), int(ran["best_set"]), 6],
+		("已跑 %d 卷 · 最远 %d / %d 棚" if zh else "%d runs · best set %d / %d") % [int(ran["runs"]), int(ran["best_set"]), RunScript.MODULES],
 		16, UiKit.DIM)
 	record.name = "Record"
 	record.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

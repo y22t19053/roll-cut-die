@@ -73,6 +73,7 @@ var room_track_start := 0
 var cards: Array = []
 var desk: CanvasLayer
 var slate: CanvasLayer
+var pause_ui: CanvasLayer
 var fx: Node
 var score: Node
 ## Last distance to each ghost, so a close pass can be told from a clean one.
@@ -129,6 +130,11 @@ func _ready() -> void:
 	slate = SlateUI.new()
 	slate.name = "Slate"
 	add_child(slate)
+	pause_ui = load("res://scripts/relay/relay_pause.gd").new()
+	pause_ui.name = "Pause"
+	add_child(pause_ui)
+	pause_ui.resumed.connect(func() -> void: _refresh())
+	pause_ui.left_run.connect(_to_title)
 	fx = FrameFX.new()
 	fx.name = "FrameFX"
 	add_child(fx)
@@ -988,6 +994,20 @@ func _show_sheet(won: bool) -> void:
 		lines.insert(0,_w("最后一趟没走出来。","The last take never made it out."))
 		desk.show_call_sheet(_w("这卷到头了","END OF REEL"), lines, false, Loc.language == "zh")
 
+## ESC is the only key that stops the clock. Everything else in this game is a
+## decision about the take; this one is a decision about the person playing it.
+func _open_pause() -> void:
+	if pause_ui == null: return
+	if pause_ui.is_open:
+		pause_ui.close()
+		_refresh()
+		return
+	pause_ui.open()
+
+func _to_title() -> void:
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://scenes/front/title.tscn")
+
 func _unhandled_key_input(e: InputEvent) -> void:
 	if not e is InputEventKey or not e.pressed or e.echo: return
 	var key: int = e.physical_keycode
@@ -1039,6 +1059,8 @@ func _unhandled_key_input(e: InputEvent) -> void:
 					_restore(_selected)
 	elif phase == Mode.PLAY:
 		match key:
+			KEY_ESCAPE:
+				_open_pause()
 			KEY_C:
 				phase = Mode.CUT
 				_selected = last_anchor
