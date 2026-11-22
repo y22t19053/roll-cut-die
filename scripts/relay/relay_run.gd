@@ -222,10 +222,12 @@ const LANE := 2.10
 func _start_leg(back: bool) -> void:
 	returning = back
 	route.clear()
-	var room := segments.back() as Dictionary
-	var target: Vector3 = (room.start if back else room.end) as Vector3
-	target.z = LANE if back else -LANE
-	route.append(target)
+	var room_node := $Rooms.get_child(segments.size() - 1) as Node3D
+	# The lamp sits on one wall going out and the other coming back, so the return
+	# trip is a different read of the floor instead of a mirror of the first leg.
+	# It is built in the room's own frame: the crew may have turned the set.
+	var local := Vector3(0.0 if back else SET_LENGTH, 0.0, LANE if back else -LANE)
+	route.append(room_node.to_global(local) if room_node != null else local)
 	cursor = 0
 	_arrival_locked = false
 	phase = Mode.PLAY
@@ -734,7 +736,12 @@ func _physics_process(dt: float) -> void:
 				break
 		if $Rooms.hazard_at(player.global_position,segments.size()-1,elapsed):
 			if _hit(0): return
-	var inside := player.position.x <= route[cursor].x + 0.1 if returning else player.position.x >= route[cursor].x - 0.1
+	# The line is read in the room's own frame, not in world x: once the crew turns
+	# the set the finish line is no longer the same wall, and a world-axis test
+	# would count the crossing the moment the room moved.
+	var room_now := $Rooms.get_child(segments.size() - 1) as Node3D
+	var lp: Vector3 = room_now.to_local(player.global_position) if room_now != null else player.global_position
+	var inside := lp.x <= 0.1 if returning else lp.x >= SET_LENGTH - 0.1
 	if not inside: _arrival_locked = false
 	if inside and not _arrival_locked:
 		cursor += 1
@@ -783,12 +790,14 @@ func _hit(source: int) -> bool:
 	score.cue("trap" if source == 0 else "hit")
 	rig.add_shake(1.0)
 	fx.flash(Color("f3dfad"), 0.34, 0.0, 0.22)
+	_drop_photogram(player.global_position, player.facing)
 	if difficulty > 0:
 		forced_cut = cut_stock > 0
 		phase = Mode.CUT if forced_cut else Mode.LOST
 		_selected = last_anchor
 		_freeze()
 		_board_die()
+		_rotate_stage()
 		_show_target()
 		if phase == Mode.CUT: _show_preview()
 		else:
@@ -797,6 +806,7 @@ func _hit(source: int) -> bool:
 	else:
 		_board_die()
 		_restore(last_anchor)
+		_rotate_stage() # A death is a rebuild: the set turns under you.
 		_hint("first_death", "撞上就重来一条，别的什么都不扣。", "A collision costs one take and nothing else.")
 		desk.show_message(_death_line(source))
 		_hold_until_board()
@@ -934,8 +944,75 @@ func _board_cut() -> void:
 	score.duck(true)
 	slate.play_cut(n, _w("第 %02d 条" % n, "TAKE %02d" % n))
 
-## A death board is short on purpose: the player is looking at the frame that got
-## them, so the board never covers it and never keeps the controls.
+## A death is when the crew rebuilds: the set is turned end for end, and the ghost
+## that killed you keeps walking the way it was walking. The floor turns around
+## its own centre, so whoever stands on it stays on the same plank.
+##
+## It turns 180°, not 90°: a set is 9 × 6, so a quarter turn would swing half the
+## floor (and every ghost recorded on it) out into the dark. Half a turn keeps the
+## footprint, keeps the ghosts standing on deck, and reads as "they rebuilt it the
+## other way round". Quarter turns come back when the sets get square footprints.
+const SET_LENGTH := 9.0
+const SET_TURN := PI
+var _turn_room: Node3D
+var _turn_center := Vector3.ZERO
+var _turn_local_player := Vector3.ZERO
+var _turn_local_target := Vector3.ZERO
+
+
+func _rotate_stage() -> void:
+	if phase != Mode.PLAY and phase != Mode.CUT: return
+	if segments.is_empty(): return
+	var room := $Rooms.get_child(segments.size() - 1) as Node3D
+	if room == null: return
+	set_meta("turned", int(get_meta("turned", 0)) + 1)
+	_turn_room = room
+	_turn_center = room.global_transform * Vector3(SET_LENGTH * 0.5, 0.0, 0.0)
+	_turn_local_player = room.to_local(player.global_position)
+	_turn_local_target = room.to_local(route[cursor])
+	var a0 := room.rotation.y
+	var tw := create_tween()
+	tw.tween_method(_apply_stage_angle, a0, a0 + SET_TURN, 0.45)
+	rig.add_shake(0.35)
+	fx.flash(Color("cfd6e0"), 0.16, 0.02, 0.20)
+	score.cue("choose")
+
+
+func _apply_stage_angle(a: float) -> void:
+	if _turn_room == null or not is_instance_valid(_turn_room): return
+	var off := Vector3(SET_LENGTH * 0.5, 0.0, 0.0)
+	var turn := Basis(Vector3.UP, a)
+	_turn_room.rotation.y = a
+	# Keep the set's centre where it was. Rotating about the room's own origin
+	# would swing the whole stage out from under whoever is standing on it.
+	_turn_room.global_position = _turn_center - turn * off
+	var room_xform := _turn_room.global_transform
+	player.global_position = room_xform * _turn_local_player
+	route[cursor] = room_xform * _turn_local_target
+	if _lamp.visible: _lamp.position = route[cursor] + Vector3.UP * 0.10
+
+
+## The frame you died on, printed on the floor of the set. It is dressing, not
+## geometry: nothing collides with it, and it turns with the stage.
+func _drop_photogram(pos: Vector3, facing: float) -> void:
+	if segments.is_empty(): return
+	var room := $Rooms.get_child(segments.size() - 1) as Node3D
+	if room == null: return
+	var print := MeshInstance3D.new()
+	var quad := PlaneMesh.new()
+	quad.size = Vector2(0.86, 1.42)
+	print.mesh = quad
+	print.name = "Photogram"
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(1.0, 0.93, 0.78, 0.22)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	print.material_override = mat
+	room.add_child(print)
+	var flat := Basis(Vector3.UP, facing) * Basis(Vector3.RIGHT, -PI * 0.5)
+	print.global_transform = Transform3D(flat, pos + Vector3.UP * 0.012)
+
 func _board_die() -> void:
 	var n := maxi(live.take_id,1)
 	score.duck(true)
