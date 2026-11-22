@@ -297,15 +297,21 @@ func _cart_patch(cart: Node3D, ink: Color) -> void:
 static var _grain_tex: ImageTexture
 static var _deck_tex: Texture2D
 static var _flat_tex: Texture2D
+static var _wall_tex: Texture2D
 
-## The two painted surfaces. Loaded once; the fallback is the procedural grain so
-## a missing asset never leaves the set bare.
+## Three painted surfaces: the deck you walk on, the walls that hold the set in,
+## and the flats that make the shapes. Each falls back to its own painted grain,
+## and every one of them is a near-white multiply mask so the room colour still
+## comes from the palette rather than from the photograph.
 static func _surface(color: Color) -> Texture2D:
 	if color == DECK:
-		if _deck_tex == null: _deck_tex = _load_or_grain("res://assets/textures/deck.png")
+		if _deck_tex == null: _deck_tex = _load_or_grain("res://assets/textures/deck_ai.png")
 		return _deck_tex
-	if _flat_tex == null: _flat_tex = _load_or_grain("res://assets/textures/flat.png")
-	return _flat_tex
+	if color == IRON:
+		if _flat_tex == null: _flat_tex = _load_or_grain("res://assets/textures/flat.png")
+		return _flat_tex
+	if _wall_tex == null: _wall_tex = _load_or_grain("res://assets/textures/wall.png")
+	return _wall_tex
 
 
 static func _load_or_grain(path: String) -> Texture2D:

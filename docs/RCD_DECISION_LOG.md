@@ -446,6 +446,22 @@ HUD 从「两块深色面板」改成**两组字 + 两条细线**：左上「棚
 
 **实测**：`tests/run_all.gd` **490 断言全绿**（relay 82/82，新增 5 条）；真机站上桥 `player.y == 1.25`、走开回落；截图里能看清桥、两端台阶、桥下的腿，玩家站在桥上，推轨从下面过。
 
+# D-040 · 场记板是一块黑板，HUD 只剩字，声音进了房间
+
+**状态**：CONFIRMED（已实现、已测、已出包）。
+
+**板**：`scripts/ui/slate_board.gd` 从「奶油色纸板」改成真正的场记板——黑洞石板底 `0.086,0.082,0.075`、粉笔白 `0.925,0.906,0.855`、上限一条 2% 亮边与 1 px 粉笔描边；顶上两条合板条（板上的斜纹带 + 会转的拍板条）之间补了一颗铰链圆点，让它们读成一件会张合的东西；右上是一块三行字段表 `SCENE / TAKE / ROLL`（等宽字体、细线、值用粉笔写），由 `slate_ui._apply_text()` 写 `board.take_no`；长的前提句自动折两行（`_wrap()` 逐字量宽、优先在「。」后断），折行后让出右侧字段块；relay 的「第 NN 条」不再和字段块重复。
+
+**HUD**：`cutting_desk.gd` 删掉两块深色面板，只剩两条 1 px 细线和两行字（左上 `棚 x/y` + `趟 a/b`，右上 `MARK n / CUT n`，底部消息条改软底）。HUD 从「家具」变成「字」。
+
+**声音**：三态音床用本机 FFmpeg 8.1.1 重新渲染——`highpass/lowpass` 切掉电话感、`vibrato` 做磁带轻微走带、`aecho` 给房间、`anoisesrc`（brown, 0.011/0.018）铺底噪，再 `amix` 压回去；原始未处理版本保留为 `bed_*_dry.wav`。这一轮用的是本机 FFmpeg 而不是 Audacity：同样的滤波链可以写进脚本、可以复现。
+
+**贴图**：`relay_rooms._surface()` 改成三个面（甲板 / 铁件 / 墙面），各走「有导入就用 → 盘上直接读 PNG → 程序化颗粒」三级回退，所以缺文件不会白屏。
+
+**被硬件挡住的部分（写清楚，别假装做过）**：本轮想用本机 SDXL 出墙面与甲板的真贴图，`C:\AI\models\sdxl_diffusers` 只有 2.7 MB 配置、**没有权重**；`tools/make_textures_ai.py` 已写好（fp16 + VAE/attention slicing + 镜像接缝），运行需要 D: 盘上的模型主库。当前机器上 **D: 盘未插**（`Get-PSDrive` 只有 C:），所以 `assets/textures/wall.png` 与 `deck_ai.png` 不存在，运行时会回退到程序化颗粒——功能不受影响，观感停在上一轮。
+
+**实测**：`tests/run_all.gd` **490 断言全绿**；`godot_export_project` 出包 `builds/RCD-Ink-and-Tape.exe`（exit 0，日志里 bed_* 与新脚本都进了包）；真机截图 `m6_board3.png`（黑板 + 字段块 TAKE 03 + 两行折好的前提 + 极简 HUD）。
+
 ## 变更规则
 1. 新增决策 → 追加条目，编号连续，不得改写历史条目。
 2. 推翻旧决策 → 新条目 + 在旧条目上标 `SUPERSEDED by D-0xx`，保留原文。
