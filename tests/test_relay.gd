@@ -122,6 +122,19 @@ static func run(h, tree = null) -> void:
 		float(Run.LANE) + float(Player.RADIUS) < widest_throat)
 	h.ok("the line stays off centre", float(Run.LANE) > 0.05)
 
+	# The crew opens one drawer at a time: the first set is clean, the second may
+	# only show a ghost that cannot kill, and everything is available from the third.
+	var first_pool: Array = Run._event_pool_for(0)
+	h.ok("the first set is clean", first_pool.size() == 1 and str(first_pool[0]) == "")
+	var second_pool: Array = Run._event_pool_for(1)
+	var loud := 0
+	for e: String in second_pool:
+		if e != "" and e != "guide":
+			loud += 1
+	h.eq("only a demonstration joins the second set", loud, 0)
+	var open_pool: Array = Run._event_pool_for(3)
+	h.ok("the shop is open by the third set", open_pool.has("belt") and open_pool.has("wire"))
+
 	# The three shapes that answer the turn three different ways.
 	h.ok("I is a shape", Rooms.LANES.has("i"))
 	h.ok("L is a shape", Rooms.LANES.has("l"))

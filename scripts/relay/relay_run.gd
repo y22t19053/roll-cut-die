@@ -229,6 +229,11 @@ func _ready() -> void:
 	# Sample after the actual player and camera have stepped.
 	process_physics_priority = 5
 	_start_leg(false)
+	# Once the board has closed, tell them how long the job is. Nobody should have
+	# to guess the run's length from the HUD.
+	get_tree().create_timer(0.95).timeout.connect(func() -> void:
+		if is_inside_tree() and phase == Mode.PLAY:
+			_hint("shape", "四节十二棚。最后一棚要冲线。", "Four acts, twelve sets. The last one is the gate."))
 
 func _w(zh: String, en: String) -> String:
 	return zh if Loc.language == "zh" else en
@@ -591,15 +596,29 @@ func _slot_passes() -> int:
 	return LONG_PASSES if segments.size() % SETS_PER_ACT == SETS_PER_ACT - 1 else SHORT_PASSES
 
 
+## Which things the crew is allowed to do to set number `tier` (0 = the first set
+## after the opener). The first two sets stay quiet on purpose: the creator played
+## this and said his head was going to explode by the third act, so the shop opens
+## one drawer at a time. Set 1 is clean, set 2 may only offer a guide (a ghost that
+## demonstrates and cannot kill), then the basic three, then everything.
+static func _event_pool_for(tier: int) -> Array:
+	if tier <= 0:
+		return [""]
+	if tier == 1:
+		return ["", "", "guide"]
+	var pool: Array = (EVENT_POOL.slice(0, 3) if tier < 2 else EVENT_POOL).duplicate()
+	return pool
+
+
 func _offer_doors() -> Array:
 	var tier := segments.size() - 1
 	var deck := KINDS.duplicate()
 	# Later acts pull from the whole shop, not the three the first act knows, and
 	# by then the crew is willing to dress one set with two things at once.
-	var pool: Array = (EVENT_POOL.slice(0, 3) if tier < 2 else EVENT_POOL).duplicate()
+	var pool: Array = _event_pool_for(tier)
 	var events: Array = []
 	for k in 2:
-		events.append(str(pool.pop_at(_rng.randi_range(0, pool.size() - 1))))
+		events.append(str(pool.pop_at(_rng.randi_range(0, pool.size() - 1))) if not pool.is_empty() else "")
 	var passes := _slot_passes()
 	var rewards: Array = ["", "mark", "cut" if tier >= 2 else "splice"]
 	var out: Array = []
