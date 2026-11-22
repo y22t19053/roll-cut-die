@@ -137,6 +137,7 @@ func _apply_text() -> void:
 		return
 	board.corner = _corner_text if not _corner_text.is_empty() else _default_corner()
 	board.subline = _subline_text if not _subline_text.is_empty() else _default_subline()
+	board.take_no = _take
 
 
 func _default_corner() -> String:

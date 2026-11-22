@@ -129,14 +129,17 @@ class Sheet extends Control:
 	func _draw() -> void:
 		_layout(); draw_set_transform(Vector2.ZERO,0,Vector2.ONE*s)
 		var d=owner_desk
-		var dark:=Color("1d2224ee")
-		rect(14,12,246,38,dark);rect(14,12,4,38,AMBER)
-		text(26,37,word("棚 %02d/%02d","SET %02d/%02d")%[d._room,d._rooms],17,PAPER)
-		text(148,37,word("趟 %d/%d","PASS %d/%d")%[d._pass,d._passes],16,AMBER)
+		# HUD: type on the frame, no furniture. Two groups, one hairline each,
+		# so the deck is what you look at and the numbers are what you glance at.
+		var line_y := 34.0
+		draw_line(Vector2(20,line_y+8),Vector2(214,line_y+8),Color(AMBER.r,AMBER.g,AMBER.b,0.55),1.0)
+		text(22,line_y,word("棚 %02d/%02d","SET %02d/%02d")%[d._room,d._rooms],18,PAPER)
+		text(146,line_y,word("趟 %d/%d","PASS %d/%d")%[d._pass,d._passes],18,AMBER)
 		var stock:String="MARK %d   CUT %d"%[d._marks,d._cuts]
 		if d._splice: stock+=word("   接片","   SPLICE")
-		var sw:float=d._font.get_string_size(stock,HORIZONTAL_ALIGNMENT_LEFT,-1,16).x+28
-		rect(w-sw-14,12,sw,38,dark); text(w-sw,37,stock,16,MINT)
+		var sw:float=d._font.get_string_size(stock,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
+		draw_line(Vector2(w-sw-22,line_y+8),Vector2(w-22,line_y+8),Color(MINT.r,MINT.g,MINT.b,0.55),1.0)
+		text(w-sw-20,line_y,stock,18,MINT)
 		if not d._cards.is_empty():
 			rect(0,0,w,h,Color("101817cf"))
 			var left:=card(0).position.x
@@ -173,7 +176,8 @@ class Sheet extends Control:
 			text(x+22,y+89,word("全片接通","PRINT COMPLETE") if d._result==1 else word("这卷到头了","END OF REEL"),32,PAPER)
 		if d._remaining>0 and d._message!="":
 			var span:=minf(w-32,d._font.get_string_size(d._message,HORIZONTAL_ALIGNMENT_LEFT,-1,17).x+32)
-			rect((w-span)*.5,h-51,span,36,dark)
+			# One line of type over a soft scrim: enough to read, not a panel.
+			rect((w-span)*.5,h-51,span,36,Color(0.043,0.051,0.055,0.62))
 			draw_string(d._font,Vector2((w-span)*.5+14,h-27),d._message,HORIZONTAL_ALIGNMENT_LEFT,span-24,17,PAPER)
 	func draw_contract(i:int) -> void:
 		var d=owner_desk; var r:=card(i); var x:=r.position.x; var y:=r.position.y
