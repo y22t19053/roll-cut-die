@@ -1407,11 +1407,9 @@ func _refresh() -> void:
 func _board_roll() -> void:
 	var n := maxi(live.take_id,1)
 	score.duck(true)
-	# The premise, in the place the player is already looking: you are not the
-	# first one shooting this take, and nobody on the floor will stop for you.
-	slate.play_roll(n, _w("第 %02d 条" % n, "TAKE %02d" % n),
-		_w("你是来补拍的。原来那条，废了。\n棚子每晚换搭，站进镜头的只有几个。",
-			"You are here to reshoot. The take before this was ruined.\nThe set is rebuilt every night, and only a few will stand in it."))
+	# The board carries the take number and nothing else: the premise belongs to the
+	# title page now, and a board that explains itself delays the first step.
+	slate.play_roll(n, _w("第 %02d 条" % n, "TAKE %02d" % n), "")
 
 
 ## 抢天光: the day is going. Each act the key light drops and warms, so the last

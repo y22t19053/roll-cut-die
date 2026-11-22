@@ -167,10 +167,6 @@ func _render() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_constant_override("outline_size", 10)
 	col.add_child(title)
-	var tag := UiKit.label(_tagline(), 22, UiKit.INK)
-	tag.name = "Tagline"
-	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(tag)
 	var premise := UiKit.label(_premise(), 16, UiKit.DIM)
 	premise.name = "Premise"
 	premise.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -224,7 +220,7 @@ func _render() -> void:
 	record.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	buttons.add_child(record)
 	var daily := _secondary(UiKit.button(
-		("每日种子 %06X" if zh else "DAILY SEED %06X") % rules.daily_seed(), _on_daily))
+		("每日挑战" if zh else "DAILY CHALLENGE") + (" %06X" % rules.daily_seed()), _on_daily))
 	daily.name = "Daily"
 	buttons.add_child(daily)
 	var rule := ColorRect.new()
@@ -321,11 +317,10 @@ func _start_block(button: Button, caption: String) -> Control:
 
 
 ## What a new run is, in one line, before you commit to it.
+## Only the difficulty: the length of a run belongs to the pause page and the sheet
+## at the end, not to the button you press before you know what the game is.
 func _shape_line(zh: bool, mode: int) -> String:
-	var mode_name: String = (["新手", "专家", "大师"] if zh else ["Novice", "Expert", "Master"])[clampi(mode, 0, 2)]
-	if zh:
-		return "%s · 四节十二棚 · 一局 6–9 分钟" % mode_name
-	return "%s · four acts, twelve sets · 6–9 min" % mode_name
+	return (["新手", "专家", "大师"] if zh else ["Novice", "Expert", "Master"])[clampi(mode, 0, 2)]
 
 
 ## Drawn over the button's own stylebox; lit white while hovered or focused.

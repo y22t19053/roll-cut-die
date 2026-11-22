@@ -41,7 +41,7 @@ var ghosts: Array = []
 ## ORBIT by default: the only scheme that never converges back onto the keys.
 var roll_mode: int = RollModes.ORBIT
 var settings := {
-	"language": "zh",
+	"language": "en",
 	"reduce_motion": false,
 	"hud_scale": 1.0,
 	"roll_scale": 1.0,
