@@ -937,3 +937,15 @@ _plans[i] = {"entry": Vector3, "exit": Vector3}
 **实测**：`tests/run_all.gd` **570 断言全绿**，`relay_walk 6/6`（五族全通）、`relay_death 10/10`、`relay 146/146`；真机把 `o` 棚造出来，站在入口看得见两侧都有路，`probe` 在 z=±2.2 的通道上连续 10/23 格无碰撞。
 
 **没验证**：真人走 O 棚会不会觉得「绕得太远」——它现在的通道有两条，但都靠边。如果反馈「O 棚像在罚我绕路」，改的是方框尺寸（缩到 2 行），不是恢复通墙。
+
+# D-068 · 开发用的服务器不进发行包
+
+**状态**：CONFIRMED（570 断言全绿，Web 版真机复验，TOY 预览控制台无该报错）。
+
+**怎么发现的**：B 站 TOY 的预览页控制台里有一条红字——`Attempt to open script 'res://autoload/mcp_interaction_server.gd' resulted in error 'File not found'`。游戏能玩，但**每次启动都先在日志里报一次错**；itch 的 Web 版从上一版起就带着同一句。根因：`project.godot` 的 `[autoload]` 声明了 `McpInteractionServer="*res://autoload/mcp_interaction_server.gd"`（godot-bridge 起的本地实例自动装回去的开发服务器），而 `export_presets.cfg` 的 `exclude_filter` 里本来就有 `autoload/*`——**声明还在、文件没打进去**，启动时找不到脚本。
+
+**改法**：从 `project.godot` 的 `[autoload]` 删掉这一行（保留 `GameSession`）。本地跑我不受影响——`godot_run_project` 开实例时会自己把它装回去；发行包里从此没有这个悬空的 autoload。
+
+**实测**：重导出 Web（`builds/web`，pack 里已无 `autoload/*`）→ 重传 TOY（新预览 `author_35NfsY9g`）→ iframe 内 `#canvas` 从占位 300×150 变成 2179×1311、`#status` removed，控制台只剩一条无害的 `Changing the V-Sync mode is not supported by this display server`。截图主色 `(25,26,25)` + `(178,166,141)`＝标题页黑板与米白大字，与 Windows 版一致。
+
+**没验证**：itch 的 Web 与 Windows 两个文件仍是上一版（`ba675e3`），带着这句报错；要不要为这一句再传一次，等创作者说。
