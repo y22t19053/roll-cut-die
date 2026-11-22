@@ -33,7 +33,16 @@ RCD 现在能挂 itch（已挂）与少数不禁止 AI 的平台；**近在眼�
 | **Game Jolt** | 免费托管 Windows/HTML5，自带 Jam 生态（需注册账号） | 有现成 zip | **成本最低的下一步**，登录即可挂 |
 | **Newgrounds** | HTML5 上传，需账号；当场被 `NG Guard` 人机验证拦住（未登录） | 有 web 包 | 要账号 + 过验证 |
 | **GX.games**（Opera GX，`dev.gx.games`） | 开发者后台 + Jam 板块，支持 Godot web 导出 | 有 web 包 | 要账号，后台待核 |
+| **B 站 TOY**（`bilibili.com/toy`） | 入口 `index.html` 解压后 ≤1 MB、包体走审核；`toy` CLI 上传；含自由绘制要加 `--watermark` | web 包 65.49 MB、`index.html` 2.7 KB | **已提交审核**（Toy id `58061569920000`，2026-11-22） |
 | **Steam** | 每款 **$100** 上架费、需完整成品与商店页、审核 | 目前是 4 节 12 棚的一局 | 长期最值，不是「挂比赛」 |
+
+## 2.5 · B 站 TOY 的实际做法（2026-11-22）
+
+- 打包：`builds/web` 去掉 `*.import` 的 9 个文件 → `builds/toy-roll-cut-die/`；`index.html` 里全是相对路径，`GODOT_THREADS_ENABLED = false`，所以在 `/toy/<slug>/` 子路径下能跑。
+- 封面图标**必须是 4:3 与正方形**，不是 itch 的 630×500：`tools/make_toy_poster.py` 把 16:9 的 `visual/cover.png` 裁成 4:3 再套字（`visual/toy_poster.png` 1200×900），另画 `visual/toy_icon.png` 512×512。
+- `toy create <dir> ... ` 不带 `--yes` **只出预览、不提交**；预览页 `https://www.bilibili.com/toy/preview/author_XXXX/index.html` 在 iframe 里跑，判断它真的起来了要看 iframe 内 `#canvas` 的 width 从 300×150 变成真尺寸，而不是只看页面标题。
+- 上传成功后 `toy mylist` 才会出现这条；提交审核后 `status: auditing`。
+- **踩过的坑**：导出包里带着开发用的 `McpInteractionServer` autoload（`project.godot` 有声明、`exclude_filter` 又排除了 `autoload/*`），Toy 版控制台一进就报 `Attempt to open script 'res://autoload/mcp_interaction_server.gd' … File not found`。删掉那条声明后重导出，错误消失，只剩一条无害的 V-Sync warning。
 
 ## 3 · 三条可执行路线
 
