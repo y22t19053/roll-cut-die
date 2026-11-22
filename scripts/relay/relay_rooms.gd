@@ -240,15 +240,23 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		_doubles[_count] = {"x": stand_x, "z": stand_z, "stall": 0.0, "held": 0.0, "last": 0.0, "node": stand}
 	if _has(event, "runner"):
 		# The crew's runner. He has a call to make on the far side and he is not
-		# going to walk around the marks to make it.
+		# going to walk around the marks to make it. He does, however, look up.
 		var body := Node3D.new()
 		body.name = "Runner"
 		room.add_child(body)
 		_box(body, Vector3(0, .55, 0), Vector3(.40, 1.10, .32), Color("2e4258"))
-		_box(body, Vector3(0, 1.17, 0), Vector3(.26, .26, .26), Color("d9c3a0"))
 		_box(body, Vector3(.16, .74, .19), Vector3(.26, .02, .20), WHITE)
+		# The head rides on its own pivot so it can turn without the body turning:
+		# a person looking at you is not the same as a person turning to face you.
+		var head := Node3D.new()
+		head.name = "Head"
+		head.position = Vector3(0, 1.17, 0)
+		body.add_child(head)
+		_box(head, Vector3.ZERO, Vector3(.26, .26, .26), Color("d9c3a0"))
 		body.position = Vector3(4.5, 0.0, -2.6)
-		_runners[_count] = {"node": body, "speed": 1.5}
+		_runners[_count] = {
+			"node": body, "head": head, "speed": 1.5,
+			"look": 0.0, "seen": false, "rest": 0.0}
 	if _has(event, "mezz"):
 		# A catwalk over the lane. The deck sweeps under you instead of through you:
 		# you buy the whole dolly lane with the walk up and down the two ramps.
@@ -383,6 +391,24 @@ func spot_at(room_index: int) -> Vector3:
 	var room: Node3D = _rooms[room_index]
 	if room == null: return Vector3.ZERO
 	return room.to_global(_spots[room_index])
+
+
+## Every family walks a different way, and the call note on the deck says so in
+## the same breath as the paperwork. This is not a hint system: it is the crew
+## telling you how the set is built tonight, on the same piece of paper.
+static func family_note(kind: String, zh: bool) -> String:
+	match kind:
+		"i":
+			return "这一条是空的。中间那块台，绕过去。" if zh else "This one is bare. The slab in the middle: go round it."
+		"l":
+			return "口岸宽，巷子窄。别贴着箱子走。" if zh else "Wide mouth, narrow lane. Do not hug the crates."
+		"o":
+			return "环在里头。人走外侧。" if zh else "The ring is inside. Walk the outside of it."
+		"h":
+			return "两条长巷。中间不通。" if zh else "Two long lanes. Nothing crosses the middle."
+		"s":
+			return "两个弯。光带先往侧道拐。" if zh else "Two bends. The line turns into the side lane first."
+	return ""
 
 
 ## The paperwork on the deck. Returns true while the player is standing on it.
@@ -589,8 +615,47 @@ func set_clock(room_index: int,t: float) -> void:
 		var s := fposmod(t*float(r["speed"])/span,2.0)
 		var z := -span*0.5 + (s if s<=1.0 else 2.0-s)*span
 		var body: Node3D = r["node"]
-		body.position.z = z
-		body.rotation.y = 0.0 if s<=1.0 else PI
+		var walking := 0.0 if s<=1.0 else PI
+		r["walk_yaw"] = walking
+		if float(r.get("look", 0.0)) <= 0.50:
+			# He stops for the beat he is looking at you. A person standing still
+			# is readable at twelve metres in a way a turning one is not.
+			body.position.z = z
+			body.rotation.y = walking
+
+## The runner is doing his job, not hunting you. But he is a person: come within two
+## and a half metres and he looks up for a beat, then goes back to it. Nothing about
+## this is fair or unfair — it just means somebody else is in the room.
+func notice_player(world_pos: Vector3, room_index: int, dt: float) -> void:
+	if not _runners.has(room_index): return
+	var r: Dictionary = _runners[room_index]
+	var body: Node3D = r["node"]
+	var head: Node3D = r["head"]
+	# Where he is being looked at from, measured in the SET's frame and not his
+	# own: measuring it in his own frame makes the target chase his own turn.
+	var parent := body.get_parent() as Node3D
+	var local_target := parent.to_local(world_pos) - body.position
+	var p := local_target
+	var near := Vector2(p.x, p.z).length() < 3.4
+	if near and float(r["look"]) <= 0.0 and float(r["rest"]) <= 0.0:
+		r["look"] = 1.05
+	if float(r["look"]) > 0.0:
+		r["look"] = float(r["look"]) - dt
+		var want: float = float(r.get("walk_yaw", 0.0))
+		if float(r["look"]) > 0.50:
+			# Turn the whole body, not just the head: at twelve metres a head
+			# turning is three pixels. A shoulders-square turn is readable.
+			want = atan2(p.x, p.z)
+			# Keep the sheet in his hand where the walk put it.
+			if absf(want - float(r.get("walk_yaw", 0.0))) > PI * 0.5:
+				want += PI if want < 0.0 else -PI
+		body.rotation.y = lerpf(body.rotation.y, want, clampf(dt * 14.0, 0.0, 1.0))
+		head.rotation.y = lerpf(head.rotation.y, 0.0, clampf(dt * 6.0, 0.0, 1.0))
+		if float(r["look"]) <= 0.0:
+			r["rest"] = 5.0
+	elif float(r["rest"]) > 0.0:
+		r["rest"] = float(r["rest"]) - dt
+		body.rotation.y = lerpf(body.rotation.y, float(r.get("walk_yaw", 0.0)), clampf(dt * 4.0, 0.0, 1.0))
 
 ## What the deck is doing under your feet here. Stage-local, so a set that has been
 ## turned end for end pushes you the other way in the world — the belt answers to

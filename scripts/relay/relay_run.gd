@@ -981,6 +981,8 @@ func _physics_process(dt: float) -> void:
 		_sample()
 		_next_sample = elapsed + 0.10
 	$Rooms.set_clock(segments.size()-1,elapsed)
+	# Somebody else is in the room, and he notices you.
+	$Rooms.notice_player(player.global_position, segments.size()-1, dt)
 	# On the wire you are not walking: the rig carries you in a straight line and
 	# nothing on the deck can reach you until it sets you down.
 	if not _riding and not _wire_used and $Rooms.wire_at(player.global_position, segments.size()-1):
@@ -1087,7 +1089,13 @@ func _read_note() -> void:
 		"Not enough light left. The gaffer says two more takes, and does not say two more of what.",
 		"Past that door is the delivery bay. Cross the line and this reel is somebody else's.",
 	]
-	_show_notice(_w(lines[clampi(act, 0, 3)], en[clampi(act, 0, 3)]), 5.0)
+	var line := _w(lines[clampi(act, 0, 3)], en[clampi(act, 0, 3)])
+	# The same sheet also says how tonight's set is built: every family walks a
+	# different way, and the crew would rather tell you than watch you find out.
+	var how: String = $Rooms.family_note(str((segments.back() as Dictionary).get("kind", "")), Loc.language == "zh")
+	if how != "":
+		line += "\n" + how
+	_show_notice(line, 5.0)
 
 ## The nearest ghost sets the tension bed; the moment a close pass becomes a
 ## clean one, a single click says so. Nothing here scores, slows or pushes.

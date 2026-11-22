@@ -191,6 +191,14 @@ static func run(h, tree = null) -> void:
 		h.ok("the %s room can answer back" % kind, Sound.hit_for(kind).get_length() < 1.0)
 	var crate_spot: Vector3 = rooms.spot_at(9)
 	h.ok("the crate room knows where its crates are", crate_spot != Vector3.ZERO)
+	# Each family tells you how it is built, on the same sheet as the paperwork.
+	var notes := {}
+	for kind: String in ["i", "l", "o", "h", "s"]:
+		var note: String = Rooms.family_note(kind, true)
+		h.ok("the %s room says how to walk it" % kind, note != "")
+		notes[note] = true
+	h.eq("five families, five ways to walk", notes.size(), 5)
+	h.ok("the note speaks English too", Rooms.family_note("l", false) != Rooms.family_note("l", true))
 	h.eq("an O room still runs one dolly", (rooms._dollies[9] as Array).size(), 1)
 
 	# The trolley's danger is its footprint, sampled at the time you ask for.
@@ -227,6 +235,25 @@ static func run(h, tree = null) -> void:
 	var clear_spot: Vector3 = rooms._rooms[run_room].to_global(Vector3(4.5, 0.05, runner.position.z + 2.4))
 	h.ok("two metres away is clear", not rooms.crew_at(clear_spot, run_room))
 	h.ok("a room with no runner has no crew", not rooms.crew_at(under_him, 0))
+
+	# He is a person: walk into his eyeline and he turns toward you, then goes back.
+	var runner_head: Node3D = rooms._runners[run_room]["head"]
+	var walk_yaw := runner.rotation.y
+	var beside: Vector3 = rooms._rooms[run_room].to_global(Vector3(4.5 + 1.2, 0.05, runner.position.z + 0.8))
+	for i in 12:
+		rooms.notice_player(beside, run_room, 0.02)
+	h.ok("he turns toward you when you come close", absf(runner.rotation.y - walk_yaw) > 0.15)
+	var turned := absf(runner.rotation.y - walk_yaw)
+	rooms.append_room("s", 0, "", false, "runner")
+	var other_room: int = rooms._count - 1
+	var other: Node3D = rooms._runners[other_room]["node"]
+	rooms.set_clock(other_room, 0.0)
+	var other_walk := other.rotation.y
+	var far_away: Vector3 = rooms._rooms[other_room].to_global(Vector3(4.5, 0.05, 40.0))
+	for i in 12:
+		rooms.notice_player(far_away, other_room, 0.02)
+	h.ok("nobody turns from across the building", absf(other.rotation.y - other_walk) < 0.02)
+	h.ok("the turn is not a flicker", turned > 0.15 and runner_head.rotation.y < 0.9)
 
 	# Taped-off deck: not a body in the way, a mistake the take cannot survive.
 	rooms.append_room("s", 0, "", false, "goof")
