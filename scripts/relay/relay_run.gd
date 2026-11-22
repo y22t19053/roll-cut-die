@@ -590,6 +590,7 @@ func _offer_doors() -> Array:
 			var tag := _event_short(str(door["event"]))
 			door["mod_label"] = tag if str(door["mod_label"]) == "" else (str(door["mod_label"]) + " · " + tag)
 		door["stake_label"] = _stake_label(int(door["passes"]), str(door["reward"]), str(door["event"]))
+		door["stamp"] = _reward_stamp(str(door["reward"]))
 		door["turn_note"] = _turn_note(str(door["kind"]))
 		out.append(door)
 	return out
@@ -637,6 +638,17 @@ func _stake_label(passes: int, reward: String, _event := "") -> String:
 		"cut": return base + _w(" · +1 CUT", " · +1 CUT")
 		"splice": return base + _w(" · 接片", " · splice")
 	return base + _w(" · 无补给", " · none")
+
+
+func _reward_stamp(reward: String) -> String:
+	# The stamp is the price tag on the call sheet, so it has to say what the
+	# door actually hands over — a paper that reads "no supply" while the cost
+	# line says "+1 MARK" is a lie on paper.
+	match reward:
+		"mark": return "+1 MARK"
+		"cut": return "+1 CUT"
+		"splice": return _w("接片", "SPLICE")
+	return _w("无补给", "NO SUPPLY")
 
 
 func _event_short(event: String) -> String:

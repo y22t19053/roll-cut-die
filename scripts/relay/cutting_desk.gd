@@ -195,31 +195,54 @@ class Sheet extends Control:
 		rect(x+12,y+131,170,28,INK)
 		text(x+22,y+151,str(data.get("stamp","")),17,AMBER)
 
+	## Cut a line down to what the card can actually hold. A crew call that runs
+	## off the paper reads as a bug, not as a busy night.
+	func _fit(s: String, px: int, x0: float, x1: float) -> String:
+		var font: Font = owner_desk._font
+		if font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x <= x1 - x0:
+			return s
+		var out := s
+		while out.length() > 1 and font.get_string_size(out + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > x1 - x0:
+			out = out.substr(0, out.length() - 1)
+		return out + "…"
+
 	func draw_strip(i:int) -> void:
 		var d=owner_desk; var r:=card(i);var x:=r.position.x;var y:=r.position.y
 		var selected:bool=i==d._hover
 		var data:Dictionary=d._cards[i];var kind:=str(data.get("kind","straight"))
 		var title:String=word("棚型  ","SET  ")+kind.to_upper()
-		rect(x+3,y+5,196,188,Color("101210"));rect(x,y,196,188,AMBER if selected else PAPER)
-		for j in 11:
-			for edge in [4,176]:rect(x+7+j*17,y+edge,9,7,INK)
-		rect(x+8,y+17,180,84,INK)
-		# Each line is one continuous stroke, in a 3x3 contact-print grid.
+		# A call sheet, not a poster: paper, a ruled header, dotted leaders, and
+		# one rubber stamp for what it costs.
+		rect(x+3,y+5,196,188,Color("101210"))
+		rect(x,y,196,188,AMBER if selected else PAPER)
+		rect(x,y,196,26,INK)
+		text(x+10,y+18,"CALL SHEET  /  %02d"%(i+1),12,MINT)
+		# the shape, drawn small in the header's right corner
 		var diagrams:={"s":[[2,0,3,5,8,6]],"h":[[0,6],[3,5],[2,8]],"u":[[0,6,8,2]],"l":[[0,6,8]],"n":[[6,0,8,2]],"x":[[0,8],[6,2]],"i":[[1,7]],"o":[[0,2,8,6,0]]}
 		for stroke:Array in diagrams.get(kind.to_lower(),[[3,5]]):
 			var pts:=PackedVector2Array()
-			for cell:int in stroke: pts.append(Vector2(x+61+37*(cell%3),y+32+27*floori(cell/3.0)))
-			draw_polyline(pts,MINT,4,true)
-		text(x+11,y+120,"%02d"%(i+1),17,INK);text(x+47,y+120,title,19,INK)
+			for cell:int in stroke: pts.append(Vector2(x+150+11*(cell%3),y+9+6*floori(cell/3.0)))
+			draw_polyline(pts,MINT,2,true)
+		text(x+11,y+48,title,19,INK)
+		var rows:Array=[]
 		var mod := str(data.get("mod_label",""))
-		if mod != "":
-			text(x+11,y+138,mod,13,Color("6b6656"))
+		if mod != "": rows.append([word("布景","CREW"),mod])
 		var stake := str(data.get("stake_label",""))
-		if stake != "":
-			text(x+11,y+153,stake,13,INK)
+		if stake != "": rows.append([word("代价","COST"),stake])
 		var note := str(data.get("turn_note",""))
-		if note != "":
-			text(x+11,y+172,note,12,Color("4b4740"))
+		if note != "": rows.append([word("转过来","TURNED"),note])
+		var ry := y+70.0
+		for row:Array in rows:
+			text(x+11,ry,str(row[0]),11,Color("6b6656"))
+			text(x+58,ry,_fit(str(row[1]),13,x+58,x+178),13,INK)
+			draw_line(Vector2(x+11,ry+5),Vector2(x+185,ry+5),Color("b8b09a"),1)
+			ry += 22.0
+		# the stamp: the price of taking this door, boxed like a rubber stamp
+		var stamp := str(data.get("stamp",""))
+		if stamp == "": stamp = word("无补给","NO SUPPLY")
+		var tw: float = d._font.get_string_size(stamp,HORIZONTAL_ALIGNMENT_LEFT,-1,12).x+16.0
+		rect(x+185-tw,y+158,tw,20,Color("8c2f22"))
+		text(x+185-tw+8,y+172,stamp,12,PAPER)
 
 	func draw_supply(i:int) -> void:
 		var r:=card(i); var x:=r.position.x; var y:=r.position.y
