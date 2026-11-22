@@ -639,6 +639,7 @@ func _event_short(event: String) -> String:
 		"guide": return _w("旧我示范", "ghost walks it")
 		"belt": return _w("有传送带", "on a belt")
 		"runner": return _w("有人在跑", "a runner")
+		"goof": return _w("地上有胶带", "taped off")
 	return ""
 
 func _mod_label(mod: String) -> String:
@@ -655,11 +656,12 @@ func _mod_label(mod: String) -> String:
 func _roll_event() -> String:
 	if segments.size() <= 1: return "" # The first set teaches the floor; leave it plain.
 	var r := _rng.randf()
-	if r < 0.20: return "relight"
-	if r < 0.40: return "extra"
-	if r < 0.52: return "guide"
-	if r < 0.64: return "belt"
-	if r < 0.76: return "runner"
+	if r < 0.18: return "relight"
+	if r < 0.36: return "extra"
+	if r < 0.47: return "guide"
+	if r < 0.58: return "belt"
+	if r < 0.69: return "runner"
+	if r < 0.80: return "goof"
 	return ""
 
 
@@ -670,6 +672,7 @@ func _event_line(event: String, zh: bool) -> String:
 		"guide": return "这一次，上一次的你不碰人，它只是先走一遍。" if zh else "This take your past does not touch you. It shows the way."
 		"belt": return "甲板上铺了一条传送带。它听棚的，不听你的镜头。" if zh else "There is a belt on the deck. It answers to the set, not to your lens."
 		"runner": return "场务在跑。他不会为你停。" if zh else "A runner is crossing. He will not stop for you."
+		"goof": return "地上贴了胶带。站进去，这一条就废了。" if zh else "The deck is taped off. Stand in it and the take is gone."
 	return ""
 
 
@@ -773,6 +776,10 @@ func _physics_process(dt: float) -> void:
 		# business is on the other side, and he will not wait for your take.
 		if $Rooms.crew_at(player.global_position,segments.size()-1):
 			if _hit(2): return
+		# The tape is not a threat: standing in it just means this take cannot be
+		# printed, which costs exactly the same as being hit — one more walk.
+		if $Rooms.goof_at(player.global_position,segments.size()-1):
+			if _hit(3): return
 	# The line is read in the room's own frame, not in world x: once the crew turns
 	# the set the finish line is no longer the same wall, and a world-axis test
 	# would count the crossing the moment the room moved.
@@ -968,6 +975,8 @@ func _death_line(source: int) -> String:
 		return _w("推轨没有看见你。", "The dolly did not see you.")
 	if source == 2:
 		return _w("你撞上了场务。他手里还拿着通告。", "You hit the runner. He was holding the call sheet.")
+	if source == 3:
+		return _w("你踩进了画面。这条废了。", "You stepped into the shot. This take is gone.")
 	return _w("你撞上了第 %02d 条的你。" % source, "You hit your take %02d." % source)
 
 

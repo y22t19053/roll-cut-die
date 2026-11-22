@@ -37,7 +37,10 @@ var _dollies: Array = []
 var _belts := {}
 ## Per room: the crew member who crosses the set and never looks up.
 var _runners := {}
+## Per room: where the deck is taped off as a goof (stage-local x, z).
+var _goofs := {}
 const BELT_SPEED := 1.6
+const GOOF_RADIUS := 0.62
 
 ## What a room's card promises. The mods are the run's only real decisions:
 ## tension costs attention, a clean stage gives marks and cuts back.
@@ -140,6 +143,17 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 			_box(room, Vector3(2.4 + i*1.5, .04, belt_z - .44), Vector3(.34, .008, .07), Color("9aa4ad"))
 			_box(room, Vector3(2.4 + i*1.5, .04, belt_z + .44), Vector3(.34, .008, .07), Color("9aa4ad"))
 		_belts[_count] = belt_z
+	if event == "goof":
+		# Taped off: this patch is in the shot. Stand in it and the take is gone —
+		# nobody kills you, you just are not in the movie that gets printed.
+		var goof_x := 5.4
+		var goof_z := -0.9 if variant % 2 == 0 else 0.9
+		_box(room, Vector3(goof_x, .012, goof_z), Vector3(GOOF_RADIUS*2.0, .024, .10), WHITE)
+		_box(room, Vector3(goof_x, .012, goof_z - GOOF_RADIUS*0.62), Vector3(.10, .024, GOOF_RADIUS*0.62), WHITE)
+		_box(room, Vector3(goof_x, .012, goof_z + GOOF_RADIUS*0.62), Vector3(.10, .024, GOOF_RADIUS*0.62), WHITE)
+		_box(room, Vector3(goof_x, .014, goof_z - .30), Vector3(.30, .02, .06), Color("c0503c"))
+		_box(room, Vector3(goof_x, .014, goof_z + .30), Vector3(.30, .02, .06), Color("c0503c"))
+		_goofs[_count] = Vector2(goof_x, goof_z)
 	if event == "runner":
 		# The crew's runner. He has a call to make on the far side and he is not
 		# going to walk around the marks to make it.
@@ -332,6 +346,15 @@ func crew_at(world_pos: Vector3,room_index: int) -> bool:
 	var r: Dictionary = _runners[room_index]
 	var body: Node3D = r["node"]
 	return absf(p.x-body.position.x)<.20+.32 and absf(p.z-body.position.z)<.17+.32
+
+## You are standing in the shot. This is not a hazard you can body-check: it is a
+## mistake the take cannot survive.
+func goof_at(world_pos: Vector3,room_index: int) -> bool:
+	if not _goofs.has(room_index): return false
+	var p := _rooms[room_index].to_local(world_pos)
+	if p.y<-.35 or p.y>1.35: return false
+	var g: Vector2 = _goofs[room_index]
+	return Vector2(p.x-g.x,p.z-g.y).length() < GOOF_RADIUS
 
 func hazard_at(world_pos: Vector3,room_index: int,t: float) -> bool:
 	if room_index<0 or room_index>=_rooms.size(): return false

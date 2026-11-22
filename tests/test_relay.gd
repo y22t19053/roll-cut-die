@@ -166,5 +166,13 @@ static func run(h, tree = null) -> void:
 	h.ok("two metres away is clear", not rooms.crew_at(clear_spot, run_room))
 	h.ok("a room with no runner has no crew", not rooms.crew_at(under_him, 0))
 
+	# Taped-off deck: not a body in the way, a mistake the take cannot survive.
+	rooms.append_room("s", 0, "", false, "goof")
+	var goof_room: int = rooms._count - 1
+	var goof_mid: Vector3 = rooms._rooms[goof_room].to_global(Vector3(5.4, 0.05, -0.9))
+	h.ok("the taped deck knows where the tape is", rooms.goof_at(goof_mid, goof_room))
+	h.ok("two metres off the tape is clear", not rooms.goof_at(goof_mid + Vector3(2.0, 0, 0), goof_room))
+	h.ok("a set with no tape has no goof", not rooms.goof_at(goof_mid, 0))
+
 	rooms.queue_free()
 	h.finish()
