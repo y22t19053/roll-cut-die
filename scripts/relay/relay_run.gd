@@ -120,6 +120,7 @@ var _sun: DirectionalLight3D
 var _env: Environment
 var _notice := ""
 var _notice_left := 0.0
+var _killer_mark: Node3D = null
 var _cut_velocity := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
 
@@ -279,6 +280,7 @@ func _start_leg(back: bool) -> void:
 	_restart_actors()
 	_arm_mercy()
 	desk.clear_sheet()
+	_clear_killer_mark()
 	score.resume_beds() # The room comes back with the new take.
 	grace = act_grace
 	_checkpoint(false)
@@ -991,6 +993,7 @@ func _hit(source: int) -> bool:
 	rig.add_shake(1.0)
 	fx.flash(Color("f3dfad"), 0.34, 0.0, 0.22)
 	_drop_photogram(player.global_position, player.facing)
+	_mark_killer(player.global_position)
 	if difficulty > 0:
 		forced_cut = cut_stock > 0
 		phase = Mode.CUT if forced_cut else Mode.LOST
@@ -1005,11 +1008,12 @@ func _hit(source: int) -> bool:
 			_show_sheet(false)
 	else:
 		_board_die()
-		_restore(last_anchor)
-		_rotate_stage() # A death is a rebuild: the set turns under you.
+		# You get to look at where it happened before the run puts you back:
+		# restoring first meant the death spot sat behind the card or off screen.
 		_hint("first_death", "撞上就重来一条，别的什么都不扣。", "A collision costs one take and nothing else.")
 		desk.show_message(_death_line(source))
 		_hold_until_board()
+		_after_death()
 	return true
 
 
@@ -1256,10 +1260,57 @@ func _drop_photogram(pos: Vector3, facing: float) -> void:
 	var flat := Basis(Vector3.UP, facing) * Basis(Vector3.RIGHT, -PI * 0.5)
 	print.global_transform = Transform3D(flat, pos + Vector3.UP * 0.012)
 
+## Where it happened. The death line says who; this says exactly where, so a
+## player can look at the frozen frame and answer both questions without moving.
+## It fades out on its own — it is a mark on the floor, not a new object to learn.
+func _mark_killer(pos: Vector3) -> void:
+	_clear_killer_mark()
+	var mark := Node3D.new()
+	mark.name = "KillerMark"
+	var ring := MeshInstance3D.new()
+	var band := TorusMesh.new()
+	band.inner_radius = 1.16
+	band.outer_radius = 1.26
+	band.rings = 48
+	ring.mesh = band
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# Chalk white, not red: the set is already full of red props, so a red halo
+	# reads as scenery. Nothing else on the floor is this colour at this size.
+	mat.albedo_color = Color(1.0, 0.96, 0.88, 0.85)
+	ring.material_override = mat
+	ring.position = Vector3(0.0, 0.02, 0.0)
+	mark.add_child(ring)
+	add_child(mark)
+	mark.global_position = Vector3(pos.x, 0.055, pos.z)
+	_killer_mark = mark
+	# Stays readable for the whole death card, then leaves on its own.
+	var tw := create_tween()
+	tw.tween_method(func(a: float) -> void: mat.albedo_color.a = a, 0.85, 0.70, 1.0)
+	tw.tween_method(func(a: float) -> void: mat.albedo_color.a = a, 0.70, 0.0, 0.5)
+	tw.tween_callback(mark.queue_free)
+
 func _board_die() -> void:
 	var n := maxi(live.take_id,1)
 	score.duck(true)
 	slate.play_die(n, _w("第 %02d 条" % n, "TAKE %02d" % n))
+
+
+func _clear_killer_mark() -> void:
+	if is_instance_valid(_killer_mark):
+		_killer_mark.queue_free()
+	_killer_mark = null
+
+
+## Runs on its own: the death card finishes first, so the player sees the frame
+## they lost before the run hands the controls back at the checkpoint.
+func _after_death() -> void:
+	if slate.is_running():
+		await slate.sequence_finished
+	_restore(last_anchor)
+	_rotate_stage() # A death is a rebuild: the set turns under you.
+	_show_target()
 
 
 ## Hold the controls until the board is gone. A respawn that hands you a frozen
@@ -1271,6 +1322,7 @@ func _hold_until_board() -> void:
 	player.set_frozen(true)
 	rig.set_physics_process(false)
 	await slate.sequence_finished
+	_clear_killer_mark() # The mark lives exactly as long as the death card.
 	if phase == Mode.PLAY:
 		player.set_frozen(was_frozen)
 		rig.set_physics_process(true)
