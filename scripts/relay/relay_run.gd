@@ -236,7 +236,10 @@ func _w(zh: String, en: String) -> String:
 ## The way out and the way back are not the same walk. Going out the lamp sits on
 ## the south wall, coming back it sits on the north one, so the return trip is a
 ## different read of the same floor instead of a mirror of the first leg.
-const LANE := 2.10
+## Where the light line points, off centre so out and back are not the same line.
+## It has to fit inside the grip throat: the grips sit at |z| 1.32 (2.16 − 0.84)
+## on normal sets and 0.78 on throat sets, and the player is 0.32 wide.
+const LANE := 0.40
 
 
 func _start_leg(back: bool) -> void:

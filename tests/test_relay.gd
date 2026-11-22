@@ -8,6 +8,7 @@ const Splice = preload("res://scripts/relay/safety_splice.gd")
 const Track = preload("res://scripts/ghost/ghost_track.gd")
 const Rooms = preload("res://scripts/relay/relay_rooms.gd")
 const Save = preload("res://scripts/relay/relay_save.gd")
+const Player = preload("res://scripts/player/player.gd")
 
 
 static func run(h, tree = null) -> void:
@@ -112,6 +113,14 @@ static func run(h, tree = null) -> void:
 	var last_set: Dictionary = rooms.append_room("h", 0, "", true, "guide")
 	h.ok("the last set says it is the last", bool(last_set.get("final", false)))
 	h.eq("a guide set brings no light and no extra dolly", (rooms._dollies[7] as Array).size(), 1)
+
+	# The light line has to fit through the throat it points at. A straight walk
+	# into the goal used to end against the inside face of a grip bay.
+	var Run = load("res://scripts/relay/relay_run.gd")
+	var widest_throat := 1.62 - 1.68 * 0.5
+	h.ok("the line fits a throat set",
+		float(Run.LANE) + float(Player.RADIUS) < widest_throat)
+	h.ok("the line stays off centre", float(Run.LANE) > 0.05)
 
 	# The three shapes that answer the turn three different ways.
 	h.ok("I is a shape", Rooms.LANES.has("i"))
