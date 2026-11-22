@@ -33,6 +33,11 @@ var _rooms: Array[Node3D] = []
 ## Per room: the dollies that sweep it, each {node, phase, period, amp}. A mod may
 ## add a second one, or take the room's only one away.
 var _dollies: Array = []
+## Per room: where the belt runs, if the crew laid one (stage-local z).
+var _belts := {}
+## Per room: the crew member who crosses the set and never looks up.
+var _runners := {}
+const BELT_SPEED := 1.6
 
 ## What a room's card promises. The mods are the run's only real decisions:
 ## tension costs attention, a clean stage gives marks and cuts back.
@@ -125,6 +130,27 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 			pool_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			pool.material_override = pool_mat
 			cart_node.add_child(pool)
+	if event == "belt":
+		# A belt on the deck. It answers to the stage: turn the set end for end
+		# and it carries you the other way without a single line of new code.
+		var belt_z := 0.0
+		_box(room, Vector3(4.6, .015, belt_z), Vector3(6.4, .03, 1.24), Color("3b3f45"))
+		_box(room, Vector3(4.6, .038, belt_z), Vector3(6.4, .01, .12), Color("9aa4ad"))
+		for i in 4:
+			_box(room, Vector3(2.4 + i*1.5, .04, belt_z - .44), Vector3(.34, .008, .07), Color("9aa4ad"))
+			_box(room, Vector3(2.4 + i*1.5, .04, belt_z + .44), Vector3(.34, .008, .07), Color("9aa4ad"))
+		_belts[_count] = belt_z
+	if event == "runner":
+		# The crew's runner. He has a call to make on the far side and he is not
+		# going to walk around the marks to make it.
+		var body := Node3D.new()
+		body.name = "Runner"
+		room.add_child(body)
+		_box(body, Vector3(0, .55, 0), Vector3(.40, 1.10, .32), Color("2e4258"))
+		_box(body, Vector3(0, 1.17, 0), Vector3(.26, .26, .26), Color("d9c3a0"))
+		_box(body, Vector3(.16, .74, .19), Vector3(.26, .02, .20), WHITE)
+		body.position = Vector3(4.5, 0.0, -2.6)
+		_runners[_count] = {"node": body, "speed": 1.5}
 	if _count==0:
 		_buffer(room,0,-1)
 		_line(room,0)
@@ -274,6 +300,38 @@ func _z_of(d: Dictionary,t: float) -> float:
 func set_clock(room_index: int,t: float) -> void:
 	if room_index<0 or room_index>=_dollies.size(): return
 	for d: Dictionary in _dollies[room_index]: d["node"].position.z = _z_of(d,t)
+	# The one crew member who does not respect the marks keeps walking across.
+	if _runners.has(room_index):
+		var r: Dictionary = _runners[room_index]
+		var span := 5.2
+		var s := fposmod(t*float(r["speed"])/span,2.0)
+		var z := -span*0.5 + (s if s<=1.0 else 2.0-s)*span
+		var body: Node3D = r["node"]
+		body.position.z = z
+		body.rotation.y = 0.0 if s<=1.0 else PI
+
+## What the deck is doing under your feet here. Stage-local, so a set that has been
+## turned end for end pushes you the other way in the world — the belt answers to
+## the stage, not to the camera.
+func belt_push(world_pos: Vector3,room_index: int) -> Vector3:
+	if not _belts.has(room_index): return Vector3.ZERO
+	var room: Node3D = _rooms[room_index]
+	var p := room.to_local(world_pos)
+	if p.x<1.0 or p.x>8.0: return Vector3.ZERO
+	if absf(p.z-float(_belts[room_index]))>.62: return Vector3.ZERO
+	var dir := room.global_transform.basis.x
+	dir.y = 0.0
+	return dir.normalized()*BELT_SPEED
+
+## The runner is not a trap you can learn the timing of by watching a mark: he
+## crosses wherever he likes, whenever he likes, all set long.
+func crew_at(world_pos: Vector3,room_index: int) -> bool:
+	if not _runners.has(room_index): return false
+	var p := _rooms[room_index].to_local(world_pos)
+	if p.y<-.35 or p.y>1.35: return false
+	var r: Dictionary = _runners[room_index]
+	var body: Node3D = r["node"]
+	return absf(p.x-body.position.x)<.20+.32 and absf(p.z-body.position.z)<.17+.32
 
 func hazard_at(world_pos: Vector3,room_index: int,t: float) -> bool:
 	if room_index<0 or room_index>=_rooms.size(): return false

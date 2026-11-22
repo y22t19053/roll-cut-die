@@ -35,6 +35,8 @@ signal facing_changed(facing: float)
 ## Radians. 0 == world -Z. The camera chases this.
 var facing := 0.0
 var frozen := false
+## Horizontal velocity the floor adds under you (belts). Set by the arena each frame.
+var push := Vector3.ZERO
 ## RollModes.CHASE / SNAP / ORBIT: decides how the body turns toward the walk.
 var roll_mode := RollModes.CHASE
 ## Optional Vector2 driving the player instead of the keyboard (tests, replays).
@@ -155,8 +157,10 @@ func _physics_process(dt: float) -> void:
 
 	var target_v := dir * SPEED
 	var rate := ACCEL if dir.length_squared() > 0.0001 else DECEL
-	velocity.x = move_toward(velocity.x, target_v.x, rate * dt)
-	velocity.z = move_toward(velocity.z, target_v.z, rate * dt)
+	# The floor can be doing something to you (a belt). It is added after the
+	# walk, so holding against it still gets you out at SPEED - BELT.
+	velocity.x = move_toward(velocity.x, target_v.x, rate * dt) + push.x
+	velocity.z = move_toward(velocity.z, target_v.z, rate * dt) + push.z
 	velocity.y = 0.0
 	move_and_slide()
 
@@ -185,6 +189,12 @@ func teleport(pos: Vector3, face: float = 0.0) -> void:
 
 func intent() -> Vector3:
 	return _last_intent
+
+
+## What the floor is doing to you this frame: belts, and anything else that moves
+## the deck under your feet. Horizontal only — the set never lifts you.
+func set_push(v: Vector3) -> void:
+	push = Vector3(v.x, 0.0, v.z)
 
 
 func speed_now() -> float:

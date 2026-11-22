@@ -637,6 +637,8 @@ func _event_short(event: String) -> String:
 		"relight": return _w("带灯", "lamped")
 		"extra": return _w("多一台车", "extra dolly")
 		"guide": return _w("旧我示范", "ghost walks it")
+		"belt": return _w("有传送带", "on a belt")
+		"runner": return _w("有人在跑", "a runner")
 	return ""
 
 func _mod_label(mod: String) -> String:
@@ -656,6 +658,8 @@ func _roll_event() -> String:
 	if r < 0.20: return "relight"
 	if r < 0.40: return "extra"
 	if r < 0.52: return "guide"
+	if r < 0.64: return "belt"
+	if r < 0.76: return "runner"
 	return ""
 
 
@@ -664,6 +668,8 @@ func _event_line(event: String, zh: bool) -> String:
 		"relight": return _w("剧组换了灯：灯现在挂在推轨上。", "The crew relamped: the light rides the dolly.") if zh else "The crew relamped: the light rides the dolly."
 		"extra": return "临时加了一条推轨。" if zh else "A dolly was rented for this set."
 		"guide": return "这一次，上一次的你不碰人，它只是先走一遍。" if zh else "This take your past does not touch you. It shows the way."
+		"belt": return "甲板上铺了一条传送带。它听棚的，不听你的镜头。" if zh else "There is a belt on the deck. It answers to the set, not to your lens."
+		"runner": return "场务在跑。他不会为你停。" if zh else "A runner is crossing. He will not stop for you."
 	return ""
 
 
@@ -744,6 +750,9 @@ func _physics_process(dt: float) -> void:
 		_sample()
 		_next_sample = elapsed + 0.10
 	$Rooms.set_clock(segments.size()-1,elapsed)
+	# The deck can be doing something to you. The belt answers to the set, so a
+	# turned set carries you the other way without any new rule.
+	player.set_push($Rooms.belt_push(player.global_position, segments.size()-1))
 	if grace <= 0:
 		var reach: float = Ghost.DANGER_RADIUS + Player.RADIUS
 		for g in _actors:
@@ -760,6 +769,10 @@ func _physics_process(dt: float) -> void:
 				break
 		if $Rooms.hazard_at(player.global_position,segments.size()-1,elapsed):
 			if _hit(0): return
+		# The runner is not a trap with a rhythm: he crosses the set because his
+		# business is on the other side, and he will not wait for your take.
+		if $Rooms.crew_at(player.global_position,segments.size()-1):
+			if _hit(2): return
 	# The line is read in the room's own frame, not in world x: once the crew turns
 	# the set the finish line is no longer the same wall, and a world-axis test
 	# would count the crossing the moment the room moved.
@@ -953,6 +966,8 @@ func _board_roll() -> void:
 func _death_line(source: int) -> String:
 	if source == 0:
 		return _w("推轨没有看见你。", "The dolly did not see you.")
+	if source == 2:
+		return _w("你撞上了场务。他手里还拿着通告。", "You hit the runner. He was holding the call sheet.")
 	return _w("你撞上了第 %02d 条的你。" % source, "You hit your take %02d." % source)
 
 

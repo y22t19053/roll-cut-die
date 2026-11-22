@@ -138,5 +138,33 @@ static func run(h, tree = null) -> void:
 	h.ok("the same corner is safe away from the cart", not rooms.hazard_at(Vector3(cart_x, 0.05, 3.4), 0, 0.0))
 	h.ok("a room with no dolly is always safe", not rooms.hazard_at(Vector3(cart_x, 0.05, 0.0), 2, 0.0))
 
+	# The belt answers to the stage: turn the set end for end and it carries you
+	# the other way in the world, with no new rule anywhere.
+	rooms.append_room("s", 0, "", false, "belt")
+	var belt_room: int = rooms._count - 1
+	var belt_node: Node3D = rooms._rooms[belt_room]
+	var belt_mid: Vector3 = belt_node.to_global(Vector3(4.6, 0.05, 0.0))
+	var push_before: Vector3 = rooms.belt_push(belt_mid, belt_room)
+	h.ok("the belt pushes you somewhere", push_before.length() > 1.0)
+	h.ok("the belt does not push you off the deck", absf(push_before.y) < 0.001)
+	var off_belt: Vector3 = belt_node.to_global(Vector3(4.6, 0.05, 2.4))
+	h.ok("three metres off the belt is no push at all", rooms.belt_push(off_belt, belt_room).length() < 0.001)
+	var plain_room: int = 0
+	h.ok("a room with no belt never pushes", rooms.belt_push(belt_mid, plain_room).length() < 0.001)
+
+	# The runner crosses because his business is on the other side.
+	rooms.append_room("s", 0, "", false, "runner")
+	var run_room: int = rooms._count - 1
+	var runner: Node3D = rooms._runners[run_room]["node"]
+	rooms.set_clock(run_room, 0.0)
+	var at_start: float = runner.position.z
+	rooms.set_clock(run_room, 1.0)
+	h.ok("the runner is somewhere else a second later", absf(runner.position.z - at_start) > 0.4)
+	var under_him: Vector3 = rooms._rooms[run_room].to_global(runner.position + Vector3(0, 0.05, 0))
+	h.ok("standing where he is is fatal", rooms.crew_at(under_him, run_room))
+	var clear_spot: Vector3 = rooms._rooms[run_room].to_global(Vector3(4.5, 0.05, runner.position.z + 2.4))
+	h.ok("two metres away is clear", not rooms.crew_at(clear_spot, run_room))
+	h.ok("a room with no runner has no crew", not rooms.crew_at(under_him, 0))
+
 	rooms.queue_free()
 	h.finish()
