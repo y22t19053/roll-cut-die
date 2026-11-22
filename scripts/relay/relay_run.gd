@@ -127,6 +127,7 @@ var _rng := RandomNumberGenerator.new()
 var _foley := preload("res://scripts/ui/foley.gd").new()
 
 func _ready() -> void:
+	Engine.time_scale = 1.0 # A previous hit-stop must never outlive its run.
 	add_child(_foley)
 	desk = load("res://scripts/relay/cutting_desk.gd").new()
 	add_child(desk)
@@ -979,6 +980,9 @@ func _physics_process(dt: float) -> void:
 	if not inside: _arrival_locked = false
 	if inside and not _arrival_locked:
 		cursor += 1
+		# Crossing is the one thing you do hundreds of times: it gets a mark, not
+		# a celebration. A short cool wash, no sound, no number on screen.
+		fx.flash(Color("9ceccb"), 0.10, 0.0, 0.12)
 		if cursor == route.size():
 			_finish_leg()
 			return
@@ -1012,6 +1016,16 @@ func _track_gaps() -> void:
 func _slate_done(_kind: String) -> void:
 	score.duck(false)
 
+## Stopping time for a tenth of a second is the cheapest way to say "that hit you".
+## The timer ignores the time scale it is restoring, otherwise it would freeze too.
+func _punch() -> void:
+	if Engine.time_scale < 1.0: return
+	Engine.time_scale = 0.22
+	get_tree().create_timer(0.14, true, false, true).timeout.connect(_unpunch)
+
+func _unpunch() -> void:
+	Engine.time_scale = 1.0
+
 func _hit(source: int) -> bool:
 	var held := splice.has_splice()
 	if splice.protect(active_clock):
@@ -1025,6 +1039,10 @@ func _hit(source: int) -> bool:
 	score.cue("trap" if source == 0 else "hit")
 	rig.add_shake(1.0)
 	fx.flash(Color("f3dfad"), 0.34, 0.0, 0.22)
+	# The frame stops for a beat. Long enough to feel hit, short enough that it
+	# never reads as a stutter — and it runs on real time so the card is not
+	# slowed down with it.
+	_punch()
 	_drop_photogram(player.global_position, player.facing)
 	_mark_killer(player.global_position)
 	if difficulty > 0:
@@ -1057,6 +1075,7 @@ func _show_sheet(won: bool) -> void:
 	# The run is over, so the board gets out of the way instead of printing the
 	# DIE. card over the page that explains what the run was.
 	if slate.is_running(): slate.hide_slate()
+	var prev_best: int = int(Rules.meta().get("best_set", 0))
 	if not _recorded:
 		_recorded = true
 		Rules.record_run(segments.size(), deaths, won, run_seed)
@@ -1066,6 +1085,10 @@ func _show_sheet(won: bool) -> void:
 		_w("种子 %06X", "SEED %06X") % run_seed,
 		_w("空格：再来一局　R：同种子重开", "SPACE: new run   R: same seed"),
 	]
+	# The only thing this game keeps between runs is how far you got. Saying it out
+	# loud is the whole progression: there is no tree, no currency, no unlocks.
+	if segments.size() > prev_best:
+		lines.insert(0, _w("走得最远的一次。", "The furthest you have been."))
 	if won:
 		desk.show_call_sheet(_w("全部接通","ANSWER PRINT"), lines, true, Loc.language == "zh")
 	else:
@@ -1185,8 +1208,8 @@ func _board_roll() -> void:
 	# The premise, in the place the player is already looking: you are not the
 	# first one shooting this take, and nobody on the floor will stop for you.
 	slate.play_roll(n, _w("第 %02d 条" % n, "TAKE %02d" % n),
-		_w("你在补拍一条镜头。棚里的人不会为你停下来。",
-			"You are reshooting a take. The crew will not stop for you."))
+		_w("你是来补拍的。原来那条，废了。\n棚子每晚换搭，站进镜头的只有几个。",
+			"You are here to reshoot. The take before this was ruined.\nThe set is rebuilt every night, and only a few will stand in it."))
 
 
 ## 抢天光: the day is going. Each act the key light drops and warms, so the last

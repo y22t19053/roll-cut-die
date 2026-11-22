@@ -124,8 +124,13 @@ func _draw() -> void:
 		draw_string(font, Vector2(origin.x + pad, y), headline,
 			HORIZONTAL_ALIGNMENT_LEFT, left_w, int(bh * 0.30), Color(chalk.r, chalk.g, chalk.b, alpha))
 	if subline != "":
-		# Two chalk lines rather than one that runs under the field block.
-		var lines := _wrap(subline, font, int(bh * 0.105), left_w)
+		# Two chalk lines rather than one that runs under the field block. An
+		# explicit newline in the text is obeyed, so a two-sentence premise stays
+		# two sentences instead of being re-flowed into one long strip.
+		var lines: Array = []
+		for chunk: String in subline.split("\n", false):
+			for piece: String in _wrap(chunk, font, int(bh * 0.105), left_w):
+				if lines.size() < 2: lines.append(piece)
 		for i in lines.size():
 			draw_string(font, Vector2(origin.x + pad, y + bh * (0.26 + 0.15 * float(i))), lines[i],
 				HORIZONTAL_ALIGNMENT_LEFT, left_w, int(bh * 0.105), Color(chalk.r, chalk.g, chalk.b, alpha * 0.66))
