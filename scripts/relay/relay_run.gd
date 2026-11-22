@@ -53,6 +53,13 @@ var act_grace := GRACE
 var leg_event := "" # How the crew dressed this set: relight / extra / guide.
 var _riding := false # On the wire: input is gone and the deck cannot reach you.
 var _wire_used := false # The rig is good for one pass per set.
+# One death, one card. Without this the same ghost could bill you every frame
+# while the board was still talking, which stacked respawns until nothing moved.
+var _dying := false
+# For a moment after a respawn the past is not allowed to bill you twice: while a
+# ghost is still standing in the spot you were put down on, the grace keeps being
+# topped up instead of expiring into another card.
+var _safe_until := 0.0
 ## The first splice of a run is free: the player has to feel what a CUT costs
 ## before it can cost them anything.
 var free_cut := 1
@@ -568,6 +575,12 @@ func _restore(i: int) -> void:
 	# take was, not a promise that the truck has left it.
 	grace = maxf(act_grace, 2.0)
 	_arrival_locked = player.global_position.distance_to(route[cursor]) <= TOUCH
+	# The card owed you one walk, and it is paid. Whatever happened while it was up
+	# is not allowed to leave the keyboard dead.
+	_dying = false
+	_safe_until = active_clock + 4.0
+	player.set_frozen(false)
+	if phase == Mode.PLAY: rig.set_physics_process(true)
 	_show_target()
 
 ## The first four sets are the tutorial, and the tutorial is what the room is doing
@@ -658,15 +671,41 @@ func _demo_mark() -> void:
 	tw.tween_property(beacon, "scale", Vector3.ONE * 0.02, 0.40)
 	tw.tween_callback(beacon.queue_free)
 
+## A death puts you back at the last mark, and the ghost that hit you may still be
+## standing on it. For a few seconds after a respawn the grace is topped up while
+## the past is within reach, so one death buys exactly one death instead of a card
+## you cannot get out from under.
+func _top_up_grace() -> void:
+	if _safe_until <= 0.0: return
+	if active_clock >= _safe_until:
+		_safe_until = 0.0
+		return
+	var reach: float = Ghost.DANGER_RADIUS + Player.RADIUS + 0.05
+	for g in _actors:
+		if g.spent: continue
+		if g.global_position.distance_to(player.global_position) < reach:
+			grace = maxf(grace, 0.30)
+			return
+
 func _clear_spot(pos: Vector3) -> Vector3:
 	var room_index := segments.size() - 1
 	if room_index < 0: return pos
+	var ghost_reach: float = Ghost.DANGER_RADIUS + Player.RADIUS + 0.15
 	for dz: float in [0.0, 0.55, -0.55, 1.05, -1.05]:
 		for dx: float in [0.0, 0.5, -0.5, 1.0, -1.0]:
 			var spot := pos + Vector3(dx, 0.0, dz)
 			if $Rooms.hazard_at(spot, room_index, elapsed): continue
 			if $Rooms.crew_at(spot, room_index): continue
 			if $Rooms.goof_at(spot, room_index): continue
+			# Putting the player back inside the past is the same death again with
+			# a card in front of it. Find a spot the recording is not standing on.
+			var taken := false
+			for g in _actors:
+				if g.spent: continue
+				if g.global_position.distance_to(spot) < ghost_reach:
+					taken = true
+					break
+			if taken: continue
 			return spot
 	return pos
 
@@ -1054,9 +1093,13 @@ func _leave_cut() -> void:
 
 func _physics_process(dt: float) -> void:
 	if phase != Mode.PLAY: return
+	# The card is up. Nothing on the deck is allowed to bill you again while it
+	# is talking, or one ghost standing on the checkpoint bills you every frame.
+	if _dying: return
 	active_clock += dt
 	elapsed += dt
 	grace = maxf(grace-dt,0)
+	_top_up_grace()
 	_notice_left -= dt
 	if elapsed >= _next_sample:
 		_sample()
@@ -1213,6 +1256,8 @@ func _unpunch() -> void:
 	Engine.time_scale = 1.0
 
 func _hit(source: int) -> bool:
+	# One card per death. While it is up nothing else collects.
+	if _dying: return false
 	var held := splice.has_splice()
 	if splice.protect(active_clock):
 		if held and not splice.has_splice():
@@ -1229,6 +1274,7 @@ func _hit(source: int) -> bool:
 	# never reads as a stutter — and it runs on real time so the card is not
 	# slowed down with it.
 	_punch()
+	_dying = true
 	_drop_photogram(player.global_position, player.facing)
 	_mark_killer(player.global_position)
 	if difficulty > 0:
@@ -1322,6 +1368,11 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		_notice = _w("镜头横倾：开" if rig.tilt_enabled else "镜头横倾：关",
 			"LENS TILT: ON" if rig.tilt_enabled else "LENS TILT: OFF")
 		_notice_left = 2.0
+		return
+	# Whatever else is on screen, ESC is the way out. A card that leaves the player
+	# in a room with no exit turns a bug into a broken keyboard.
+	if key == KEY_ESCAPE:
+		_open_pause()
 		return
 	# The board is talking. Nothing else gets a say until the clack has landed.
 	if slate.is_running(): return
@@ -1562,8 +1613,7 @@ func _clear_killer_mark() -> void:
 ## Runs on its own: the death card finishes first, so the player sees the frame
 ## they lost before the run hands the controls back at the checkpoint.
 func _after_death() -> void:
-	if slate.is_running():
-		await slate.sequence_finished
+	await _board_gone()
 	_restore(last_anchor)
 	_rotate_stage() # A death is a rebuild: the set turns under you.
 	_show_target()
@@ -1577,8 +1627,17 @@ func _hold_until_board() -> void:
 	var was_frozen := player.frozen
 	player.set_frozen(true)
 	rig.set_physics_process(false)
-	await slate.sequence_finished
+	await _board_gone()
 	_clear_killer_mark() # The mark lives exactly as long as the death card.
-	if phase == Mode.PLAY:
+	if phase == Mode.PLAY and not _dying:
 		player.set_frozen(was_frozen)
 		rig.set_physics_process(true)
+
+## A signal that already fired never fires again. Wait on the board's own state
+## with a ceiling, so a race can cost a second of stillness, never the keyboard.
+func _board_gone() -> void:
+	if not slate.is_running(): return
+	var frames := 0
+	while slate.is_running() and frames < 900:
+		await get_tree().process_frame
+		frames += 1

@@ -906,3 +906,20 @@ _plans[i] = {"entry": Vector3, "exit": Vector3}
 2. 推翻旧决策 → 新条目 + 在旧条目上标 `SUPERSEDED by D-0xx`，保留原文。
 3. 只改实现不改决策 → 只更新条目里的「实现位置」。
 4. 任何标 CONFIRMED 的条目被改动，必须在会话里向创作者说明改动内容与理由。
+
+# D-066 · 一张牌只收一次钱，键盘永远还给你
+
+**状态**：CONFIRMED（560 断言全绿，新增 `tests/test_relay_death.gd` 10 条；真机验证新手与专家两条路径）。
+
+**怎么坏的**：新手路径里 `_hit()` 不冻结玩家，也**不改 phase**——板子在播，世界还在跑。一个站在复活点上的幽灵在下一帧又满足「接触」，于是 `_hit()` 再进一次：`deaths +1`、第二张牌、第二串 `_after_death()` 协程。两串协程各自 `_restore()` 一次，`_hold_until_board()` 的 `was_frozen` 互相覆盖，最后 `player.frozen` 停在 `true`。表现就是用户报的那句：板子反复弹、WASD 和 ESC 全没反应。根因不是「无敌时间不够长」，是**一次死亡可以被同一个接触结算多次**。
+
+**四条修法**，每条堵一个入口：
+
+1. `_dying` 闸门：`_hit()` 开头 `if _dying: return false`，真的死了才置 `true`。`_physics_process` 在 `phase == PLAY` 之后立刻 `if _dying: return`——板子读台词时，地板上的东西一律不结算。
+2. `_restore()` 结尾统一收尾：`_dying = false`、`player.set_frozen(false)`、`phase == PLAY` 时恢复相机物理。**复活必须把键盘还回去**，不管之前是谁冻结的。
+3. `_clear_spot()` 多一条排除：候选点落在任何活幽灵的 `DANGER_RADIUS + PLAYER.RADIUS + 0.15` 内就跳过，最多挪 1.05 m。`_safe_until = active_clock + 4.0`，这 4 秒内只要幽灵还在够得着的地方，`_top_up_grace()` 就把 `grace` 顶到 0.30——一次死亡只买一次死亡。
+4. `_board_gone()` 取代直接 `await slate.sequence_finished`：信号已经发过的等待会永远挂着，现在改成轮询 `slate.is_running()` 并封顶 900 帧。ESC 提到板子输入闸门之前——**任何情况下 ESC 都能开暂停**，一张牌不该让玩家关不掉游戏。
+
+**实测**：新手连点四下 `_hit` → `deaths == 1`（改前是 4）；牌落 `frozen == false`、能走 1.86 m；专家路径按 SPACE 花一枚 CUT 后 `phase == PLAY`、能走 1.69 m；板子在播时按 ESC，`pause_ui.is_open == true`；`_clear_spot` 对站在复活点的幽灵挪出 1.00 m，`_top_up_grace` 顶到 0.30。
+
+**没验证**：真人手里这张牌是不是还是太慢（1.2 s）。如果反馈「死一次等太久」，改的是牌的时长，不是这四条。

@@ -16,7 +16,7 @@ boot_splash/show_image=false
 [autoload]
 
 GameSession="*res://scripts/core/game_session.gd"
-
+McpInteractionServer="*res://autoload/mcp_interaction_server.gd"
 [debug]
 
 gdscript/warnings/untyped_declaration=0
