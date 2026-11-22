@@ -42,3 +42,15 @@ static func load_run() -> Dictionary:
 	if not d.has("segments") or typeof(d["segments"]) != TYPE_ARRAY: return {}
 	if (d["segments"] as Array).is_empty(): return {}
 	return d
+
+
+## Just enough of a run to say where it stopped, for a title screen that would
+## rather tell you than make you open the save to find out.
+static func summary() -> Dictionary:
+	var run := load_run()
+	if run.is_empty(): return {}
+	return {
+		"sets": (run.get("segments", []) as Array).size(),
+		"act": int(run.get("act", 0)),
+		"seed": int(run.get("seed", 0)),
+	}

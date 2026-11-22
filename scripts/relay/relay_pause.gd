@@ -13,6 +13,8 @@ signal resumed()
 signal left_run()
 
 var is_open := false
+## Filled by the run before opening: the sheet you would want to glance at.
+var briefing := {}
 
 var _dim: ColorRect
 var _col: VBoxContainer
@@ -48,6 +50,18 @@ func refresh() -> void:
 	var head := UiKit.label("暂停" if zh else "PAUSED", 30, UiKit.INK)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_col.add_child(head)
+	# Where you are, in the same words the HUD uses. A pause screen that only
+	# says "paused" wastes the one moment the player is looking for information.
+	if not briefing.is_empty():
+		var where := ("棚 %02d / %d　　过线 %d / %d" if zh else "SET %02d / %d　　LINE %d / %d") % [
+			int(briefing.get("set", 1)), int(briefing.get("sets", 1)),
+			int(briefing.get("pass", 1)), int(briefing.get("passes", 1))]
+		var seed_line := ("种子 %06X　　死亡 %d" if zh else "SEED %06X　　DEATHS %d") % [
+			int(briefing.get("seed", 0)), int(briefing.get("deaths", 0))]
+		for text: String in [where, seed_line]:
+			var info := UiKit.label(text, 16, UiKit.DIM)
+			info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			_col.add_child(info)
 	_col.add_child(_row("继续这一条" if zh else "Back to the take", _resume))
 	var motion_on: bool = bool(GameSession.settings.get("reduce_motion", false))
 	_col.add_child(_row(("减弱动态效果：%s" % ("开" if motion_on else "关")) if zh else ("REDUCE MOTION: %s" % ("ON" if motion_on else "OFF")), _toggle_motion))

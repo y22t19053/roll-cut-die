@@ -91,6 +91,9 @@ var tracks: Array = []
 var anchors: Array[Dictionary] = []
 var last_anchor := -1
 var deaths := 0
+## Takes crossed inside the light's patience, and how many spare MARKs that has
+## bought this set. Reset whenever the spare pays out.
+var _fast_legs := 0
 var difficulty := Rules.selected_mode
 var forced_cut := false
 var splice := Splice.new()
@@ -241,10 +244,17 @@ func _w(zh: String, en: String) -> String:
 ## The way out and the way back are not the same walk. Going out the lamp sits on
 ## the south wall, coming back it sits on the north one, so the return trip is a
 ## different read of the same floor instead of a mirror of the first leg.
-## Where the light line points, off centre so out and back are not the same line.
-## It has to fit inside the grip throat: the grips sit at |z| 1.32 (2.16 − 0.84)
+## Where the light line points, off centre so out and back are not the same line.## It has to fit inside the grip throat: the grips sit at |z| 1.32 (2.16 − 0.84)
 ## on normal sets and 0.78 on throat sets, and the player is 0.32 wide.
 const LANE := 0.40
+
+## A take crossed faster than this counts as one the crew did not have to wait
+## for. Pure generosity: missing it costs nothing, and the set pays either way.
+const LIGHT_TARGET := 5.5
+
+## The spare MARK pays when every pass of the set was quick enough.
+static func _won_light(fast: int, need: int) -> bool:
+	return need > 0 and fast >= need
 
 
 func _start_leg(back: bool) -> void:
@@ -514,6 +524,15 @@ func _finish_leg() -> void:
 	rig.add_shake(0.2)
 	fx.flash(Color("9ceccb"), 0.12, 0.0, 0.14)
 	room_pass += 1
+	# Chasing the light: a take crossed inside LIGHT_TARGET counts as one the crew
+	# did not have to wait for. Clear a whole set that way and the crew hands you a
+	# spare. No penalty for being slow — the light is an offer, not a clock.
+	if elapsed <= LIGHT_TARGET:
+		_fast_legs += 1
+	if _won_light(_fast_legs, required_passes):
+		_fast_legs = 0
+		mark_stock += 1
+		_show_notice(_w("这一棚抢下天光。多给你一枚打点。", "You beat the light. One spare MARK."), 2.5)
 	if room_pass < required_passes:
 		_save_run() # One take is in the can; a quit now costs nothing.
 		score.cue("line")
@@ -1024,6 +1043,15 @@ func _open_pause() -> void:
 		pause_ui.close()
 		_refresh()
 		return
+	pause_ui.briefing = {
+		"set": segments.size(),
+		"sets": MODULES,
+		"pass": mini(room_pass + 1, required_passes),
+		"passes": required_passes,
+		"seed": run_seed,
+		"deaths": deaths,
+	}
+	pause_ui.refresh()
 	pause_ui.open()
 
 func _to_title() -> void:

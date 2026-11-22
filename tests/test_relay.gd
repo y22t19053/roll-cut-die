@@ -135,6 +135,13 @@ static func run(h, tree = null) -> void:
 	var open_pool: Array = Run._event_pool_for(3)
 	h.ok("the shop is open by the third set", open_pool.has("belt") and open_pool.has("wire"))
 
+	# Chasing the light: only a whole set of quick passes pays, and a slow one just
+	# does not pay (it never takes anything away).
+	h.ok("one quick pass is not a set", not Run._won_light(1, 2))
+	h.ok("every pass quick pays", Run._won_light(2, 2))
+	h.ok("a longer set needs more quick passes", not Run._won_light(4, 5))
+	h.ok("an empty set never pays", not Run._won_light(0, 0))
+
 	# The three shapes that answer the turn three different ways.
 	h.ok("I is a shape", Rooms.LANES.has("i"))
 	h.ok("L is a shape", Rooms.LANES.has("l"))

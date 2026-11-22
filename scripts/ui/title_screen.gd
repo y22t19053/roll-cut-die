@@ -186,16 +186,21 @@ func _render() -> void:
 	col.add_child(buttons)
 	# One way in, then housekeeping below a ruled line, quieter.
 	var save = load("res://scripts/relay/relay_save.gd")
-	# An open run is offered before a new one: closing the game should never be
-	# the most expensive decision in it.
+	var rules = load("res://scripts/relay/relay_rules.gd")
+	# An open run is offered before a new one, and it says where it stopped:
+	# closing the game should never be the most expensive decision in it.
 	if save.has_run():
+		var here: Dictionary = save.summary()
 		var cont := _primary(UiKit.button("继续这一卷" if zh else "CONTINUE", _on_continue))
 		cont.name = "Continue"
-		cont.custom_minimum_size = Vector2(340, 52)
-		cont.add_theme_font_size_override("font_size", 24)
-		buttons.add_child(cont)
-	buttons.add_child(_new_game_key())
-	var rules = load("res://scripts/relay/relay_rules.gd")
+		cont.custom_minimum_size = Vector2(392, 74)
+		cont.add_theme_font_size_override("font_size", 28)
+		cont.add_theme_stylebox_override("normal",
+			_slate(Color(0.17, 0.13, 0.12, 0.98), UiKit.ACCENT, 8, 2))
+		var where := ("棚 %02d / %d　第 %d 节" if zh else "SET %02d / %d　ACT %d") % [
+			int(here.get("sets", 1)), RunScript.MODULES, int(here.get("act", 0)) + 1]
+		buttons.add_child(_start_block(cont, where))
+	buttons.add_child(_start_block(_new_game_key(), _shape_line(zh, rules.selected_mode)))
 	var modes := OptionButton.new()
 	modes.name = "Difficulty"
 	modes.tooltip_text = "通关当前难度以解锁下一档" if zh else "Clear a difficulty to unlock the next one"
@@ -284,13 +289,13 @@ static func _slate(bg: Color, ink: Color, edge: int, rule: int, bottom: int = -1
 	return sb
 
 
-## The one primary control: a slate with a procedurally drawn play triangle
-## (no glyph dependency, no PLAY wording) beside the localized "New Game".
+## The one primary control: a printed slate with a procedurally drawn play
+## triangle (no glyph dependency, no PLAY wording) beside the localized "New Game".
 func _new_game_key() -> Button:
 	var b := _primary(UiKit.button(Loc.ui("menu.new"), _on_new_game))
 	b.name = "NewGame"
-	b.custom_minimum_size = Vector2(340, 68)
-	b.add_theme_font_size_override("font_size", 30)
+	b.custom_minimum_size = Vector2(392, 86)
+	b.add_theme_font_size_override("font_size", 34)
 	b.add_theme_stylebox_override("normal", _slate(Color(0.15, 0.13, 0.13, 0.98), UiKit.ACCENT, 8, 2))
 	b.add_theme_stylebox_override("hover", _slate(Color(0.22, 0.17, 0.16, 0.98), UiKit.ACCENT, 10, 2))
 	b.add_theme_stylebox_override("focus", _slate(Color(0, 0, 0, 0), Color.WHITE, 10, 3))
@@ -300,6 +305,27 @@ func _new_game_key() -> Button:
 		sb.content_margin_left = GLYPH_X
 	b.draw.connect(_draw_play_glyph.bind(b))
 	return b
+
+
+## A primary control plus the line that tells you what pressing it starts. Dead
+## Cells puts the whole decision on one plate; this is the same idea in paper.
+func _start_block(button: Button, caption: String) -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(button)
+	var line := UiKit.label(caption, 15, Color(UiKit.DIM, 0.9))
+	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(line)
+	return box
+
+
+## What a new run is, in one line, before you commit to it.
+func _shape_line(zh: bool, mode: int) -> String:
+	var mode_name: String = (["新手", "专家", "大师"] if zh else ["Novice", "Expert", "Master"])[clampi(mode, 0, 2)]
+	if zh:
+		return "%s · 四节十二棚 · 一局 6–9 分钟" % mode_name
+	return "%s · four acts, twelve sets · 6–9 min" % mode_name
 
 
 ## Drawn over the button's own stylebox; lit white while hovered or focused.
