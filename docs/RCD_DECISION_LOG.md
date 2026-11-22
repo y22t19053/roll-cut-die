@@ -990,3 +990,17 @@ _plans[i] = {"entry": Vector3, "exit": Vector3}
 **实测**：`tests/run_all.gd` **623 断言全绿**（新增 8 条：auto 无触摸→false、auto 有触摸→true、on→true、off→false、非法值→false、`CHOICES` 白名单、默认 `"auto"`）。桌面真机（`is_touchscreen_available() == false`）：auto 时 `visible false`、改 `on` 后 `true`、改 `off` 后 `false`、回 auto 再 `false`；`user://rcd/settings.cfg` 的 `[prefs] touch_pad` 随点随落盘；ESC 菜单行序 `继续这一条 / 界面大小 100% / 触控按键：自动 / 减弱动态效果：关 / 语言：中文 / 回到标题`，连点该行文本依次 `自动 → 总是 → 从不 → 自动`。
 
 **没验证**：真手机浏览器里 `is_touchscreen_available()` 到底报不报 true（Android Chrome / iOS Safari 都还没实测，所以才有 `OS.has_feature("mobile")` 兜底）；「暂停时触控板不刷新可见性」是有意的（暂停层 0.72 黑罩盖在上面，恢复后一帧就对上），但没在真机上确认过那一帧闪不闪。
+
+---
+
+# D-071 · 封面不是运行时资源
+
+**状态**：CONFIRMED（Web 包 23.08 → 20.33 MB，Windows 单文件 100.54 MB）。
+
+**做了什么**：两个导出预设的 `exclude_filter` 各加一条 `visual/*`。`visual/` 里是封面、胶囊图、TOY 的 4:3 海报与 512 图标——它们是商店页的物料，游戏本体一次都不读（全仓只有 `visual/preview/backlot-portals/capture.gd` 引用 `res://visual/`，而那是工具脚本，本来就不进包）。以前它们跟着 `all_resources` 一起被塞进 pck。
+
+**数字**：`index.pck` 23.08 → 20.33 MB；Web 打包 65.5 → 62.75 MB；`roll-cut-die.exe` 107.5 → 100.54 MB；两个 zip 53.4/32.9 → 48.2/28.6 MB。
+
+**为什么现在做**：CrazyGames 的首屏上限是 50 MB（见 `docs/PLATFORM_AND_JAM_PLAN.md`），还没到，所以这只是第一步；但它是零风险的一步——不删任何代码、不改任何玩法，只把不该上船的行李留在岸上。
+
+**没验证**：itch 页面与 TOY 卡片用的仍是 CDN 上的旧图（那些图通过 itch/TOY 后台单独上传，不在包里），换掉它们不影响游戏本体，只是我没再重传一次封面。
