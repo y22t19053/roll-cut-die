@@ -648,6 +648,7 @@ func _event_short(event: String) -> String:
 		"runner": return _w("有人在跑", "a runner")
 		"goof": return _w("地上有胶带", "taped off")
 		"key": return _w("有绿幕", "green screen")
+		"mezz": return _w("有二层", "a catwalk")
 	return ""
 
 func _mod_label(mod: String) -> String:
@@ -666,11 +667,12 @@ func _roll_event() -> String:
 	var r := _rng.randf()
 	if r < 0.18: return "relight"
 	if r < 0.36: return "extra"
-	if r < 0.47: return "guide"
-	if r < 0.58: return "belt"
-	if r < 0.69: return "runner"
-	if r < 0.80: return "goof"
-	if r < 0.90: return "key"
+	if r < 0.45: return "guide"
+	if r < 0.56: return "belt"
+	if r < 0.67: return "runner"
+	if r < 0.76: return "goof"
+	if r < 0.85: return "key"
+	if r < 0.95: return "mezz"
 	return ""
 
 
@@ -683,6 +685,7 @@ func _event_line(event: String, zh: bool) -> String:
 		"runner": return "场务在跑。他不会为你停。" if zh else "A runner is crossing. He will not stop for you."
 		"goof": return "地上贴了胶带。站进去，这一条就废了。" if zh else "The deck is taped off. Stand in it and the take is gone."
 		"key": return "绿幕那一块不在画面里。站上去，谁都碰不到你。" if zh else "The key square is not in the plate. Stand on it and nothing can touch you."
+		"mezz": return "这一棚搭了二层。车从下面过。" if zh else "This set has a catwalk. The dolly goes under you."
 	return ""
 
 
@@ -763,6 +766,10 @@ func _physics_process(dt: float) -> void:
 		_sample()
 		_next_sample = elapsed + 0.10
 	$Rooms.set_clock(segments.size()-1,elapsed)
+	# The catwalk is a height, not a jump: the walking surface is whatever the
+	# room says it is at this point, and you follow it up and down the ramps.
+	var floor_h: float = $Rooms.floor_height(player.global_position, segments.size()-1)
+	player.global_position.y = lerpf(player.global_position.y, floor_h + 0.05, clampf(dt*14.0, 0.0, 1.0))
 	# The deck can be doing something to you. The belt answers to the set, so a
 	# turned set carries you the other way without any new rule.
 	player.set_push($Rooms.belt_push(player.global_position, segments.size()-1))

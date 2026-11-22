@@ -41,9 +41,12 @@ var _runners := {}
 var _goofs := {}
 ## Per room: the green screen's key square — stand in it and you are not in the plate.
 var _keys := {}
+## Per room: the mezzanine — a catwalk you can be up on while the deck sweeps under you.
+var _mezz := {}
 const BELT_SPEED := 1.6
 const GOOF_RADIUS := 0.62
 const KEY_RADIUS := 0.66
+const MEZZ_H := 1.2
 
 ## What a room's card promises. The mods are the run's only real decisions:
 ## tension costs attention, a clean stage gives marks and cuts back.
@@ -176,6 +179,32 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		_box(body, Vector3(.16, .74, .19), Vector3(.26, .02, .20), WHITE)
 		body.position = Vector3(4.5, 0.0, -2.6)
 		_runners[_count] = {"node": body, "speed": 1.5}
+	if event == "mezz":
+		# A catwalk over the lane. The deck sweeps under you instead of through you:
+		# you buy the whole dolly lane with the walk up and down the two ramps.
+		var mz0 := -2.7
+		var mz1 := -1.4
+		var mid_z := (mz0 + mz1) * 0.5
+		var rise0 := 0.6
+		var flat0 := 2.4
+		var flat1 := 6.6
+		var fall1 := 8.4
+		_box(room, Vector3((flat0 + flat1) * 0.5, MEZZ_H - .06, mid_z), Vector3(flat1 - flat0, .12, mz1 - mz0), FLAT)
+		# Legs, so it reads as a built thing instead of a floating slab.
+		for lx in [flat0 + .3, (flat0 + flat1) * 0.5, flat1 - .3]:
+			_box(room, Vector3(lx, MEZZ_H * 0.5, mz1 + .06), Vector3(.12, MEZZ_H, .12), IRON)
+		# Two ramps, drawn as a stack of steps (0.15 m risers read fine from 12 m).
+		var steps := 8
+		for i in steps:
+			var t0 := float(i) / float(steps)
+			var t1 := float(i + 1) / float(steps)
+			var h := MEZZ_H * (t0 + t1) * 0.5
+			_box(room, Vector3(lerpf(rise0, flat0, (t0 + t1) * 0.5), h - .06, mid_z),
+				Vector3((flat0 - rise0) / float(steps) + .02, .14, mz1 - mz0), FLAT)
+			_box(room, Vector3(lerpf(flat1, fall1, (t0 + t1) * 0.5), h - .06, mid_z),
+				Vector3((fall1 - flat1) / float(steps) + .02, .14, mz1 - mz0), FLAT)
+		_mezz[_count] = {"rise0": rise0, "flat0": flat0, "flat1": flat1, "fall1": fall1,
+			"z0": mz0, "z1": mz1, "h": MEZZ_H}
 	if _count==0:
 		_buffer(room,0,-1)
 		_line(room,0)
@@ -342,18 +371,35 @@ func belt_push(world_pos: Vector3,room_index: int) -> Vector3:
 	if not _belts.has(room_index): return Vector3.ZERO
 	var room: Node3D = _rooms[room_index]
 	var p := room.to_local(world_pos)
+	if p.y > 0.5: return Vector3.ZERO # The belt moves the deck, not the catwalk over it.
 	if p.x<1.0 or p.x>8.0: return Vector3.ZERO
 	if absf(p.z-float(_belts[room_index]))>.62: return Vector3.ZERO
 	var dir := room.global_transform.basis.x
 	dir.y = 0.0
 	return dir.normalized()*BELT_SPEED
 
+## How high the walking surface is at this point of the room. Only the catwalk
+## changes it; everywhere else the deck is the deck.
+func floor_height(world_pos: Vector3, room_index: int) -> float:
+	if not _mezz.has(room_index): return 0.0
+	var m: Dictionary = _mezz[room_index]
+	var p: Vector3 = (_rooms[room_index] as Node3D).to_local(world_pos)
+	if p.z < float(m["z0"]) or p.z > float(m["z1"]): return 0.0
+	var h := float(m["h"])
+	var x := p.x
+	if x >= float(m["flat0"]) and x <= float(m["flat1"]): return h
+	if x >= float(m["rise0"]) and x < float(m["flat0"]):
+		return h * (x - float(m["rise0"])) / maxf(float(m["flat0"]) - float(m["rise0"]), 0.001)
+	if x > float(m["flat1"]) and x <= float(m["fall1"]):
+		return h * (float(m["fall1"]) - x) / maxf(float(m["fall1"]) - float(m["flat1"]), 0.001)
+	return 0.0
+
 ## The runner is not a trap you can learn the timing of by watching a mark: he
 ## crosses wherever he likes, whenever he likes, all set long.
 func crew_at(world_pos: Vector3,room_index: int) -> bool:
 	if not _runners.has(room_index): return false
 	var p := _rooms[room_index].to_local(world_pos)
-	if p.y<-.35 or p.y>1.35: return false
+	if p.y<-.35 or p.y>0.95: return false
 	var r: Dictionary = _runners[room_index]
 	var body: Node3D = r["node"]
 	return absf(p.x-body.position.x)<.20+.32 and absf(p.z-body.position.z)<.17+.32

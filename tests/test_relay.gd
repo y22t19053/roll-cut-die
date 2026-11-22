@@ -182,5 +182,15 @@ static func run(h, tree = null) -> void:
 	h.ok("a metre and a half away is out of the plate", not rooms.key_at(key_mid + Vector3(0, 0, -1.6), key_room))
 	h.ok("a set with no green screen keys nothing", not rooms.key_at(key_mid, 0))
 
+	# The catwalk: the floor is a height now, not always zero.
+	rooms.append_room("l", 0, "", false, "mezz")
+	var mezz_room: int = rooms._count - 1
+	var mezz_x: float = rooms._rooms[mezz_room].to_global(Vector3(4.5, 0, -2.0)).x
+	h.eq("the deck is still the deck where there is no catwalk", rooms.floor_height(rooms._rooms[mezz_room].to_global(Vector3(4.5, 0, 1.6)), mezz_room), 0.0)
+	h.near("the catwalk is up over the lane", rooms.floor_height(rooms._rooms[mezz_room].to_global(Vector3(4.5, 0, -2.0)), mezz_room), 1.2, 1e-3)
+	h.ok("the ramp climbs on the way in", rooms.floor_height(rooms._rooms[mezz_room].to_global(Vector3(1.5, 0, -2.0)), mezz_room) > 0.3)
+	h.eq("the belt does not move the catwalk", rooms.belt_push(rooms._rooms[mezz_room].to_global(Vector3(4.5, 1.25, -2.0)), mezz_room), Vector3.ZERO)
+	h.ok("a set with no catwalk is flat", rooms.floor_height(Vector3(mezz_x, 0.05, -2.0), 0) < 0.05)
+
 	rooms.queue_free()
 	h.finish()
