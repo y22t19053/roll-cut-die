@@ -222,5 +222,17 @@ static func run(h, tree = null) -> void:
 	h.ok("a keyed set keeps the green square", rooms._keys.has(key_goof))
 	h.ok("a keyed set also keeps the taped patch", rooms._goofs.has(key_goof))
 
+	# The flying rig: one pick-up, one drop, no steering.
+	rooms.append_room("s", 0, "", false, "wire")
+	var wire_room: int = rooms._count - 1
+	h.ok("a wire set has a rig", rooms._wires.has(wire_room))
+	var hook: Vector3 = rooms._rooms[wire_room].to_global(Vector3(1.0, 0.05, 0.9))
+	h.ok("standing on the mark hooks you up", rooms.wire_at(hook, wire_room))
+	h.ok("standing across the set does not", not rooms.wire_at(rooms._rooms[wire_room].to_global(Vector3(6.0, 0.05, -1.6)), wire_room))
+	h.eq("a plain set has no rig", rooms.wire_at(hook, 0), false)
+	var ride: Dictionary = rooms.wire_ride(wire_room)
+	h.ok("the flight is long enough to matter", (ride["from"] as Vector3).distance_to(ride["to"] as Vector3) > 6.0)
+	h.ok("the flight clears the dolly band", (ride["from"] as Vector3).y > 1.10)
+
 	rooms.queue_free()
 	h.finish()

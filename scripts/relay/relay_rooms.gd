@@ -1,4 +1,4 @@
-﻿extends Node3D
+extends Node3D
 ## Repeatable nine-metre soundstages. Each seam is one continuous finish line.
 const LENGTH := 9.0
 const DECK := Color("514f50")
@@ -44,6 +44,22 @@ var _goofs := {}
 var _keys := {}
 ## Per room: the mezzanine — a catwalk you can be up on while the deck sweeps under you.
 var _mezz := {}
+var _wires := {}
+## You are on the hook when you stand on the painted mark: the rig does the rest.
+func wire_at(world_pos: Vector3, room_index: int) -> bool:
+	if not _wires.has(room_index): return false
+	var p: Vector3 = (_rooms[room_index] as Node3D).to_local(world_pos)
+	var w: Dictionary = _wires[room_index]
+	if p.y < -0.35 or p.y > 0.55: return false
+	return absf(p.x - float(w["x0"])) < .55 and absf(p.z - float(w["z"])) < .55
+
+## Where the wire carries you, in world space, and how high off the deck.
+func wire_ride(room_index: int) -> Dictionary:
+	if not _wires.has(room_index): return {}
+	var w: Dictionary = _wires[room_index]
+	var room: Node3D = _rooms[room_index]
+	return {"from": room.to_global(Vector3(float(w["x0"]), float(w["h"]), float(w["z"]))),
+		"to": room.to_global(Vector3(float(w["x1"]), float(w["h"]), float(w["z"])))}
 const BELT_SPEED := 1.6
 const GOOF_RADIUS := 0.62
 const KEY_RADIUS := 0.66
@@ -226,6 +242,18 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 				Vector3((fall1 - flat1) / float(steps) + .02, .14, mz1 - mz0), FLAT)
 		_mezz[_count] = {"rise0": rise0, "flat0": flat0, "flat1": flat1, "fall1": fall1,
 			"z0": mz0, "z1": mz1, "h": MEZZ_H}
+	if _has(event, "wire"):
+		# A flying rig, and only one pick-up point: the crew hooks you at the near
+		# end and drops you at the far end. You cannot steer it, and you cannot
+		# use it twice — the wire is only good for the pass it was rigged for.
+		var wz := 0.9
+		_box(room, Vector3(1.0, 1.90, wz), Vector3(7.0, .035, .035), IRON)
+		for px: float in [0.9, 8.1]:
+			_box(room, Vector3(px, 1.0, wz), Vector3(.10, 2.0, .10), IRON)
+		_box(room, Vector3(1.0, 1.86, wz), Vector3(.16, .12, .16), Color("e8c169"))
+		# A painted mark on the deck: this is where you stand to be hooked up.
+		_box(room, Vector3(1.0, .012, wz), Vector3(1.0, .02, 1.0), Color("e8c169"))
+		_wires[_count] = {"x0": 1.0, "x1": 8.1, "z": wz, "h": 1.22}
 	if _count==0:
 		_buffer(room,0,-1)
 		_line(room,0)

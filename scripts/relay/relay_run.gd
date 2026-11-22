@@ -21,7 +21,7 @@ const MODULES := 12
 const KINDS := ["l", "i", "o", "h", "s"]
 ## Everything the crew is allowed to do to a set. Acts 1–2 only ever see the
 ## first three; later acts draw from all of it and may stack two at once.
-const EVENT_POOL := ["relight", "extra", "guide", "belt", "runner", "goof", "key", "mezz", "double"]
+const EVENT_POOL := ["relight", "extra", "guide", "belt", "runner", "goof", "key", "mezz", "double", "wire"]
 ## A run is four acts of three sets: two quick sets and one long take. The long
 ## take is the only one allowed to hurt, and it is the one with the gate in it.
 ## Four acts, not three: the room count is what makes a run ten minutes long, and
@@ -51,6 +51,8 @@ var act := 0
 var act_mod := ""
 var act_grace := GRACE
 var leg_event := "" # How the crew dressed this set: relight / extra / guide.
+var _riding := false # On the wire: input is gone and the deck cannot reach you.
+var _wire_used := false # The rig is good for one pass per set.
 ## The first splice of a run is free: the player has to feel what a CUT costs
 ## before it can cost them anything.
 var free_cut := 1
@@ -278,8 +280,13 @@ func _arm_mercy() -> void:
 func _hint(key: String, zh: String, en: String) -> void:
 	if _seen_hints.has(key): return
 	_seen_hints[key] = true
-	_notice = _w(zh, en)
-	_notice_left = 3.5
+	_show_notice(_w(zh, en), 3.5)
+
+
+## Same line, every time it happens (the wire is not a tutorial).
+func _show_notice(text: String, seconds := 3.0) -> void:
+	_notice = text
+	_notice_left = seconds
 
 
 ## Everything a run remembers, in the order it was paid for.
@@ -473,6 +480,8 @@ func _restore(i: int) -> void:
 	last_anchor = i
 	_restart_actors()
 	_arm_mercy()
+	_riding = false
+	_wire_used = false
 	desk.clear_sheet()
 	score.resume_beds()
 	grace = act_grace
@@ -672,6 +681,7 @@ func _event_short(event: String) -> String:
 		"key": return _w("有绿幕", "keyed")
 		"mezz": return _w("搭了二层", "catwalk")
 		"double": return _w("有替身", "stand-in")
+		"wire": return _w("有威亚", "on a wire")
 	return ""
 
 
@@ -731,6 +741,7 @@ func _event_line(event: String, zh: bool) -> String:
 		"double": return "剧组留了一个替身站在那条轨道上。推轨会先撞他，停一拍。" if zh else "A stand-in was left on the track. The dolly hits him first and stalls a beat."
 		"key": return "绿幕那一块不在画面里。站上去，谁都碰不到你。" if zh else "The key square is not in the plate. Stand on it and nothing can touch you."
 		"mezz": return "这一棚搭了二层。车从下面过。" if zh else "This set has a catwalk. The dolly goes under you."
+		"wire": return "甲板上画了一块。站上去，剧组把你吊到那一头。" if zh else "A mark is painted on the deck. Stand on it and the crew flies you across."
 	return ""
 
 
@@ -792,6 +803,33 @@ func _freeze() -> void:
 	rig.set_physics_process(false)
 	for g in _actors: g.playing = false
 
+## The rig is a one-way trip: you are hooked at the painted mark and set down at
+## the far post. No steering, no second pass — the decision is whether to take it.
+func _start_wire_ride() -> void:
+	var ride: Dictionary = $Rooms.wire_ride(segments.size()-1)
+	if ride.is_empty(): return
+	_riding = true
+	_wire_used = true
+	player.set_frozen(true)
+	rig.set_physics_process(false)
+	_show_notice(_w("剧组把你吊过去了。","The crew flies you across."), 2.0)
+	var a: Vector3 = ride["from"]
+	var b: Vector3 = ride["to"]
+	player.global_position = a
+	var tw := create_tween()
+	tw.tween_method(func(t: float) -> void:
+		player.global_position = a.lerp(b, t), 0.0, 1.0, 2.4)
+	tw.tween_callback(_end_wire_ride)
+
+func _end_wire_ride() -> void:
+	_riding = false
+	if not is_instance_valid(player): return
+	player.global_position = Vector3(player.global_position.x, 0.05, player.global_position.z)
+	player.set_frozen(false)
+	rig.set_physics_process(true)
+	grace = maxf(grace, 0.35)
+	_show_target()
+
 func _leave_cut() -> void:
 	_close_preview()
 	phase = Mode.PLAY
@@ -811,6 +849,12 @@ func _physics_process(dt: float) -> void:
 		_sample()
 		_next_sample = elapsed + 0.10
 	$Rooms.set_clock(segments.size()-1,elapsed)
+	# On the wire you are not walking: the rig carries you in a straight line and
+	# nothing on the deck can reach you until it sets you down.
+	if not _riding and not _wire_used and $Rooms.wire_at(player.global_position, segments.size()-1):
+		_start_wire_ride()
+		return
+	if _riding: return
 	# The catwalk is a height, not a jump: the walking surface is whatever the
 	# room says it is at this point, and you follow it up and down the ramps.
 	var floor_h: float = $Rooms.floor_height(player.global_position, segments.size()-1)
