@@ -389,7 +389,7 @@ func _sample() -> void:
 func _checkpoint(manual: bool) -> void:
 	_sample()
 	var p := {"leg":live.take_id,"pos":player.global_position,"facing":player.facing,
-		"cursor":cursor,"time":elapsed,"cam_motion":rig.mark_motion(),"cam_yaw":rig.yaw,
+		"cursor":cursor,"time":elapsed,"pass":room_pass,"cam_motion":rig.mark_motion(),"cam_yaw":rig.yaw,
 		"cam_roll":rig.roll,"prefix":live.head_until(elapsed),"manual":manual}
 	var frames := {}
 	for ghost in _actors:
@@ -1117,6 +1117,9 @@ func _show_sheet(won: bool) -> void:
 		desk.show_call_sheet(_w("全部接通","ANSWER PRINT"), lines, true, Loc.language == "zh")
 	else:
 		lines.insert(0,_w("最后一趟没走出来。","The last take never made it out."))
+		# The story of a failed run is one sentence: the take was wasted, the crew
+		# keeps going, you come back and shoot it again.
+		lines.insert(1,_w("这条废了。场务会剪掉它，明天再来一条。","That take is wasted. The crew will cut it, and you shoot again tomorrow."))
 		desk.show_call_sheet(_w("这卷到头了","END OF REEL"), lines, false, Loc.language == "zh")
 
 ## ESC is the only key that stops the clock. Everything else in this game is a
@@ -1218,7 +1221,14 @@ func _refresh() -> void:
 	if _hud.visible:
 		var p := anchors[_selected]
 		var tag := ("MARK %d" % int(p.get("number",0))) if p.manual else _w("起点","START")
-		_hud.text = _w("剪辑台　↑ ↓　%02d / %02d", "CUT DESK   ↑ ↓   %02d / %02d") % [_selected+1, anchors.size()] + "\n%s · TAKE %02d · %.1fs\n" % [tag,p.leg,p.time] + _w("空格：剪回　−1 CUT　（看片不要钱）", "SPACE: splice   −1 CUT   (looking is free)")
+		# What the CUT costs, in seconds you already walked, and in passes you
+		# gave back. Looking is free; this line is the only place the price shows.
+		var lost := maxf(elapsed - float(p.time), 0.0)
+		var back := maxi(room_pass - int(p.get("pass", room_pass)), 0)
+		var price := _w("剪回去：少 %.1f 秒走位" % lost, "SPLICE BACK: %.1f s of walking" % lost)
+		if back > 0:
+			price += _w("，本棚回到第 %d 趟" % (back + 1), ", back to pass %d" % (back + 1))
+		_hud.text = _w("剪辑台　↑ ↓　%02d / %02d", "CUT DESK   ↑ ↓   %02d / %02d") % [_selected+1, anchors.size()] + "\n%s · TAKE %02d · %.1fs\n" % [tag,p.leg,p.time] + price + "\n" + _w("空格：剪回　−1 CUT", "SPACE: splice   −1 CUT")
 	if _notice_left > 0:
 		desk.show_message(_notice)
 		_notice_left = 0
