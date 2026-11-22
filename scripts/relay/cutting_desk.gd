@@ -134,7 +134,7 @@ class Sheet extends Control:
 		var line_y := 34.0
 		draw_line(Vector2(20,line_y+8),Vector2(214,line_y+8),Color(AMBER.r,AMBER.g,AMBER.b,0.55),1.0)
 		text(22,line_y,word("棚 %02d/%02d","SET %02d/%02d")%[d._room,d._rooms],18,PAPER)
-		text(146,line_y,word("趟 %d/%d","PASS %d/%d")%[d._pass,d._passes],18,AMBER)
+		text(146,line_y,word("过线 %d/%d","LINE %d/%d")%[d._pass,d._passes],18,AMBER)
 		var stock:String="MARK %d   CUT %d"%[d._marks,d._cuts]
 		if d._splice: stock+=word("   接片","   SPLICE")
 		var sw:float=d._font.get_string_size(stock,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
@@ -154,19 +154,27 @@ class Sheet extends Control:
 				else: draw_strip(i)
 			text(left,h*.5+122,word("点选，或按 1 / 2 / 3","Click your pick, or press 1 / 2 / 3"),16,PAPER)
 		elif not d._sheet_lines.is_empty():
+			# The end of a reel is a sheet of paper too, not a black plate: same
+			# paper, same ruled rows, so the run ends on the object that started it.
 			var bw: float = 460.0
-			var bh: float = 100.0 + float(d._sheet_lines.size()) * 30.0
+			var bh: float = 118.0 + float(d._sheet_lines.size()) * 30.0
 			var bx: float = (w-bw)*.5
 			var by: float = (h-bh)*.5
 			rect(bx+3,by+6,bw,bh,Color("101210"))
-			rect(bx,by,bw,bh,INK)
-			rect(bx,by,bw,5,MINT if d._sheet_won else AMBER)
-			text(bx+26,by+44,d._sheet_title,26,PAPER)
-			rect(bx+26,by+58,bw-52,1,Color("4a4638"))
+			rect(bx,by,bw,bh,PAPER)
+			rect(bx,by,bw,26,INK)
+			text(bx+12,by+18,"CALL SHEET  /  %s"%("PRINT" if d._sheet_won else "OUTTAKE"),12,MINT if d._sheet_won else AMBER)
+			text(bx+12,by+56,d._sheet_title,24,INK)
+			draw_line(Vector2(bx+12,by+66),Vector2(bx+bw-12,by+66),Color("b8b09a"),1)
 			var row: float = by+92
-			for line in d._sheet_lines:
-				text(bx+26,row,str(line),17,PAPER)
+			for line: String in d._sheet_lines:
+				text(bx+12,row,_fit(line,15,bx+12,bx+bw-12),15,INK)
+				draw_line(Vector2(bx+12,row+6),Vector2(bx+bw-12,row+6),Color("ddd3b8"),1)
 				row+=30
+			var stamp := word("当天收工","WRAPPED") if d._sheet_won else word("没用上","WASTED")
+			var tw2: float = d._font.get_string_size(stamp,HORIZONTAL_ALIGNMENT_LEFT,-1,12).x+16.0
+			rect(bx+bw-12-tw2,by+bh-30,tw2,20,Color("8c2f22"))
+			text(bx+bw-12-tw2+8,by+bh-16,stamp,12,PAPER)
 		elif d._result>=0:
 			var x:=w*.5-192;var y:=h*.5-60
 			rect(x,y,384,120,INK)

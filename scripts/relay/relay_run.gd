@@ -905,8 +905,9 @@ func _show_sheet(won: bool) -> void:
 		_recorded = true
 		Rules.record_run(segments.size(), deaths, won, run_seed)
 	var lines: Array = [
-		_w("棚 %d / %d　条 %d　死 %d", "SETS %d / %d   TAKES %d   DEATHS %d") % [segments.size(),MODULES,tracks.size(),deaths],
-		_w("标记 %d　剪 %d　种子 %06X", "MARKS %d   CUTS %d   SEED %06X") % [mark_stock,cut_stock,run_seed],
+		_w("走完 %d / %d 棚　　废条 %d　　死亡 %d", "SETS %d / %d   WASTED %d   DEATHS %d") % [segments.size(),MODULES,maxi(tracks.size()-segments.size(),0),deaths],
+		_w("手上还剩　标记 %d　剪 %d", "LEFT   MARKS %d   CUTS %d") % [mark_stock,cut_stock],
+		_w("种子 %06X", "SEED %06X") % run_seed,
 		_w("空格：再来一局　R：同种子重开", "SPACE: new run   R: same seed"),
 	]
 	if won:
