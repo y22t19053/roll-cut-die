@@ -170,8 +170,9 @@ static func run(h, tree = null) -> void:
 	var bar_wall := 0
 	for row: String in bar:
 		bar_wall += row.count("#")
-	h.eq("I is one bar across the middle", bar_wall, 7)
-	h.eq("the bar sits on the centre line", bar[0].count("#"), 0)
+	h.eq("I is a slab in the middle, not a wall across", bar_wall, 3)
+	h.eq("the slab sits on the centre line", bar[0].count("#"), 0)
+	h.ok("there is a way around each end of the slab", bar[2].substr(0, 2) == ".." and bar[2].substr(5, 2) == "..")
 	var ring: Array = Rooms.LANES["o"]
 	h.eq("O is a closed ring", ring[2].count("#"), 2)
 	h.eq("O keeps its inside empty", ring[2].substr(2, 3), "...")
