@@ -266,12 +266,27 @@ func _start_leg(back: bool) -> void:
 	# trip is a different read of the floor instead of a mirror of the first leg.
 	# It is built in the room's own frame: the crew may have turned the set.
 	# The room says where its doors are; the light line and the crossing test read
-	# the same plan, so a set may put its exit off the centre line.
+	# the same plan, so a set may put its exit off the centre line — or bend the
+	# route with corner stops that are crossed one at a time.
 	var ri := segments.size() - 1
 	var plan: Dictionary = $Rooms.plan(ri)
-	var local: Vector3 = plan.get("entry", Vector3(0.0, 0.05, 0.0)) if back else plan.get("exit", Vector3(SET_LENGTH, 0.05, 0.0))
-	local.z += LANE if back else -LANE
-	route.append(room_node.to_global(local) if room_node != null else local)
+	var entry: Vector3 = plan.get("entry", Vector3(0.0, 0.05, 0.0))
+	var exitp: Vector3 = plan.get("exit", Vector3(SET_LENGTH, 0.05, 0.0))
+	var mids: Array = plan.get("mids", [])
+	if back:
+		for i in range(mids.size() - 1, -1, -1):
+			var m: Vector3 = mids[i]
+			m.z = -m.z if m.z != 0.0 else m.z
+			route.append(room_node.to_global(m) if room_node != null else m)
+		var near := entry
+		near.z += LANE
+		route.append(room_node.to_global(near) if room_node != null else near)
+	else:
+		for m: Vector3 in mids:
+			route.append(room_node.to_global(m) if room_node != null else m)
+		var far := exitp
+		far.z += -LANE
+		route.append(room_node.to_global(far) if room_node != null else far)
 	cursor = 0
 	_arrival_locked = false
 	phase = Mode.PLAY
@@ -982,7 +997,7 @@ func _physics_process(dt: float) -> void:
 	# the set the finish line is no longer the same wall, and a world-axis test
 	# would count the crossing the moment the room moved.
 	var ri_now := segments.size() - 1
-	var inside: bool = $Rooms.crossed(player.global_position, ri_now, returning)
+	var inside: bool = $Rooms.reached(player.global_position, ri_now, route[cursor])
 	if not inside: _arrival_locked = false
 	if inside and not _arrival_locked:
 		cursor += 1

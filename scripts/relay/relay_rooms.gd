@@ -294,11 +294,19 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		_cap.queue_free()
 	_cap = _buffer(room,LENGTH,1)
 	# A strip room is the first hollow plan: you enter low and leave high, so the
-	# crossing is diagonal instead of a walk straight down the middle.
+	# crossing is diagonal instead of a walk straight down the middle. A two-bend
+	# room is the first bent plan: the guide is two corner stops plus the door.
 	var exit_z := 1.95 if kind == "i" else 0.0
 	var entry_z := -1.60 if kind == "i" else 0.0
-	_plans[_count] = {"entry": Vector3(0,.05,entry_z), "exit": Vector3(LENGTH,.05,exit_z)}
+	var mids: Array = []
+	if kind == "s":
+		# The two corner stops sit in the side lanes, clear of the glyph walls —
+		# the route goes down one side, across, and out, instead of straight on.
+		mids = [Vector3(2.60,.05,2.58), Vector3(6.40,.05,-2.58)]
+	_plans[_count] = {"entry": Vector3(0,.05,entry_z), "exit": Vector3(LENGTH,.05,exit_z), "mids": mids}
 	_line(room,LENGTH,final,exit_z,2.1 if kind == "i" else 2.62)
+	for m: Vector3 in mids:
+		_line(room,float(m.x),false,float(m.z),1.1)
 	_count += 1
 	var end := room.to_global(Vector3(LENGTH,.05,0))
 	var stops: Array[Vector3] = [end]
@@ -486,17 +494,25 @@ static func _grain() -> ImageTexture:
 func plan(room_index: int) -> Dictionary:
 	return _plans.get(room_index, {})
 
+## Did the player reach a given world point inside this room? Every guide line in
+## the game is "walk to this point", so the test is the same for the front door,
+## the back door and the corner stops of a bent route.
+func reached(world_pos: Vector3, room_index: int, target_world: Vector3, tol := 1.35) -> bool:
+	var room: Node3D = _rooms[room_index] if room_index >= 0 and room_index < _rooms.size() else null
+	if room == null: return false
+	var lp: Vector3 = room.to_local(world_pos)
+	var tp: Vector3 = room.to_local(target_world)
+	return Vector2(lp.x, lp.z).distance_to(Vector2(tp.x, tp.z)) <= tol
+
+
 ## Did the player just reach the door this leg was pointed at? The light line and
 ## this test read the same plan, so a room whose exit sits off-axis needs no
 ## second rule — only a different point.
 func crossed(world_pos: Vector3, room_index: int, returning: bool) -> bool:
 	var p := plan(room_index)
 	if p.is_empty(): return false
-	var room: Node3D = _rooms[room_index]
-	if room == null: return false
 	var goal: Vector3 = p["entry"] if returning else p["exit"]
-	var lp: Vector3 = room.to_local(world_pos)
-	return Vector2(lp.x, lp.z).distance_to(Vector2(goal.x, goal.z)) <= 1.35
+	return reached(world_pos, room_index, _rooms[room_index].to_global(goal))
 
 
 func _line(room: Node3D, x: float, final := false, zc := 0.0, span := 2.62) -> void:
