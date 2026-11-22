@@ -36,6 +36,7 @@ const MODULES := [
 	["routes", preload("res://tests/test_routes.gd")],
 	["scene", preload("res://tests/test_scene.gd")],
 	["relay_death", preload("res://tests/test_relay_death.gd")],
+	["relay_walk", preload("res://tests/test_relay_walk.gd")],
 ]
 
 var _finished := false

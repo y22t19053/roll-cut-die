@@ -174,8 +174,16 @@ static func run(h, tree = null) -> void:
 	h.eq("the slab sits on the centre line", bar[0].count("#"), 0)
 	h.ok("there is a way around each end of the slab", bar[2].substr(0, 2) == ".." and bar[2].substr(5, 2) == "..")
 	var ring: Array = Rooms.LANES["o"]
-	h.eq("O is a closed ring", ring[2].count("#"), 2)
-	h.eq("O keeps its inside empty", ring[2].substr(2, 3), "...")
+	# The ring used to run wall to wall, which left no way past it at all — a run
+	# that drew an O set could never cross the line. It is now a box pushed to one
+	# side, so there is a lane above and below it, and turning the set moves the box
+	# to the other half ("转过来换半边").
+	h.eq("O is a closed box", ring[2].count("#"), 2)
+	h.eq("O keeps its inside empty", ring[2].substr(2, 2), "..")
+	h.eq("the box has a top and a bottom", ring[1].count("#"), 4)
+	h.eq("the box has a top and a bottom", ring[3].count("#"), 4)
+	h.ok("there is a lane above the box", ring[0].count("#") == 0)
+	h.ok("there is a lane below the box", ring[4].count("#") == 0)
 	rooms.append_room("i", 0, "")
 	rooms.append_room("o", 0, "")
 	h.eq("an I room still runs one dolly", (rooms._dollies[8] as Array).size(), 1)

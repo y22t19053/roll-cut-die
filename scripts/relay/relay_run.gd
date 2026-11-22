@@ -1369,10 +1369,15 @@ func _unhandled_key_input(e: InputEvent) -> void:
 			"LENS TILT: ON" if rig.tilt_enabled else "LENS TILT: OFF")
 		_notice_left = 2.0
 		return
-	# Whatever else is on screen, ESC is the way out. A card that leaves the player
-	# in a room with no exit turns a bug into a broken keyboard.
+	# Whatever else is on screen, ESC always does something. On the cutting desk it
+	# leaves the desk (the old behaviour, and the cheapest way out); everywhere
+	# else it opens the pause menu, including while a card is up — a card that
+	# leaves the player in a room with no exit turns a bug into a broken keyboard.
 	if key == KEY_ESCAPE:
-		_open_pause()
+		if phase == Mode.CUT and not forced_cut:
+			_leave_cut()
+		else:
+			_open_pause()
 		return
 	# The board is talking. Nothing else gets a say until the clack has landed.
 	if slate.is_running(): return

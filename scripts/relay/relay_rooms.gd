@@ -26,7 +26,10 @@ const LANES := {
 	# I used to be a bar across the whole set. Shortened to a slab in the middle it
 	# becomes the first island: you enter low, the middle is blocked, you leave high.
 	"i": [".......",".......","..###..",".......","......."],
-	"o": [".#####.",".#...#.",".#...#.",".#...#.",".#####."],
+	# O is a ring you walk around, not a wall you cannot. Three rows of box
+	# leaves a one-metre lane at each edge of the deck — and it sits off centre,
+	# so turning the set 180 degrees really does move it to the other half.
+	"o": [".......", ".####..", ".#..#..", ".####..", "......."],
 }
 var _count := 0
 var _cap: Node3D
