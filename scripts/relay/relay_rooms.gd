@@ -384,8 +384,14 @@ func _finish_cart(room: Node3D, cart: Node3D, ink: Color, variant: int) -> void:
 		for z in [-.28,.28]: _disc(cart,Vector3(x,.14,z),.14,.1,IRON).rotation.y = PI/2
 	_box(cart,Vector3(0,.28,0),Vector3(.88,.17,.72),ink)
 	_box(cart,Vector3(0,.53,0),Vector3(.14,.38,.15),IRON)
-	_box(cart,Vector3(0,.83,0),Vector3(.58,.34,.35),ink)
-	_disc(cart,Vector3(0,.84,.23),.12,.16,IRON)
+	# Camera forward, counterweight back, push bars on both sides: the silhouette
+	# tells you which way the thing will swing before it swings.
+	_box(cart,Vector3(0,.86,.22),Vector3(.52,.30,.34),ink)
+	_box(cart,Vector3(0,.86,-.26),Vector3(.30,.26,.22),IRON)
+	_disc(cart,Vector3(0,.86,.41),.13,.12,IRON)
+	_box(cart,Vector3(0,1.07,.22),Vector3(.34,.06,.20),IRON)
+	for sx: float in [-.46,.46]:
+		_box(cart,Vector3(sx,.62,-.06),Vector3(.06,.52,.06),IRON)
 
 ## The trolley throws a pool of light on the deck. It is set lighting, not a
 ## danger ring: the eye should place the cart a beat before the body does.

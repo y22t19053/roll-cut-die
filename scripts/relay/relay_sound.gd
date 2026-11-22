@@ -118,6 +118,25 @@ func set_act(n: int) -> void:
 	_act_lift = clampf(float(n) * 1.4, 0.0, 3.2)
 
 
+## Each family of set has its own pitch for the same two beds, so you hear which
+## kind of room you walked into before you look at it. A strip room sits high and
+## tight; a ring room drags; two lanes hurry. Cheap, and it is the fastest thing
+## the ear can learn.
+func set_family(kind: String) -> void:
+	if not is_node_ready():
+		return
+	var p := 1.0
+	match kind:
+		"i": p = 1.03
+		"l": p = 0.96
+		"o": p = 0.92
+		"h": p = 1.05
+		"s": p = 1.09
+	for bed: AudioStreamPlayer in [_calm, _tense]:
+		if bed != null:
+			bed.pitch_scale = p
+
+
 ## The board is talking: step the score back so the clack is the loudest thing
 ## in the room, then bring it back.
 func duck(on: bool) -> void:

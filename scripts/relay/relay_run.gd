@@ -282,6 +282,7 @@ func _start_leg(back: bool) -> void:
 	desk.clear_sheet()
 	_clear_killer_mark()
 	score.resume_beds() # The room comes back with the new take.
+	score.set_family(str((segments.back() as Dictionary).get("kind", "")))
 	grace = act_grace
 	_checkpoint(false)
 	_show_target()
