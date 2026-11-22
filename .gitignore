@@ -24,5 +24,8 @@ runtime.log
 # It is a dev tool: it must never ship in an export, so it stays out of the tree.
 autoload/
 
+# tools/strip_dev_autoload.py parks the dev autoload line here while an export runs
+tools/.dev_autoload.bak
+
 # Screenshots taken through the interaction server during a run.
 shots/

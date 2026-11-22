@@ -1004,3 +1004,25 @@ _plans[i] = {"entry": Vector3, "exit": Vector3}
 **为什么现在做**：CrazyGames 的首屏上限是 50 MB（见 `docs/PLATFORM_AND_JAM_PLAN.md`），还没到，所以这只是第一步；但它是零风险的一步——不删任何代码、不改任何玩法，只把不该上船的行李留在岸上。
 
 **没验证**：itch 页面与 TOY 卡片用的仍是 CDN 上的旧图（那些图通过 itch/TOY 后台单独上传，不在包里），换掉它们不影响游戏本体，只是我没再重传一次封面。
+
+---
+
+# D-072 · 出包前把开发服务器摘下来，出包后再装回去
+
+**状态**：CONFIRMED（已实现工具、已按此流程重出 Web/Windows、itch 的 Run game 日志已核对）。
+
+**这是一次回归**：D-068 当时的做法是「把 `McpInteractionServer` 从 `[autoload]` 删掉再导出」。这件事看起来成立，但实际上每次 `godot_run_project` 起本地交互实例，`godot-bridge` 都会**把那一行重新写回 `project.godot`**（它需要那个服务器才能跟游戏对话）。于是「删掉 → 导出」的顺序能成立一次，下一次交互测试之后就悄悄失效了——itch 上 12:37 那版 Web 包启动时又打出 `USER ERROR: Attempt to open script 'res://autoload/mcp_interaction_server.gd' resulted in error 'File not found'.`，而我当时以为已经干净了。
+
+**做法**：新增 `tools/strip_dev_autoload.py`（行级、只匹配 `^McpInteractionServer\s*=`），把导出夹在 `--strip` 与 `--restore` 之间；`--check` 打印 `present` / `absent`。流程写进 `docs/WORKFLOW_GUIDE.md` §2.1：
+
+```
+python tools/strip_dev_autoload.py --strip
+godot_export_project(...)                       # Web 之后还要 tools/patch_web_shell.py
+python tools/strip_dev_autoload.py --restore
+```
+
+**为什么不干脆把这行从仓库里删掉**：删了以后每次交互测试都会再写回来，工作树永远是脏的；而「仓库里留着、导出时摘掉」让 git 状态与引擎/插件的真实行为一致。代价是**每次出包都必须跑这两条命令**（已写进流程，不是靠记性）。
+
+**怎么验证的**：重新导出后 itch 的 `Run game` iframe 控制台只剩 `still waiting on run dependencies: loadDylibs / index.side.wasm` 两条加载期进度，`Attempt to open script` 那条不再出现。
+
+**没验证**：B 站 TOY 那版是否也换成了这次干净包（要重新 `toy update` 才算）。

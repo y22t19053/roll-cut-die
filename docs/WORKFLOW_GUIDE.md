@@ -65,6 +65,20 @@ godot_export_project(preset_name="Windows Desktop", output_path="build/rcd.exe",
 
 等价命令行：`godot.exe --headless --path <工程根> --export-release "Windows Desktop" build\rcd.exe`
 
+### 2.1 出包前先摘掉开发用的 autoload（否则发行包每次启动都报错）
+
+`godot-bridge` 每次起本地交互实例都会把 `McpInteractionServer="*res://autoload/mcp_interaction_server.gd"` 写回 `project.godot`，而 `export_presets.cfg` 的 `exclude_filter` 含 `autoload/*`。两者一起的后果是**发行包在启动时打一行 `Attempt to open script 'res://autoload/mcp_interaction_server.gd' … File not found`**（itch 与 B 站 TOY 的网页版都会在控制台里看到）。流程固定为：
+
+```
+python tools/strip_dev_autoload.py --strip    # 导出前
+godot_export_project(...)                      # 导出（Web 之后还要 python tools/patch_web_shell.py builds/web/index.html）
+python tools/strip_dev_autoload.py --restore   # 导出后（把声明还给本地交互测试）
+```
+
+`--check` 打印 `present` / `absent`。只删这一行，别的都别动——`project.godot` 是引擎自己会重写的文件，改多了 diff 就没法读了。
+
+## 3 · 日志：两个文件，别搞混
+
 ## 3 · 日志：两个文件，别搞混
 
 | 文件 | 谁写 | 路径 |
