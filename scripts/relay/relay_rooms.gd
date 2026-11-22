@@ -39,8 +39,11 @@ var _belts := {}
 var _runners := {}
 ## Per room: where the deck is taped off as a goof (stage-local x, z).
 var _goofs := {}
+## Per room: the green screen's key square — stand in it and you are not in the plate.
+var _keys := {}
 const BELT_SPEED := 1.6
 const GOOF_RADIUS := 0.62
+const KEY_RADIUS := 0.66
 
 ## What a room's card promises. The mods are the run's only real decisions:
 ## tension costs attention, a clean stage gives marks and cuts back.
@@ -143,6 +146,14 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 			_box(room, Vector3(2.4 + i*1.5, .04, belt_z - .44), Vector3(.34, .008, .07), Color("9aa4ad"))
 			_box(room, Vector3(2.4 + i*1.5, .04, belt_z + .44), Vector3(.34, .008, .07), Color("9aa4ad"))
 		_belts[_count] = belt_z
+	if event == "key":
+		# The green screen. Whatever stands on the key square is not in the plate:
+		# the crew, the dolly and your own past all pass straight through you.
+		var key_z := 2.1
+		_box(room, Vector3(2.2, .012, key_z), Vector3(KEY_RADIUS*2.0, .024, KEY_RADIUS*2.0), Color("2f8f4e"))
+		_box(room, Vector3(2.2, .80, key_z + 0.78), Vector3(2.9, 1.6, .06), Color("3fae60"))
+		_box(room, Vector3(2.2, .02, key_z + 0.78), Vector3(2.9, .04, .06), Color("22262a"))
+		_keys[_count] = Vector2(2.2, key_z)
 	if event == "goof":
 		# Taped off: this patch is in the shot. Stand in it and the take is gone —
 		# nobody kills you, you just are not in the movie that gets printed.
@@ -349,6 +360,15 @@ func crew_at(world_pos: Vector3,room_index: int) -> bool:
 
 ## You are standing in the shot. This is not a hazard you can body-check: it is a
 ## mistake the take cannot survive.
+## Standing on the key square means you are not in the plate: nothing here can
+## touch you, because you are not in the image that gets printed.
+func key_at(world_pos: Vector3,room_index: int) -> bool:
+	if not _keys.has(room_index): return false
+	var p := _rooms[room_index].to_local(world_pos)
+	if p.y<-.35 or p.y>1.35: return false
+	var k: Vector2 = _keys[room_index]
+	return Vector2(p.x-k.x,p.z-k.y).length() < KEY_RADIUS
+
 func goof_at(world_pos: Vector3,room_index: int) -> bool:
 	if not _goofs.has(room_index): return false
 	var p := _rooms[room_index].to_local(world_pos)

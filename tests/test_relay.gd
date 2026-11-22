@@ -174,5 +174,13 @@ static func run(h, tree = null) -> void:
 	h.ok("two metres off the tape is clear", not rooms.goof_at(goof_mid + Vector3(2.0, 0, 0), goof_room))
 	h.ok("a set with no tape has no goof", not rooms.goof_at(goof_mid, 0))
 
+	# The key square: you are not in the plate, so nothing in the room reaches you.
+	rooms.append_room("s", 0, "", false, "key")
+	var key_room: int = rooms._count - 1
+	var key_mid: Vector3 = rooms._rooms[key_room].to_global(Vector3(2.2, 0.05, 2.1))
+	h.ok("the key square is where the green screen says", rooms.key_at(key_mid, key_room))
+	h.ok("a metre and a half away is out of the plate", not rooms.key_at(key_mid + Vector3(0, 0, -1.6), key_room))
+	h.ok("a set with no green screen keys nothing", not rooms.key_at(key_mid, 0))
+
 	rooms.queue_free()
 	h.finish()

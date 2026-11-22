@@ -106,6 +106,9 @@ var _arrival_locked := false
 var _next_sample := 0.0
 var _lamp := MeshInstance3D.new()
 var _hud := Label.new()
+## The key light, kept so a later act can lose the day.
+var _sun: DirectionalLight3D
+var _env: Environment
 var _notice := ""
 var _notice_left := 0.0
 var _cut_velocity := Vector3.ZERO
@@ -186,6 +189,9 @@ func _ready() -> void:
 	sun.rotation_degrees = Vector3(-54,-28,0)
 	sun.shadow_enabled = true
 	add_child(sun)
+	_sun = sun
+	_env = env
+	_act_light()
 	# A cold bounce from the opposite side keeps the shadowed faces from going
 	# flat black; it is a set light, never a gameplay signal.
 	var bounce := DirectionalLight3D.new()
@@ -501,6 +507,7 @@ func _finish_leg() -> void:
 		# The seam between acts: sign one thing, and live with it for two sets.
 		phase = Mode.ACT
 		act += 1
+		_act_light()
 		cards = _offer_contracts()
 		score.cue("clear")
 		score.set_act(act)
@@ -640,6 +647,7 @@ func _event_short(event: String) -> String:
 		"belt": return _w("有传送带", "on a belt")
 		"runner": return _w("有人在跑", "a runner")
 		"goof": return _w("地上有胶带", "taped off")
+		"key": return _w("有绿幕", "green screen")
 	return ""
 
 func _mod_label(mod: String) -> String:
@@ -662,6 +670,7 @@ func _roll_event() -> String:
 	if r < 0.58: return "belt"
 	if r < 0.69: return "runner"
 	if r < 0.80: return "goof"
+	if r < 0.90: return "key"
 	return ""
 
 
@@ -673,6 +682,7 @@ func _event_line(event: String, zh: bool) -> String:
 		"belt": return "甲板上铺了一条传送带。它听棚的，不听你的镜头。" if zh else "There is a belt on the deck. It answers to the set, not to your lens."
 		"runner": return "场务在跑。他不会为你停。" if zh else "A runner is crossing. He will not stop for you."
 		"goof": return "地上贴了胶带。站进去，这一条就废了。" if zh else "The deck is taped off. Stand in it and the take is gone."
+		"key": return "绿幕那一块不在画面里。站上去，谁都碰不到你。" if zh else "The key square is not in the plate. Stand on it and nothing can touch you."
 	return ""
 
 
@@ -756,7 +766,10 @@ func _physics_process(dt: float) -> void:
 	# The deck can be doing something to you. The belt answers to the set, so a
 	# turned set carries you the other way without any new rule.
 	player.set_push($Rooms.belt_push(player.global_position, segments.size()-1))
-	if grace <= 0:
+	# On the green screen's key square you are not in the plate: the crew, the
+	# dolly and your own past all pass through where you are standing.
+	var keyed: bool = $Rooms.key_at(player.global_position, segments.size()-1)
+	if grace <= 0 and not keyed:
 		var reach: float = Ghost.DANGER_RADIUS + Player.RADIUS
 		for g in _actors:
 			# "guide": the past self walks the route and nobody dies from it. The
@@ -967,6 +980,18 @@ func _board_roll() -> void:
 	slate.play_roll(n, _w("第 %02d 条" % n, "TAKE %02d" % n),
 		_w("你在补拍一条镜头。棚里的人不会为你停下来。",
 			"You are reshooting a take. The crew will not stop for you."))
+
+
+## 抢天光: the day is going. Each act the key light drops and warms, so the last
+## act is shot at the end of the afternoon — long shadows, and whatever lamps the
+## crew hung on the set become the light you can actually read.
+func _act_light() -> void:
+	if _sun == null: return
+	var t := clampf(float(act) / float(maxi(ACTS - 1, 1)), 0.0, 1.0)
+	_sun.light_energy = lerpf(1.0, 0.56, t)
+	_sun.light_color = Color("fff6e6").lerp(Color("ffb877"), t)
+	if _env != null:
+		_env.ambient_light_energy = lerpf(0.80, 0.60, t)
 
 
 ## The cause of a death, in one line, the way a set would say it out loud.
