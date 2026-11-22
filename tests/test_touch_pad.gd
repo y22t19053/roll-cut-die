@@ -8,6 +8,9 @@ extends RefCounted
 
 
 const Pad = preload("res://scripts/relay/touch_pad.gd")
+## Read statically: the autoload is not a compile-time identifier inside a
+## --script runner, but the class's constants and defaults are.
+const Session = preload("res://scripts/core/game_session.gd")
 
 
 static func run(h, tree = null) -> void:
@@ -16,6 +19,7 @@ static func run(h, tree = null) -> void:
 	_stick_math(h)
 	_slots(h)
 	_phases(h)
+	_device(h)
 	_zoom(h)
 
 
@@ -98,6 +102,21 @@ static func _phases(h) -> void:
 	# The death card is the one moment the frame must stay readable: nothing of the
 	# pad may sit over the slate.
 	h.ok("the slate hides the pad in every phase", Pad.wanted(Pad.M_CUT, true) == false)
+
+
+static func _device(h) -> void:
+	# Auto is the default because both mistakes are visible: thumbs on a keyboard
+	# screen, or no way to move on a phone. The preference has to answer first.
+	h.ok("auto hides the pad on a machine without a touch screen", Pad.device_wants("auto", false) == false)
+	h.ok("auto shows the pad where there is a touch screen", Pad.device_wants("auto", true) == true)
+	h.ok("always shows it even with a keyboard", Pad.device_wants("on", false) == true)
+	h.ok("never hides it even on a phone", Pad.device_wants("off", true) == false)
+	h.ok("an unreadable preference falls back to auto", Pad.device_wants("banana", false) == false)
+	var session = Session.new()
+	h.ok("a written preference is one of three words", Session.CHOICES["touch_pad"] == ["auto", "on", "off"])
+	h.ok("the pad preference is stored like every other", session.settings.has("touch_pad"))
+	h.ok("auto is the default, so a keyboard machine starts clean", str(session.settings["touch_pad"]) == "auto")
+	session.free()
 
 
 static func _zoom(h) -> void:

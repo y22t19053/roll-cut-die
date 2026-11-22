@@ -63,6 +63,9 @@ func _ready() -> void:
 	if _font == null:
 		_font = ThemeDB.fallback_font
 	z_index = 40
+	## Hidden until _process has decided: a Node2D starts visible, and defaulting
+	## to on would flash thumbs on a keyboard machine for one frame.
+	visible = false
 	set_process(true)
 	get_viewport().size_changed.connect(_layout)
 	_layout()
@@ -145,6 +148,21 @@ static func wanted(mode: int, board_running: bool) -> bool:
 	return mode in [M_PLAY, M_CUT, M_DONE, M_LOST, M_ITEM, M_PICK]
 
 
+## Preference "auto"/"on"/"off" crossed with what the machine actually has.
+## Auto is the honest default: a keyboard player has no reason to see thumbs,
+## and a phone has no way to play without them.
+static func device_wants(pref: String, has_touch: bool) -> bool:
+	if pref == "on":
+		return true
+	if pref == "off":
+		return false
+	return has_touch
+
+
+static func has_touch_screen() -> bool:
+	return DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
+
+
 ## --- live pad ---------------------------------------------------------------
 
 func _mode() -> int:
@@ -157,6 +175,21 @@ func _board_running() -> bool:
 	if relay == null or relay.slate == null:
 		return false
 	return bool(relay.slate.is_running())
+
+
+## Read the preference without a hard dependency on the autoload's global name:
+## a --script test run has the singleton at /root but not always as a compile-time
+## identifier, and a missing hub must mean "auto", not a broken script.
+func pad_preference() -> String:
+	var hub := get_node_or_null("/root/GameSession")
+	if hub == null:
+		return "auto"
+	var prefs: Variant = hub.get("settings")
+	if prefs is Dictionary:
+		var d: Dictionary = prefs
+		if d.has("touch_pad"):
+			return str(d["touch_pad"])
+	return "auto"
 
 
 func _layout() -> void:
@@ -174,7 +207,10 @@ func _process(_dt: float) -> void:
 	if shape != _last_size:
 		_last_size = shape
 		_layout()
-	var want := wanted(_mode(), _board_running())
+	var want := (
+		wanted(_mode(), _board_running())
+		and device_wants(pad_preference(), has_touch_screen())
+	)
 	if want != _visible_now:
 		_visible_now = want
 		visible = want
@@ -294,7 +330,7 @@ func _update_pinch() -> void:
 
 
 func _draw() -> void:
-	if not _visible_now and not visible:
+	if not _visible_now:
 		return
 	var u := _u
 	# Stick: a ring, eight ticks, and the knob where your thumb is.

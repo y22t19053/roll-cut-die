@@ -39,6 +39,13 @@ func _pick_language(lang: String) -> void:
 		GameSession.set_language(lang)
 
 
+## The pad is the one setting that changes the picture for everyone watching a
+## screen recording, so it gets a three-way choice rather than a checkbox.
+func _pick_touch(id: String) -> void:
+	GameSession.set_setting("touch_pad", id)
+	_render.call_deferred()
+
+
 func open() -> void:
 	visible = true
 	_render()
@@ -117,6 +124,13 @@ func _general() -> void:
 
 
 func _controls() -> void:
+	var pad_row := _row(Loc.ui("settings.touch_pad"))
+	for id: String in ["auto", "on", "off"]:
+		var b := UiKit.button(Loc.ui("settings.touch_" + id), _pick_touch.bind(id), 18)
+		b.custom_minimum_size = Vector2(210, 40)
+		b.toggle_mode = true
+		b.button_pressed = str(GameSession.settings.get("touch_pad", "auto")) == id
+		pad_row.add_child(b)
 	_slider("settings.mouse_sensitivity", "mouse_sensitivity", 0.0005, 0.006, 0.0001,
 		func(v: float) -> String: return "%.1f" % (v * 1000.0))
 	var grid := GridContainer.new()

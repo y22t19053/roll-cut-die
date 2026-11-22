@@ -968,3 +968,25 @@ _plans[i] = {"entry": Vector3, "exit": Vector3}
 **实测**：`tests/run_all.gd` **615 断言全绿**（`touch_pad 45/45`：尺寸上下限、四方向与八扇区、死区、按钮不出屏、摇杆与按钮不重叠、各 phase 的键表、板子隐藏、缩放夹紧）。真机 900×460 横屏窗口：摇杆落在像素 `(76, 384)`、主键 `(833, 393)`，开关触控层前后差 21,533 像素，四角分布正确；合成触摸事件按摇杆 → `touch_vec = (1, 0)`、松手归零；按 C 键进剪辑台（`phase 0 → 2`，键位换 4 个）；按 OK 回 PLAY。
 
 **没验证**：真人在真手机上打一局的手感（尤其摇杆半径 13% 屏宽是不是太大，以及按住摇杆同时够不够到右下 C 键）；`▲ / ▼ / OK / ||` 四个字形在 Noto 里都有了，但字号在 520 px 宽的屏上是否还读得清没实测。
+
+---
+
+# D-070 · 拇指是给触摸屏的，键盘机器默认看不见它
+
+**状态**：CONFIRMED（623 断言全绿，`touch_pad 53/53`；桌面真机三态与落盘都验过）。**未提交审核前不算已发布。**
+
+**创作者的要求**（2026-11-23，原话）：「插一句我在pc端玩的时候看到有这些东西很难受，但是只有我在手机端玩的时候必需要有，要不加一个按键在设置或者符合操作的地方可以选择把这些关闭怎么样」。
+
+**问题不是「加一个开关」，是「默认值错了」**：D-069 把触控板做成默认显示，于是 PC 上凭空多出两只虚拟拇指——它是一件只在触摸屏上成立的工具，却占着所有人的画面。所以先改默认：`touch_pad` 新设置项默认 `"auto"`，`device_wants(pref, has_touch)` 在 auto 下走 `DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")`；"on"/"off" 是给两种人的手动逃生门（触屏笔记本不想要它，或手机被误判成没有触摸屏）。
+
+**放在两个能顺手找到的地方**（都在同一份 `GameSession.settings` 上，改一处两处同步）：
+- 局内 ESC 菜单（`scripts/relay/relay_pause.gd`，节点名就是 `Pause`）加一行 `触控按键：自动 / 总是 / 从不`，点一下循环一档——和「界面大小」「减弱动态效果」同一排，都是按下就见效、不用回标题页的项。
+- 标题页设置面板（`scripts/ui/settings_panel.gd` 的「操作」页）加三个并排的三态按钮，走 `settings.touch_pad/auto|on|off` 的本地化键（`On-screen pad` / `自动（仅触摸屏）` / `总是显示` / `从不显示`）。
+
+**两个实现细节值得留档**：
+1. `TouchPad._ready()` 里先 `visible = false`。Node2D 默认可见，而 `_process` 的判据是 `want != _visible_now`——如果初始就 `true` 而 `want` 也是 `false`，条件永远不成立，键盘机器会一直挂着那块板。同理 `_draw()` 守卫只看 `_visible_now`。
+2. 读设置时**不用 `GameSession` 这个全局名**：`--script` 运行器里 autoload 不是编译期标识符，直接写会 `Compile Error: Identifier not found: GameSession`（测试与 `touch_pad.gd` 各踩了一次）。改成 `get_node_or_null("/root/GameSession")` 读 `settings`，缺失回落 `"auto"`；测试里 `preload("res://scripts/core/game_session.gd")` 拿 `CHOICES` 与默认值。
+
+**实测**：`tests/run_all.gd` **623 断言全绿**（新增 8 条：auto 无触摸→false、auto 有触摸→true、on→true、off→false、非法值→false、`CHOICES` 白名单、默认 `"auto"`）。桌面真机（`is_touchscreen_available() == false`）：auto 时 `visible false`、改 `on` 后 `true`、改 `off` 后 `false`、回 auto 再 `false`；`user://rcd/settings.cfg` 的 `[prefs] touch_pad` 随点随落盘；ESC 菜单行序 `继续这一条 / 界面大小 100% / 触控按键：自动 / 减弱动态效果：关 / 语言：中文 / 回到标题`，连点该行文本依次 `自动 → 总是 → 从不 → 自动`。
+
+**没验证**：真手机浏览器里 `is_touchscreen_available()` 到底报不报 true（Android Chrome / iOS Safari 都还没实测，所以才有 `OS.has_feature("mobile")` 兜底）；「暂停时触控板不刷新可见性」是有意的（暂停层 0.72 黑罩盖在上面，恢复后一帧就对上），但没在真机上确认过那一帧闪不闪。

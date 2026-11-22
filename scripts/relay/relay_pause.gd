@@ -70,6 +70,9 @@ func refresh() -> void:
 	var motion_on: bool = bool(GameSession.settings.get("reduce_motion", false))
 	var scale_now: float = float(GameSession.settings.get("hud_scale", 1.0))
 	_col.add_child(_row(("界面大小：%d%%" % roundi(scale_now * 100.0)) if zh else ("HUD SIZE: %d%%" % roundi(scale_now * 100.0)), _cycle_hud_scale))
+	var pad_now: String = str(GameSession.settings.get("touch_pad", "auto"))
+	_col.add_child(_row(("触控按键：%s" % PAD_NAMES_ZH.get(pad_now, "自动")) if zh
+		else ("TOUCH PAD: %s" % PAD_NAMES_EN.get(pad_now, "AUTO")), _cycle_touch_pad))
 	_col.add_child(_row(("减弱动态效果：%s" % ("开" if motion_on else "关")) if zh else ("REDUCE MOTION: %s" % ("ON" if motion_on else "OFF")), _toggle_motion))
 	_col.add_child(_row(("语言：中文" if zh else "LANGUAGE: English"), _toggle_language))
 	_col.add_child(_row("回到标题" if zh else "Back to the title", _leave))
@@ -99,6 +102,20 @@ func _resume() -> void:
 ## Four stops, like Dead Cells' HUD scale, minus the catalogue. It only ever
 ## touches type: the deck, the cards and the criterion of the game stay put.
 const HUD_STEPS := [0.8, 1.0, 1.25, 1.5]
+
+## Auto / always / never. Auto is the default so a keyboard machine never shows
+## thumbs, and a phone is never left without a way to move.
+const PAD_STEPS := ["auto", "on", "off"]
+const PAD_NAMES_ZH := {"auto": "自动", "on": "总是", "off": "从不"}
+const PAD_NAMES_EN := {"auto": "AUTO", "on": "ALWAYS", "off": "NEVER"}
+
+func _cycle_touch_pad() -> void:
+	var now: String = str(GameSession.settings.get("touch_pad", "auto"))
+	var at: int = PAD_STEPS.find(now)
+	var next: String = PAD_STEPS[(at + 1) % PAD_STEPS.size()] if at >= 0 else "auto"
+	GameSession.set_setting("touch_pad", next)
+	GameSession.save_preferences()
+	refresh()
 
 func _cycle_hud_scale() -> void:
 	var now: float = float(GameSession.settings.get("hud_scale", 1.0))

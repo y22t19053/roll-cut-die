@@ -51,6 +51,13 @@ var settings := {
 	"fullscreen": true,
 	"vsync": true,
 	"max_fps": 0,
+	## "auto" shows the on-screen pad only where there is a touch screen,
+	## "on"/"off" force it. A keyboard player never wants thumbs on screen.
+	"touch_pad": "auto",
+}
+## Values a string preference may take; anything else falls back to the default.
+const CHOICES := {
+	"touch_pad": ["auto", "on", "off"],
 }
 ## Valid range per numeric preference: [min, max].
 const RANGES := {
@@ -165,6 +172,10 @@ func _sanitize(key: String, value: Variant) -> Variant:
 		"language":
 			var lang := str(value).to_lower()
 			return lang if Loc.is_supported(lang) else Loc.default_language()
+	if CHOICES.has(key):
+		var pick := str(value).to_lower()
+		var allowed: Array = CHOICES[key]
+		return pick if allowed.has(pick) else cur
 	if cur is bool:
 		return bool(value) if (value is bool or value is int or value is float) else cur
 	if cur is int:
