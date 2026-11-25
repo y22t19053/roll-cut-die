@@ -3,7 +3,7 @@ extends Node
 ## transport command. A second, monophonic player articulates the edit points.
 const Harmony = preload("res://scripts/ui/relay_score.gd")
 const Foley = preload("res://scripts/ui/foley.gd")
-const RATE := 16000
+const RATE := 22050
 const BPM := 108.0
 const BEAT := 60.0 / BPM
 # beat, pitch, level. Short answers to the title's D-minor mallet phrase;
@@ -21,7 +21,7 @@ const TUNES := {
 	"choose": [[0,69,0.29],[0.055,62,0.35]],
 	"clear": [[0,62,0.32],[0.10,69,0.32],[0.22,74,0.40]],
 	"win": [[0,62,0.35],[0.14,65,0.31],[0.28,69,0.34],[0.54,74,0.42],[0.54,65,0.19]]}
-const PRIORITY := {"near":0,"line":1,"draw":2,"choose":3,"pickup":4,"trap":5,"hit":6,"clear":7,"win":8}
+const PRIORITY := {"sprint":7,"light_bonus":8,"belt":1,"wire":3,"key_safe":2,"catwalk":2,"stage_turn":4,"near":0,"line":1,"draw":2,"choose":3,"pickup":4,"trap":9,"hit":10,"clear":7,"win":11}
 static var _score: AudioStreamWAV
 static var _cues := {}
 static var _danger_stream: AudioStreamWAV
@@ -32,6 +32,13 @@ var _danger := AudioStreamPlayer.new()
 var _danger_target := -60.0
 var _ducked := false
 var _act_lift := 0.0
+var _act_index: int = 0
+var _final_sprint: bool = false
+var _still_seconds: float = 0.0
+var _drive := AudioStreamPlayer.new()
+var _murmur := AudioStreamPlayer.new()
+static var _drive_stream: AudioStreamWAV
+static var _murmur_stream: AudioStreamWAV
 var _music := AudioStreamPlayer.new()
 var _fx := AudioStreamPlayer.new()
 var _lock_until := 0
@@ -56,7 +63,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_music.name = "Score"
 	_fx.name = "Edit"
-	for p in [_music,_fx]:
+	for p: AudioStreamPlayer in [_music,_fx,_drive,_murmur]:
 		p.bus = &"Master"
 		add_child(p)
 	if _score == null:
@@ -65,9 +72,22 @@ func _ready() -> void:
 		_cues["pickup"] = Foley.make_stream("pickup")
 		_cues["trap"] = Foley.make_stream("deny")
 		_cues["hit"] = Foley.make_stream("death")
-	_music.volume_db = -12.0
+		for kind: String in ["sprint", "light_bonus", "belt", "wire", "key_safe", "catwalk", "stage_turn"]:
+			_cues[kind] = Foley.make_stream(kind)
+		_drive_stream = _compose_drive()
+		_murmur_stream = _compose_murmur()
+	_drive.name = "Drive"
+	_drive.stream = _drive_stream
+	_drive.volume_db = -28.0
+	_murmur.name = "Murmur"
+	_murmur.stream = _murmur_stream
+	_murmur.volume_db = -60.0
+	_murmur.play()
+	_music.volume_db = -11.5
 	_music.stream = _score
+	# Start both equal-length stems in the same audio mix block.
 	_music.play()
+	_drive.play()
 	_danger.name = "Tension"
 	_danger.bus = &"Master"
 	add_child(_danger)
@@ -101,29 +121,57 @@ func _ready() -> void:
 func set_danger(v: float) -> void:
 	if not is_node_ready() or _danger.stream == null:
 		return
-	var w := clampf(v, 0.0, 1.0)
-	var target := -60.0 if v <= 0.01 else lerpf(-24.0, -9.0, w)
+	var w: float = clampf(v, 0.0, 1.0)
+	var target: float = -60.0 if v <= 0.01 else lerpf(-24.0, -9.0, w)
 	if absf(target - _danger_target) >= 0.4:
 		_danger_target = target
-		create_tween().tween_property(_danger, "volume_db", target, 0.22)
 	# The bed changes state with the same information: one note of the world.
 	if _beds_muted:
 		return
 	var calm_target := lerpf(-22.0, -31.0, w)
-	var tense_target := -60.0 if w <= 0.02 else lerpf(-24.0, -12.0, w)
+	var tense_target: float = -60.0 if w <= 0.02 else lerpf(-24.0, -12.0, w)
 	# The last act never goes fully quiet: the room has been counting takes.
 	tense_target += _act_lift
 	if absf(calm_target - _calm_db) >= 0.5:
 		_calm_db = calm_target
-		create_tween().tween_property(_calm, "volume_db", calm_target, 0.35)
 	if absf(tense_target - _tense_db) >= 0.5:
 		_tense_db = tense_target
-		create_tween().tween_property(_tense, "volume_db", tense_target, 0.35)
 
 
 ## The last act does not go quiet: the room has been counting takes all along.
-func set_act(n: int) -> void:
-	_act_lift = clampf(float(n) * 1.4, 0.0, 3.2)
+func set_act(act_index: int) -> void:
+	_act_index = clampi(act_index, 0, 3)
+	_act_lift = clampf(float(act_index) * 1.4, 0.0, 3.2)
+
+
+func set_final_sprint(active: bool) -> void:
+	_final_sprint = active
+
+
+func set_stillness(still_seconds: float) -> void:
+	_still_seconds = still_seconds
+
+
+func _process(delta: float) -> void:
+	# One owner per gain: no accumulating per-frame volume tweens.
+	var quiet: bool = _beds_muted or _ducked
+	var duck_db: float = -8.5 if _ducked else 0.0
+	var music_db: float = -60.0 if _beds_muted else -11.5 + duck_db
+	_music.volume_db = move_toward(_music.volume_db, music_db, delta * 100.0)
+	for pair: Array in [[_calm, _calm_db], [_tense, _tense_db], [_danger, _danger_target], [_dress, -26.0]]:
+		var deck: AudioStreamPlayer = pair[0]
+		var level: float = -60.0 if _beds_muted else maxf(-60.0, float(pair[1]) + duck_db)
+		deck.volume_db = move_toward(deck.volume_db, level, delta * 140.0)
+	var drive_db: float = lerpf(-28.0, -15.0, float(_act_index) / 3.0)
+	if _final_sprint: drive_db += 3.5
+	if _reduce_motion(): drive_db -= 12.0
+	if _ducked: drive_db -= 8.5
+	if _beds_muted: drive_db = -60.0
+	_drive.volume_db = move_toward(_drive.volume_db, drive_db, delta * 48.0)
+	var murmur_db: float = -34.0 if _still_seconds >= 2.0 and not quiet else -60.0
+	_murmur.volume_db = move_toward(_murmur.volume_db, murmur_db, delta * (104.0 if quiet or _still_seconds < 0.2 else 26.0))
+	_music.pitch_scale = 1.0
+	_drive.pitch_scale = 1.0
 
 
 ## Each family of set has its own pitch for the same two beds, plus one layer of
@@ -159,8 +207,7 @@ func duck(on: bool) -> void:
 	if not is_node_ready() or on == _ducked:
 		return
 	_ducked = on
-	var target := -20.0 if on else -12.0
-	create_tween().tween_property(_music, "volume_db", target, 0.18)
+	if on: _still_seconds = 0.0
 
 
 static func _compose_danger() -> AudioStreamWAV:
@@ -389,11 +436,11 @@ func family_hit(kind: String) -> void:
 func cue(kind: String) -> void:
 	if not is_node_ready() or not _cues.has(kind): return
 	var now := Time.get_ticks_msec()
-	var refractory := 850 if kind == "near" else 100
-	if now - int(_last.get(kind,-1000)) < refractory: return
+	var refractory: int = 1200 if kind in ["belt", "key_safe"] else (850 if kind == "near" else 100)
+	if now - int(_last.get(kind,-1200)) < refractory: return
 	if now < _lock_until and int(PRIORITY[kind]) < _rank: return
 	_rank = PRIORITY[kind]
-	_lock_until = now + (300 if kind in ["clear","win"] else 100)
+	_lock_until = now + (650 if kind == "light_bonus" else (300 if kind in ["clear","win"] else 100))
 	_last[kind] = now
 	if kind == "hit" or kind == "trap":
 		_halt_bed()
@@ -407,72 +454,130 @@ func cue(kind: String) -> void:
 ## A collision stops the bed: the room goes quiet under the board.
 func _halt_bed() -> void:
 	_beds_muted = true
+	_still_seconds = 0.0
 	_calm_db = -60.0
 	_tense_db = -60.0
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(_calm, "volume_db", -60.0, 0.25)
-	tw.tween_property(_tense, "volume_db", -60.0, 0.25)
 	_halt.volume_db = -11.0
 	_halt.play()
 
 
 func _mute_beds() -> void:
 	_beds_muted = true
+	_still_seconds = 0.0
 	_calm_db = -60.0
 	_tense_db = -60.0
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(_calm, "volume_db", -60.0, 0.6)
-	tw.tween_property(_tense, "volume_db", -60.0, 0.6)
 
 
 ## A new take brings the room back; the score picks up where the room is.
 func resume_beds() -> void:
 	if not is_node_ready(): return
 	_beds_muted = false
+	_still_seconds = 0.0
 	_halt.stop()
 	_calm_db = -22.0
 	_tense_db = -60.0
-	_calm.volume_db = -22.0
-	_tense.volume_db = -60.0
+	_danger_target = -60.0
 	if not _calm.playing: _calm.play()
 	if not _tense.playing: _tense.play()
 
 static func _compose() -> AudioStreamWAV:
 	var buf := PackedFloat32Array()
 	buf.resize(roundi(32*BEAT*RATE))
-	# Render each pitched instrument once; lay out its notes by offset. The
-	# loop owns one clock, including note tails that cross bar eight into one.
-	var bank := {}
+	var bank: Dictionary = {}
 	for chord: Array in Harmony.CHORDS:
-		var count := int(chord[1])
+		var count: int = int(chord[1])
 		var tones: Array = chord[3]
-		for b in count:
-			var at := (float(chord[0])+b)*BEAT
-			if b % 2 == 0: _lay(buf,bank,at,chord[2],0,0.36)
-			_lay(buf,bank,at+0.5*BEAT,tones[b%tones.size()],1,0.22)
-			if b % 2 == 1: _lay(buf,bank,at+0.75*BEAT,tones[0]+12,1,0.09)
-	for n: Array in ANSWERS: _lay(buf,bank,n[0]*BEAT,n[1],2,n[2])
-	return _wav(buf,true)
+		var root: int = int(chord[2])
+		var start: float = float(chord[0]) * BEAT
+		for tone: int in tones:
+			_lay(buf, bank, start, tone, 3, 0.12, float(count) * BEAT + 0.3)
+		for b: int in count:
+			var at: float = start + float(b) * BEAT
+			if b % 4 == 0: _lay(buf, bank, at, root, 0, 0.48)
+			if b % 4 == 2: _lay(buf, bank, at + 0.5 * BEAT, root + 7, 0, 0.25)
+			if b % 4 == 3: _lay(buf, bank, at, root + 12, 0, 0.22)
+			_lay(buf, bank, at + 0.5 * BEAT, int(tones[b % tones.size()]), 1, 0.26)
+			if b % 2 == 1: _lay(buf, bank, at + 0.75 * BEAT, int(tones[0]) + 12, 1, 0.12)
+	for n: Array in ANSWERS: _lay(buf, bank, float(n[0]) * BEAT, int(n[1]), 2, float(n[2]))
+	_normalize(buf, 0.82)
+	return _wav(buf, true)
+
+
+static func _normalize(buf: PackedFloat32Array, level: float) -> void:
+	var peak: float = 0.001
+	for sample: float in buf: peak = maxf(peak, absf(sample))
+	for i: int in buf.size(): buf[i] *= level / peak
+
+
+static func _compose_drive() -> AudioStreamWAV:
+	var buf := PackedFloat32Array()
+	buf.resize(roundi(32.0 * BEAT * RATE))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 10832
+	for beat: int in 128:
+		var start: int = roundi(float(beat) * BEAT * 0.25 * RATE)
+		var gain: float = 0.32 if beat % 2 == 0 else 0.10
+		for i: int in roundi(0.065 * RATE):
+			var t: float = float(i) / RATE
+			var click: float = rng.randf_range(-1.0, 1.0) * 0.4 + sin(TAU * 1650.0 * t) * 0.3
+			buf[(start + i) % buf.size()] += click * exp(-t * 95.0) * minf(t / 0.002, 1.0) * gain
+		if beat % 4 == 0: _add_pulse(buf, float(beat) * BEAT * 0.25, 73.416)
+	# Upper chord tones brighten gently as the act raises this stem, in tune.
+	var bank: Dictionary = {}
+	for chord: Array in Harmony.CHORDS:
+		var tones: Array = chord[3]
+		for step: int in int(float(chord[1]) * 2.0):
+			_lay(buf, bank, (float(chord[0]) + float(step) * 0.5) * BEAT, int(tones[step % tones.size()]) + 12, 1, 0.045)
+	_normalize(buf, 0.72)
+	return _wav(buf, true)
+
+
+static func _compose_murmur() -> AudioStreamWAV:
+	var buf := PackedFloat32Array()
+	var n: int = roundi(6.0 * RATE)
+	buf.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 620280
+	var brown: float = 0.0
+	var low_a: float = 0.0
+	var band_a: float = 0.0
+	var low_b: float = 0.0
+	var band_b: float = 0.0
+	var fa: float = 2.0 * sin(PI * 310.0 / RATE)
+	var fb: float = 2.0 * sin(PI * 570.0 / RATE)
+	# Warm noise through two damped state-variable formant bandpasses.
+	for i: int in n:
+		var t: float = float(i) / RATE
+		brown = brown * 0.96 + rng.randf_range(-1.0, 1.0) * 0.04
+		low_a += fa * band_a
+		band_a += fa * (brown - low_a - 0.48 * band_a)
+		low_b += fb * band_b
+		band_b += fb * (brown - low_b - 0.55 * band_b)
+		var syllable: float = pow(0.5 + 0.5 * sin(TAU * 4.5 * t + 0.7 * sin(TAU * t / 3.0)), 2.0)
+		var phrase: float = 0.3 + 0.7 * pow(0.5 + 0.5 * sin(TAU * t / 2.0), 2.0)
+		var seam: float = smoothstep(0.0, 0.15, t) * smoothstep(0.0, 0.15, 6.0 - t)
+		buf[i] = (band_a + band_b * 0.65) * syllable * phrase * seam
+	_normalize(buf, 0.60)
+	return _wav(buf, true)
 
 static func _sting(kind: String) -> AudioStreamWAV:
 	var notes: Array = TUNES[kind]
 	var buf := PackedFloat32Array()
-	var voice := 1 if kind in ["draw","near","choose"] else 2
+	var voice: int = 1 if kind in ["draw","near","choose"] else 2
 	buf.resize(ceili((float(notes.back()[0])+_length(voice))*RATE)+2)
 	var bank := {}
 	for n: Array in notes: _lay(buf,bank,n[0],n[1],voice,n[2])
 	return _wav(buf,false)
 
 static func _length(voice: int) -> float:
-	return [0.49,0.16,0.42][voice]
+	return float([0.85,0.24,0.70,4.0 * BEAT + 0.3][voice])
 
-static func _lay(buf: PackedFloat32Array, bank: Dictionary, at: float, midi: int, voice: int, amp: float) -> void:
-	var key := midi*3+voice
+static func _lay(buf: PackedFloat32Array, bank: Dictionary, at: float, midi: int, voice: int, amp: float, duration: float = -1.0) -> void:
+	var length: float = duration if duration > 0.0 else _length(voice)
+	var key: String = "%d:%d:%.4f" % [midi, voice, length]
 	if not bank.has(key):
 		var note := PackedFloat32Array()
-		note.resize(ceili(_length(voice)*RATE))
+		note.resize(ceili(length*RATE))
 		var step := TAU*440*pow(2.0,(midi-69)/12.0)/RATE
 		for i in note.size():
 			var t := float(i)/RATE
@@ -480,8 +585,11 @@ static func _lay(buf: PackedFloat32Array, bank: Dictionary, at: float, midi: int
 			var tone := sin(ph)
 			if voice == 0: tone += 0.33*sin(2*ph) # rounded, felt-covered bass
 			elif voice == 1: tone += 0.52*sin(3.01*ph)*exp(-40*t) # dry wood
+			elif voice == 3: tone += 0.28 * sin(2.0 * ph) + 0.10 * sin(3.0 * ph)
 			else: tone += 0.30*sin(4.02*ph)*exp(-16*t) # bright gate tine
-			note[i] = tone*exp(-4*t/_length(voice))*minf(t/0.004,1)*minf((note.size()-1-i)/120.0,1)
+			note[i] = tone*exp(-4*t/length)*minf(t/0.004,1)*minf((note.size()-1-i)/120.0,1)
+			if voice == 3:
+				note[i] = tone * minf(t / 0.22, 1.0) * minf((length - t) / 0.45, 1.0) * 0.65
 		bank[key] = note
 	var note: PackedFloat32Array = bank[key]
 	var offset := roundi(at*RATE)
@@ -499,3 +607,11 @@ static func _wav(buf: PackedFloat32Array, looped: bool) -> AudioStreamWAV:
 		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		wav.loop_end = buf.size()
 	return wav
+
+
+func _reduce_motion() -> bool:
+	# Resolve at runtime: these scripts are also preloaded by standalone tests.
+	var session: Node = get_node_or_null("/root/GameSession")
+	if session == null: return false
+	var settings: Dictionary = session.get("settings")
+	return bool(settings.get("reduce_motion", false))

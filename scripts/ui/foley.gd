@@ -28,12 +28,21 @@ const DENY := "deny"
 const DEATH := "death"
 const MESSAGE := "message"
 const SPLICE := "splice"
-const KINDS := [INSPECT, PICKUP, MARK, DENY, DEATH, MESSAGE, SPLICE]
+const SPRINT := "sprint"
+const LIGHT_BONUS := "light_bonus"
+const BELT := "belt"
+const WIRE := "wire"
+const KEY_SAFE := "key_safe"
+const CATWALK := "catwalk"
+const STAGE_TURN := "stage_turn"
+const KINDS := [INSPECT, PICKUP, MARK, DENY, DEATH, MESSAGE, SPLICE, SPRINT, LIGHT_BONUS, BELT, WIRE, KEY_SAFE, CATWALK, STAGE_TURN]
 
 const _LENGTH := {
+	SPRINT: 0.42, LIGHT_BONUS: 0.70, BELT: 0.24, WIRE: 0.46, KEY_SAFE: 0.32, CATWALK: 0.28, STAGE_TURN: 0.75,
 	INSPECT: 0.13, PICKUP: 0.19, MARK: 0.24, DENY: 0.20, DEATH: 0.55, MESSAGE: 0.06, SPLICE: 0.22,
 }
 const _VOLUME_DB := {
+	SPRINT: -8.0, LIGHT_BONUS: -8.0, BELT: -12.0, WIRE: -10.0, KEY_SAFE: -12.0, CATWALK: -10.0, STAGE_TURN: -8.0,
 	INSPECT: -13.0, PICKUP: -9.0, MARK: -8.0, DENY: -11.0, DEATH: -6.0, MESSAGE: -16.0, SPLICE: -10.0,
 }
 
@@ -64,10 +73,11 @@ func play(kind: String) -> bool:
 	if not enabled or _voices.is_empty() or not _streams.has(kind):
 		return false
 	var now := Time.get_ticks_msec()
-	if _last_ms.has(kind) and now - int(_last_ms[kind]) < RETRIGGER_MS:
+	var cooldown: int = 1200 if kind in [BELT, KEY_SAFE] else RETRIGGER_MS
+	if _last_ms.has(kind) and now - int(_last_ms[kind]) < cooldown:
 		return false
 	_last_ms[kind] = now
-	var p := _voices[_next_voice]
+	var p: AudioStreamPlayer = _voices[_next_voice]
 	_next_voice = (_next_voice + 1) % _voices.size()
 	p.stream = _streams[kind]
 	p.volume_db = float(_VOLUME_DB[kind])
@@ -123,6 +133,20 @@ static func make_stream(kind: String) -> AudioStreamWAV:
 				s = noise * exp(-t * 92.0) * 0.58 + _tap(t, 0.052, noise, 0.95)
 				for j in 4:
 					s += _tap(t, 0.104 + 0.023 * j, noise, 0.30 - j * 0.045)
+			SPRINT:
+				s = _blip(t, 0.0, 587.33, 18.0) * 0.6 + _blip(t, 0.105, 880.0, 14.0) * 0.65 + _tap(t, 0.11, noise, 0.65)
+			LIGHT_BONUS:
+				s = (_blip(t, 0.0, 587.33, 7.0) + _blip(t, 0.045, 739.99, 8.0) + _blip(t, 0.09, 880.0, 7.0)) * 0.32
+			BELT:
+				s = (sin(TAU * 92.0 * t) * 0.5 + sin(TAU * 184.0 * t) * 0.2) * exp(-t * 16.0) + _tap(t, 0.012, noise, 0.3)
+			WIRE:
+				s = _blip(t, 0.0, 1174.66, 35.0) * 0.35 + sin(TAU * (220.0 * t + 850.0 * t * t)) * exp(-t * 8.0) * 0.45
+			KEY_SAFE:
+				s = (sin(TAU * 293.66 * t) + 0.3 * sin(TAU * 440.0 * t)) * sin(PI * t / total) * exp(-t * 9.0) * 0.5
+			CATWALK:
+				s = (sin(TAU * 196.0 * t) * 0.45 + sin(TAU * 523.0 * t) * 0.25) * exp(-t * 20.0) + _tap(t, 0.0, noise, 0.5)
+			STAGE_TURN:
+				s = _knock(t, 0.015) * 0.6 + (sin(TAU * 55.0 * t) * 0.6 + sin(TAU * 83.0 * t) * 0.22) * exp(-t * 6.0) + noise * exp(-t * 65.0) * 0.2
 			MESSAGE:
 				s = sin(TAU * 988.0 * t) * exp(-t * 85.0) * 0.6
 		# 2 ms in, 6 ms out: no click at either end of the buffer.
