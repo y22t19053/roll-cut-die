@@ -45,6 +45,7 @@ const MODULES := [
 	["touch_pad", preload("res://tests/test_touch_pad.gd")],
 	["toy_score", preload("res://tests/test_toy_score.gd")],
 	["gantry", preload("res://tests/test_gantry.gd")],
+	["gantry_room", preload("res://tests/test_gantry_room.gd")],
 ]
 
 var _current := "(startup)"

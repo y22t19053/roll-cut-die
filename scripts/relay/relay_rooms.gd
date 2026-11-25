@@ -1,6 +1,8 @@
 extends Node3D
-## Repeatable nine-metre soundstages. Each seam is one continuous finish line.
+## Connected soundstages. Each seam is one continuous finish line.
 const LENGTH := 9.0
+const GantryRoom = preload("res://scripts/relay/gantry_room.gd")
+const GANTRY_SLOT := 6
 const DECK := Color("514f50")
 const FLAT := Color("847362")
 const WHITE := Color("f3dfad")
@@ -35,6 +37,8 @@ var _count := 0
 var _cap: Node3D
 var _inks := {}
 var _rooms: Array[Node3D] = []
+var _starts := PackedFloat32Array()
+var _next_x := 0.0
 ## Per room: the dollies that sweep it, each {node, phase, period, amp}. A mod may
 ## add a second one, or take the room's only one away.
 var _dollies: Array = []
@@ -90,22 +94,31 @@ func _has(event: String, id: String) -> bool:
 	# so a door card can promise two changes without a second code path.
 	return event == id or event.split(",", false).has(id)
 
-## Decks occupy [9k, 9(k+1)); stage turns keep that footprint.
+## Seams stay in place when a set turns. The wide gantry has a longer deck.
 func room_at(world_pos: Vector3) -> int:
 	if _rooms.is_empty(): return -1
-	return clampi(int(floor(world_pos.x / LENGTH)), 0, _rooms.size() - 1)
+	for i in range(_starts.size() - 1, 0, -1):
+		if world_pos.x >= _starts[i]: return i
+	return 0
 
 func bays() -> int:
 	return _rooms.size()
+
+func is_gantry(room_index: int) -> bool:
+	return _plans.get(room_index, {}).get("kind") == GantryRoom.KIND
 
 func append_room(kind: String, variant: int, mod := "", final := false, event := "", hurry := 1.0) -> Dictionary:
 	assert(is_inside_tree(), "Mount RelayRooms before requesting world positions")
 	var spec: Dictionary = MODS.get(mod, MODS[""])
 	var room := Node3D.new()
 	room.name = "Bay%d_%s" % [_count+1,kind]
-	room.position.x = _count*LENGTH
+	room.position.x = _next_x
 	add_child(room)
 	_rooms.append(room)
+	_starts.append(_next_x)
+	_next_x += GantryRoom.LENGTH if kind == GantryRoom.KIND else LENGTH
+	if kind == GantryRoom.KIND:
+		return _append_gantry(room, variant, mod, final, event)
 	var ink: Color = SET_INKS.get(kind, LETTER_INKS.get(kind, SET_INKS.straight))
 	var hand := 1 if posmod(variant,2)==0 else -1
 	_box(room,Vector3(4.5,-.12,0),Vector3(9,.24,6),DECK,true)
@@ -339,6 +352,37 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 	# from the same choices it was made of.
 	return {"start":room.to_global(Vector3(0,.05,0)),"end":end,"stops":stops,
 		"kind":kind,"variant":variant,"mod":mod,"final":final,"event":event}
+
+
+func _append_gantry(room: Node3D, variant: int, mod: String, final: bool, event: String) -> Dictionary:
+	var stations := GantryRoom.build(room)
+	var length := GantryRoom.LENGTH
+	var half_width := GantryRoom.HALF_WIDTH
+	var mouth := 1.48
+	for side: float in [-1.0, 1.0]:
+		_box(room, Vector3(length * 0.5, 0.5, side * half_width),
+			Vector3(length, 1.0, 0.12), FLAT, true)
+		for x: float in [0.06, length - 0.06]:
+			_box(room, Vector3(x, 0.5, side * (half_width + mouth) * 0.5),
+				Vector3(0.12, 1.0, half_width - mouth), FLAT, true)
+	if _count == 0:
+		_buffer(room, 0.0, -1)
+	if is_instance_valid(_cap):
+		_cap.get_parent().remove_child(_cap)
+		_cap.queue_free()
+	_cap = _buffer(room, length, 1)
+	_line(room, 0.0)
+	_line(room, length, final)
+	_dollies.append([])
+	var room_plan := GantryRoom.plan()
+	_plans[_count] = room_plan
+	_count += 1
+	var start := room.to_global(room_plan["entry"])
+	var end := room.to_global(room_plan["exit"])
+	var stops: Array[Vector3] = [end]
+	return {"start":start,"end":end,"stops":stops,"target":end,"floor":room.global_position.y,
+		"kind":GantryRoom.KIND,"variant":variant,"mod":mod,"final":final,"event":event,
+		"deck_top":GantryRoom.DECK_TOP,"stations":stations}
 
 ## Every family gets its own furniture and its own floor inlay, so the five sets
 ## are five places rather than five wall layouts. Nothing here is solid: dressing
@@ -623,7 +667,10 @@ static func _grain() -> ImageTexture:
 	return _grain_tex
 
 
-func plan(room_index: int) -> Dictionary:
+## The seventh main-stage slot follows two acts and excludes the prologue.
+func plan(room_index: int, main_index := -1) -> Dictionary:
+	if room_index == _count and main_index == GANTRY_SLOT:
+		return GantryRoom.plan()
 	return _plans.get(room_index, {})
 
 ## Did the player reach a given world point inside this room? Every guide line in
@@ -634,6 +681,9 @@ func reached(world_pos: Vector3, room_index: int, target_world: Vector3, tol := 
 	if room == null: return false
 	var lp: Vector3 = room.to_local(world_pos)
 	var tp: Vector3 = room.to_local(target_world)
+	if is_gantry(room_index):
+		if absf(lp.y - tp.y) > 0.45: return false
+		if tp.x > 0.0 and tp.x < GantryRoom.LENGTH: tol = minf(tol, 0.65)
 	return Vector2(lp.x, lp.z).distance_to(Vector2(tp.x, tp.z)) <= tol
 
 

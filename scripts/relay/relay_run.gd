@@ -265,8 +265,11 @@ func _ready() -> void:
 	if not _resume_at.is_empty():
 		spawn.x = float(_resume_at.get("x", spawn.x))
 		spawn.z = float(_resume_at.get("z", spawn.z))
-		spawn.y = $Rooms.floor_height(spawn, $Rooms.room_at(spawn)) + 0.05
+		var bay: int = $Rooms.room_at(spawn)
+		spawn.y = $Rooms.floor_height(spawn, bay) + 0.05
+		if $Rooms.is_gantry(bay): spawn.y = float(_resume_at.get("y", spawn.y))
 	player.teleport(spawn, float(_resume_at.get("facing", 0.0)))
+	player.vertical_walk = $Rooms.is_gantry(_room_at())
 	player.roll_mode = Orbit
 	rig.name = "CameraRig"
 	add_child(rig)
@@ -391,7 +394,7 @@ func _start_leg(back: bool) -> void:
 	if back:
 		for i in range(mids.size() - 1, -1, -1):
 			var m: Vector3 = mids[i]
-			m.z = -m.z if m.z != 0.0 else m.z
+			if not $Rooms.is_gantry(ri): m.z = -m.z
 			route.append(room_node.to_global(m) if room_node != null else m)
 		var near := entry
 		near.z += LANE
@@ -405,6 +408,7 @@ func _start_leg(back: bool) -> void:
 	cursor = 0
 	_arrival_locked = false
 	phase = Mode.PLAY
+	player.vertical_walk = $Rooms.is_gantry(_room_at())
 	player.set_frozen(false)
 	rig.set_physics_process(true)
 	live = Track.new()
@@ -470,8 +474,10 @@ func _serialize_run() -> Dictionary:
 	var rec: Array = []
 	for t in tracks:
 		rec.append(t.to_dict())
-	return {"at": {"room": _room_at(), "x": player.global_position.x,
-		"z": player.global_position.z, "facing": player.facing}, "track_ranges": ranges,
+	var at := {"room": _room_at(), "x": player.global_position.x,
+		"z": player.global_position.z, "facing": player.facing}
+	if $Rooms.is_gantry(int(at.room)): at["y"] = player.global_position.y
+	return {"at": at, "track_ranges": ranges,
 		"seed": run_seed, "difficulty": difficulty, "required_passes": required_passes,
 		"room_pass": room_pass, "segments": plan, "mark_stock": mark_stock, "cut_stock": cut_stock,
 		"free_cut": free_cut, "splice": splice.has_splice(), "deaths": deaths, "tracks": rec,
@@ -679,6 +685,7 @@ func _restore(i: int) -> void:
 	var prop_state: Array = p.get("set_props", []) if p.leg == live.take_id else []
 	_props.restore_take(prop_state, _prop_film_room == segments.size() - 1, elapsed)
 	player.teleport(_clear_spot(p.pos), p.facing)
+	player.vertical_walk = $Rooms.is_gantry(_room_at())
 	rig.setup(player)
 	rig.restore_mark_motion(p)
 	_sample()
@@ -809,7 +816,7 @@ func _top_up_grace() -> void:
 
 func _clear_spot(pos: Vector3) -> Vector3:
 	var room_index: int = $Rooms.room_at(pos)
-	if room_index < 0: return pos
+	if room_index < 0 or $Rooms.is_gantry(room_index): return pos
 	var ghost_reach: float = Ghost.DANGER_RADIUS + Player.RADIUS + 0.15
 	for dz: float in [0.0, 0.55, -0.55, 1.05, -1.05]:
 		for dx: float in [0.0, 0.5, -0.5, 1.0, -1.0]:
@@ -830,7 +837,7 @@ func _clear_spot(pos: Vector3) -> Vector3:
 	return pos
 
 func _show_target() -> void:
-	_lamp.visible = phase == Mode.PLAY
+	_lamp.visible = phase == Mode.PLAY and cursor < route.size()
 	if _lamp.visible: _lamp.position = route[cursor]+Vector3.UP*0.10
 	_refresh()
 
@@ -972,6 +979,7 @@ static func _event_pool_for(tier: int) -> Array:
 
 func _offer_doors() -> Array:
 	var tier := leg_room
+	var scheduled: Dictionary = $Rooms.plan(segments.size(), _sets())
 	var deck := KINDS.duplicate()
 	# Later acts pull from the whole shop, not the three the first act knows, and
 	# by then the crew is willing to dress one set with two things at once.
@@ -992,7 +1000,14 @@ func _offer_doors() -> Array:
 			"variant": _rng.randi_range(0, 1), "mod": _roll_mod(tier, slot),
 			"passes": passes, "reward": str(rewards[slot]),
 			"event": ev}
+		if not scheduled.is_empty():
+			door["kind"] = scheduled["kind"]
+			door["variant"] = 0
+			door["mod"] = ""
+			door["event"] = ""
 		door["mod_label"] = _mod_label(str(door["mod"]))
+		if not scheduled.is_empty():
+			door["mod_label"] = _w("沿斜梯上桥", "Take the ramps")
 		if str(door["event"]) != "":
 			var tag := _events_short(str(door["event"]))
 			door["mod_label"] = tag if str(door["mod_label"]) == "" else (str(door["mod_label"]) + " · " + tag)
@@ -1157,7 +1172,7 @@ func _pick_card(i: int) -> void:
 	var c: Dictionary = cards[i]
 	var last := segments.size() == MODULES - 1
 	leg_event = str(c.get("event", ""))
-	if last and leg_event == "":
+	if last and leg_event == "" and c.kind != "gantry":
 		# The last set never plays clean: it is the one where you either cross or
 		# do not, so the crew always adds something to it.
 		leg_event = "extra" if _rng.randf() < 0.5 else "relight"
@@ -1264,6 +1279,7 @@ func _step_set_props() -> void:
 
 func _physics_process(dt: float) -> void:
 	var here := _room_at()
+	player.vertical_walk = $Rooms.is_gantry(here)
 	if here != _visited_room:
 		if _visited_room >= 0:
 			_show_notice(_w("你来到了棚 %d", "You are in set %d") % (here + 1))
@@ -1307,8 +1323,9 @@ func _physics_process(dt: float) -> void:
 	if _riding: return
 	# The catwalk is a height, not a jump: the walking surface is whatever the
 	# room says it is at this point, and you follow it up and down the ramps.
-	var floor_h: float = $Rooms.floor_height(player.global_position, _room_at())
-	player.global_position.y = lerpf(player.global_position.y, floor_h + 0.05, clampf(dt*14.0, 0.0, 1.0))
+	if not player.vertical_walk:
+		var floor_h: float = $Rooms.floor_height(player.global_position, here)
+		player.global_position.y = lerpf(player.global_position.y, floor_h + 0.05, clampf(dt*14.0, 0.0, 1.0))
 	# The deck can be doing something to you. The belt answers to the set, so a
 	# turned set carries you the other way without any new rule.
 	var belt: Vector3 = $Rooms.belt_push(player.global_position, _room_at())
@@ -1846,6 +1863,7 @@ var _turn_local_target := Vector3.ZERO
 
 func _rotate_stage() -> void:
 	if _room_at() != leg_room: return # An old MARK must not turn a distant set.
+	if $Rooms.is_gantry(leg_room): return # Its elevated route and ground doors are fixed.
 	if phase != Mode.PLAY and phase != Mode.CUT: return
 	if segments.is_empty(): return
 	var room := $Rooms.get_child(leg_room) as Node3D

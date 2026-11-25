@@ -23,6 +23,7 @@ const MODULES := {
 	"relay_link": preload("res://tests/test_relay_link.gd"),
 	"set_props": preload("res://tests/test_set_props.gd"),
 	"gantry": preload("res://tests/test_gantry.gd"),
+	"gantry_room": preload("res://tests/test_gantry_room.gd"),
 }
 
 ## A dead _main (runtime error inside a module) never reaches quit(), and the
