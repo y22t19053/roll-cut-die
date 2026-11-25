@@ -6,7 +6,7 @@ extends RefCounted
 ## running when the game closed is not in it: the tape only keeps what it got to
 ## the end of, which is also what the rule says a MARK may restore.
 const PATH := "user://rcd/relay_run.json"
-const VERSION := 1
+const VERSION := 2
 static var save_path := PATH
 ## Nothing here is trusted on load: a hand-edited file may only make a run
 ## stranger, never longer than its own seed.
@@ -40,7 +40,7 @@ static func load_run() -> Dictionary:
 	var parsed = JSON.parse_string(text)
 	if typeof(parsed) != TYPE_DICTIONARY: return {}
 	var d: Dictionary = parsed
-	if int(d.get("version",0)) != VERSION: return {}
+	if int(d.get("version",0)) not in [1, VERSION]: return {}
 	if not d.has("segments") or typeof(d["segments"]) != TYPE_ARRAY: return {}
 	if (d["segments"] as Array).is_empty(): return {}
 	return d

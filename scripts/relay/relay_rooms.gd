@@ -90,6 +90,14 @@ func _has(event: String, id: String) -> bool:
 	# so a door card can promise two changes without a second code path.
 	return event == id or event.split(",", false).has(id)
 
+## Decks occupy [9k, 9(k+1)); stage turns keep that footprint.
+func room_at(world_pos: Vector3) -> int:
+	if _rooms.is_empty(): return -1
+	return clampi(int(floor(world_pos.x / LENGTH)), 0, _rooms.size() - 1)
+
+func bays() -> int:
+	return _rooms.size()
+
 func append_room(kind: String, variant: int, mod := "", final := false, event := "", hurry := 1.0) -> Dictionary:
 	assert(is_inside_tree(), "Mount RelayRooms before requesting world positions")
 	var spec: Dictionary = MODS.get(mod, MODS[""])
@@ -307,7 +315,6 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 	if _count == 1 or _count == 2 or (_count >= 5 and _count % 3 == 2):
 		_off_duty(room, variant)
 	if is_instance_valid(_cap):
-		for part: MeshInstance3D in _cap.find_children("*","MeshInstance3D",true,false): part.mesh = null
 		_cap.get_parent().remove_child(_cap)
 		_cap.queue_free()
 	_cap = _buffer(room,LENGTH,1)

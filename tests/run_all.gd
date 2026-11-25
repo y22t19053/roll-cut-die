@@ -38,6 +38,7 @@ const MODULES := [
 	["scene", preload("res://tests/test_scene.gd")],
 	["relay_death", preload("res://tests/test_relay_death.gd")],
 	["relay_walk", preload("res://tests/test_relay_walk.gd")],
+	["relay_link", preload("res://tests/test_relay_link.gd")],
 	["inrun_ui_deai", preload("res://tests/test_inrun_ui_and_deai.gd")],
 	["touch_pad", preload("res://tests/test_touch_pad.gd")],
 	["toy_score", preload("res://tests/test_toy_score.gd")],
