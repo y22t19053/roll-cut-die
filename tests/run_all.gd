@@ -38,15 +38,25 @@ const MODULES := [
 	["scene", preload("res://tests/test_scene.gd")],
 	["relay_death", preload("res://tests/test_relay_death.gd")],
 	["relay_walk", preload("res://tests/test_relay_walk.gd")],
+	["relay_link", preload("res://tests/test_relay_link.gd")],
 	["inrun_ui_deai", preload("res://tests/test_inrun_ui_and_deai.gd")],
 	["touch_pad", preload("res://tests/test_touch_pad.gd")],
 	["toy_score", preload("res://tests/test_toy_score.gd")],
 ]
 
 var _current := "(startup)"
+# Godot 4.3 dummy rendering asks for surface count during instance teardown.
+# Keep the mesh alive until that teardown finishes (also affects a lone BoxMesh).
+var _retired_meshes: Array[Mesh] = []
+
+func _retain_mesh(node: Node) -> void:
+	if node is MeshInstance3D and node.mesh != null:
+		_retired_meshes.append(node.mesh)
 
 
 func _init() -> void:
+	node_removed.connect(_retain_mesh)
+	process_frame.connect(func(): _retired_meshes.clear())
 	# The tree does not exist yet inside _init, and the scene test needs it.
 	call_deferred("_main")
 

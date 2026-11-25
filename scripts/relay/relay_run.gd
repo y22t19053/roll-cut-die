@@ -98,7 +98,22 @@ const STILL_INK := Color(0.55, 0.95, 0.85)
 const STILL_ALPHA := 0.30
 const STILL_FADE := 0.28
 var room_pass := 0
-var room_track_start := 0
+var room_track_start := 0 # Compatibility alias for the frontier range's start.
+var leg_room: int = -1
+var _track_ranges: Array[Vector2i] = [] # Half-open intervals, one per bay.
+var _resume_at: Dictionary = {}
+var _visited_room := -1
+
+func _room_at() -> int:
+	return $Rooms.room_at(player.global_position)
+
+func _sync_track_ranges() -> void:
+	while _track_ranges.size() < segments.size():
+		_track_ranges.append(Vector2i(tracks.size(), tracks.size()))
+	if not _track_ranges.is_empty():
+		_track_ranges[-1].y = tracks.size()
+		room_track_start = _track_ranges[-1].x
+
 var cards: Array = []
 var desk: CanvasLayer
 var slate: CanvasLayer
@@ -236,7 +251,12 @@ func _ready() -> void:
 		Save.clear() # A new run throws away the one that was left open.
 	player.name = "Player"
 	add_child(player)
-	player.teleport((segments.back() as Dictionary).start, 0)
+	var spawn: Vector3 = (segments.back() as Dictionary).start
+	if not _resume_at.is_empty():
+		spawn.x = float(_resume_at.get("x", spawn.x))
+		spawn.z = float(_resume_at.get("z", spawn.z))
+		spawn.y = $Rooms.floor_height(spawn, $Rooms.room_at(spawn)) + 0.05
+	player.teleport(spawn, float(_resume_at.get("facing", 0.0)))
 	player.roll_mode = Orbit
 	rig.name = "CameraRig"
 	add_child(rig)
@@ -277,7 +297,7 @@ func _ready() -> void:
 	# distance and not as the same wall twice.
 	env.fog_enabled = true
 	env.fog_light_color = Color("28333e")
-	env.fog_density = 0.006
+	env.fog_density = 0.035
 	env.fog_aerial_perspective = 0.0
 	var sky := WorldEnvironment.new()
 	sky.environment = env
@@ -314,7 +334,7 @@ func _ready() -> void:
 	_hud.add_theme_constant_override("outline_size",8)
 	# Sample after the actual player and camera have stepped.
 	process_physics_priority = 5
-	_start_leg(false)
+	_start_leg(resuming and room_pass % 2 == 1)
 	# The length of the job is on the title's start caption and in the pause page.
 	# It is not the first thing to say here: the first thing is "walk to the line",
 	# and two notices on top of each other is how a tutorial stops being read.
@@ -339,19 +359,21 @@ static func _won_light(fast: int, need: int) -> bool:
 
 
 func _start_leg(back: bool) -> void:
+	leg_room = segments.size() - 1
+	_sync_track_ranges()
 	_reset_audio_tracking()
 	score.set_act(act)
 	score.set_final_sprint(required_passes >= 2 and room_pass + 1 >= required_passes)
 	returning = back
 	route.clear()
-	var room_node := $Rooms.get_child(segments.size() - 1) as Node3D
+	var room_node := $Rooms.get_child(leg_room) as Node3D
 	# The lamp sits on one wall going out and the other coming back, so the return
 	# trip is a different read of the floor instead of a mirror of the first leg.
 	# It is built in the room's own frame: the crew may have turned the set.
 	# The room says where its doors are; the light line and the crossing test read
 	# the same plan, so a set may put its exit off the centre line — or bend the
 	# route with corner stops that are crossed one at a time.
-	var ri := segments.size() - 1
+	var ri := leg_room
 	var plan: Dictionary = $Rooms.plan(ri)
 	var entry: Vector3 = plan.get("entry", Vector3(0.0, 0.05, 0.0))
 	var exitp: Vector3 = plan.get("exit", Vector3(SET_LENGTH, 0.05, 0.0))
@@ -422,6 +444,10 @@ func _show_notice(text: String, seconds := 3.0) -> void:
 
 ## Everything a run remembers, in the order it was paid for.
 func _serialize_run() -> Dictionary:
+	_sync_track_ranges()
+	var ranges: Array = []
+	for interval in _track_ranges:
+		ranges.append([interval.x, interval.y])
 	var plan: Array = []
 	for s in segments:
 		plan.append({"kind": str(s.get("kind","")), "variant": int(s.get("variant",0)),
@@ -430,7 +456,9 @@ func _serialize_run() -> Dictionary:
 	var rec: Array = []
 	for t in tracks:
 		rec.append(t.to_dict())
-	return {"seed": run_seed, "difficulty": difficulty, "required_passes": required_passes,
+	return {"at": {"room": _room_at(), "x": player.global_position.x,
+		"z": player.global_position.z, "facing": player.facing}, "track_ranges": ranges,
+		"seed": run_seed, "difficulty": difficulty, "required_passes": required_passes,
 		"room_pass": room_pass, "segments": plan, "mark_stock": mark_stock, "cut_stock": cut_stock,
 		"free_cut": free_cut, "splice": splice.has_splice(), "deaths": deaths, "tracks": rec,
 		"room_track_start": room_track_start, "act": act, "act_mod": act_mod, "act_grace": act_grace,
@@ -444,6 +472,7 @@ func _save_run() -> void:
 
 
 func _apply_run(d: Dictionary) -> void:
+	_resume_at = d.get("at", {})
 	run_seed = int(d.get("seed", run_seed))
 	_rng.seed = run_seed
 	difficulty = int(d.get("difficulty", difficulty))
@@ -471,7 +500,21 @@ func _apply_run(d: Dictionary) -> void:
 	room_pass = int(d.get("room_pass", 0))
 	# The ghosts this set already has: everything recorded since it was joined,
 	# never the takes of a set the player has not entered yet.
-	room_track_start = clampi(int(d.get("room_track_start", tracks.size())), 0, tracks.size())
+	_track_ranges.clear()
+	var raw_ranges: Array = d.get("track_ranges", [])
+	var boundary := 0
+	for bay in segments.size():
+		var end := boundary
+		if raw_ranges.size() == segments.size():
+			end = clampi(int(raw_ranges[bay][1]), boundary, tracks.size())
+		else:
+			# V1 takes are chronological; recover ownership from an interior world sample.
+			# A return take may start exactly on the next bay's seam.
+			while end < tracks.size() and $Rooms.room_at(tracks[end].sample_at(tracks[end].duration() * 0.5).position) <= bay:
+				end += 1
+		_track_ranges.append(Vector2i(boundary, end))
+		boundary = end
+	_sync_track_ranges()
 
 func _restart_actors() -> void:
 	for old in _actors:
@@ -479,17 +522,21 @@ func _restart_actors() -> void:
 		old.hide()
 		old.queue_free()
 	_actors.clear()
-	for tr in tracks.slice(room_track_start):
-		if tr.duration() <= 0.0: continue
-		var g := Ghost.new()
-		g.loop_strip = true
-		g.warmup_seconds = GRACE
-		g.setup(tr,tr.take_id)
-		add_child(g)
-		g.strip_age = elapsed
-		g.playhead = fposmod(elapsed, tr.duration())
-		g.global_position = tr.sample_at(g.playhead).position
-		_actors.append(g)
+	_sync_track_ranges()
+	for bay in _track_ranges.size():
+		var interval := _track_ranges[bay]
+		for tr in tracks.slice(interval.x, interval.y):
+			if tr.duration() <= 0.0: continue
+			var g := Ghost.new()
+			g.set_meta("room", bay)
+			g.loop_strip = true
+			g.warmup_seconds = GRACE
+			g.setup(tr,tr.take_id)
+			add_child(g)
+			g.strip_age = elapsed
+			g.playhead = fposmod(elapsed, tr.duration())
+			g.global_position = tr.sample_at(g.playhead).position
+			_actors.append(g)
 
 func _sample() -> void:
 	live.add_sample(elapsed,player.global_position,player.facing,rig.yaw,rig.roll)
@@ -738,7 +785,7 @@ func _top_up_grace() -> void:
 			return
 
 func _clear_spot(pos: Vector3) -> Vector3:
-	var room_index := segments.size() - 1
+	var room_index: int = $Rooms.room_at(pos)
 	if room_index < 0: return pos
 	var ghost_reach: float = Ghost.DANGER_RADIUS + Player.RADIUS + 0.15
 	for dz: float in [0.0, 0.55, -0.55, 1.05, -1.05]:
@@ -767,6 +814,7 @@ func _show_target() -> void:
 func _finish_leg() -> void:
 	_sample()
 	tracks.append(live)
+	_sync_track_ranges()
 	slate.clack(-8.0) # One take is in the can.
 	rig.add_shake(0.2)
 	fx.flash(Color("9ceccb"), 0.12, 0.0, 0.14)
@@ -900,7 +948,7 @@ static func _event_pool_for(tier: int) -> Array:
 
 
 func _offer_doors() -> Array:
-	var tier := segments.size() - 1
+	var tier := leg_room
 	var deck := KINDS.duplicate()
 	# Later acts pull from the whole shop, not the three the first act knows, and
 	# by then the crew is willing to dress one set with two things at once.
@@ -1124,7 +1172,7 @@ func _freeze() -> void:
 ## The rig is a one-way trip: you are hooked at the painted mark and set down at
 ## the far post. No steering, no second pass — the decision is whether to take it.
 func _start_wire_ride() -> void:
-	var ride: Dictionary = $Rooms.wire_ride(segments.size()-1)
+	var ride: Dictionary = $Rooms.wire_ride(leg_room)
 	if ride.is_empty(): return
 	_riding = true
 	_wire_used = true
@@ -1170,6 +1218,14 @@ func _reset_audio_tracking() -> void:
 
 
 func _physics_process(dt: float) -> void:
+	var here := _room_at()
+	if here != _visited_room:
+		if _visited_room >= 0:
+			_show_notice(_w("你来到了棚 %d", "You are in set %d") % (here + 1))
+			score.cue("near")
+		_visited_room = here
+		_spot_played = false
+		score.set_family(str(segments[here].get("kind", "")))
 	var displacement: Vector3 = player.global_position - _still_position
 	_still_position = player.global_position
 	if phase == Mode.PLAY and not slate.is_running() and not _dying and not _riding:
@@ -1192,22 +1248,23 @@ func _physics_process(dt: float) -> void:
 	if elapsed >= _next_sample:
 		_sample()
 		_next_sample = elapsed + 0.10
-	$Rooms.set_clock(segments.size()-1,elapsed)
+	for bay in $Rooms.bays():
+		$Rooms.set_clock(bay,elapsed)
 	# Somebody else is in the room, and he notices you.
-	$Rooms.notice_player(player.global_position, segments.size()-1, dt)
+	$Rooms.notice_player(player.global_position, _room_at(), dt)
 	# On the wire you are not walking: the rig carries you in a straight line and
 	# nothing on the deck can reach you until it sets you down.
-	if not _riding and not _wire_used and $Rooms.wire_at(player.global_position, segments.size()-1):
+	if here == leg_room and not _riding and not _wire_used and $Rooms.wire_at(player.global_position, leg_room):
 		_start_wire_ride()
 		return
 	if _riding: return
 	# The catwalk is a height, not a jump: the walking surface is whatever the
 	# room says it is at this point, and you follow it up and down the ramps.
-	var floor_h: float = $Rooms.floor_height(player.global_position, segments.size()-1)
+	var floor_h: float = $Rooms.floor_height(player.global_position, _room_at())
 	player.global_position.y = lerpf(player.global_position.y, floor_h + 0.05, clampf(dt*14.0, 0.0, 1.0))
 	# The deck can be doing something to you. The belt answers to the set, so a
 	# turned set carries you the other way without any new rule.
-	var belt: Vector3 = $Rooms.belt_push(player.global_position, segments.size()-1)
+	var belt: Vector3 = $Rooms.belt_push(player.global_position, _room_at())
 	player.set_push(belt)
 	var on_belt: bool = belt.length_squared() > 0.0
 	if on_belt and not _on_belt: score.cue("belt")
@@ -1217,15 +1274,16 @@ func _physics_process(dt: float) -> void:
 	_on_catwalk = on_catwalk
 	# On the green screen's key square you are not in the plate: the crew, the
 	# dolly and your own past all pass through where you are standing.
-	var keyed: bool = $Rooms.key_at(player.global_position, segments.size()-1)
+	var keyed: bool = $Rooms.key_at(player.global_position, _room_at())
 	if keyed and not _in_key: score.cue("key_safe")
 	_in_key = keyed
-	if grace <= 0 and not keyed:
+	if here == leg_room and grace <= 0 and not keyed:
 		var reach: float = Ghost.DANGER_RADIUS + Player.RADIUS
 		for g in _actors:
 			# "guide": the past self walks the route and nobody dies from it. The
 			# set is asking you to watch a crossing before you have to make one.
 			if leg_event.split(",", false).has("guide"): break
+			if int(g.get_meta("room", -1)) != leg_room: continue
 			if g.spent or g.strip_age < GRACE: continue
 			var d: float = g.global_position.distance_to(player.global_position)
 			if _inside.get(g.take_id, false):
@@ -1234,21 +1292,21 @@ func _physics_process(dt: float) -> void:
 			if d < reach:
 				if _hit(g.take_id): return
 				break
-		if $Rooms.hazard_at(player.global_position,segments.size()-1,elapsed):
+		if $Rooms.hazard_at(player.global_position,leg_room,elapsed):
 			if _hit(0): return
 		# The runner is not a trap with a rhythm: he crosses the set because his
 		# business is on the other side, and he will not wait for your take.
-		if $Rooms.crew_at(player.global_position,segments.size()-1):
+		if $Rooms.crew_at(player.global_position,leg_room):
 			if _hit(2): return
 		# The tape is not a threat: standing in it just means this take cannot be
 		# printed, which costs exactly the same as being hit — one more walk.
-		if $Rooms.goof_at(player.global_position,segments.size()-1):
+		if $Rooms.goof_at(player.global_position,leg_room):
 			if _hit(3): return
 	# The line is read in the room's own frame, not in world x: once the crew turns
 	# the set the finish line is no longer the same wall, and a world-axis test
 	# would count the crossing the moment the room moved.
-	var ri_now := segments.size() - 1
-	var inside: bool = $Rooms.reached(player.global_position, ri_now, route[cursor])
+	var ri_now := leg_room
+	var inside: bool = here == leg_room and $Rooms.reached(player.global_position, ri_now, route[cursor])
 	if not inside: _arrival_locked = false
 	if inside and not _arrival_locked:
 		cursor += 1
@@ -1264,7 +1322,7 @@ func _physics_process(dt: float) -> void:
 		_show_target()
 	_track_gaps()
 	_watch_ghosts()
-	_first_lessons()
+	if here == leg_room: _first_lessons()
 	_read_note()
 	_brush_spot()
 	_refresh()
@@ -1274,12 +1332,12 @@ func _physics_process(dt: float) -> void:
 ## in, this tells you where in the room you are.
 func _brush_spot() -> void:
 	if _spot_played: return
-	var ri := segments.size() - 1
+	var ri := _room_at()
 	var sp: Vector3 = $Rooms.spot_at(ri)
 	if sp == Vector3.ZERO: return
 	if Vector2(sp.x, sp.z).distance_to(Vector2(player.global_position.x, player.global_position.z)) > 1.5: return
 	_spot_played = true
-	score.family_hit(str((segments.back() as Dictionary).get("kind", "")))
+	score.family_hit(str(segments[ri].get("kind", "")))
 
 ## Did one of your own past takes walk close enough that you would have noticed it?
 ## The tutorial uses this instead of "a ghost exists", because a ghost on the far
@@ -1296,8 +1354,8 @@ func _watch_ghosts() -> void:
 ## The only lore in the game: a call note left on the deck. One per set, read by
 ## walking over it, said once, never repeated in that run.
 func _read_note() -> void:
-	if not $Rooms.note_at(player.global_position, segments.size() - 1): return
-	var key := segments.size()
+	if not $Rooms.note_at(player.global_position, _room_at()): return
+	var key := _room_at() + 1
 	if _notes_read.has(key): return
 	_notes_read[key] = true
 	var lines := [
@@ -1508,6 +1566,7 @@ func _open_pause() -> void:
 	pause_ui.open()
 
 func _to_title() -> void:
+	if phase == Mode.PLAY: _save_run()
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/front/title.tscn")
 
@@ -1710,9 +1769,10 @@ var _turn_local_target := Vector3.ZERO
 
 
 func _rotate_stage() -> void:
+	if _room_at() != leg_room: return # An old MARK must not turn a distant set.
 	if phase != Mode.PLAY and phase != Mode.CUT: return
 	if segments.is_empty(): return
-	var room := $Rooms.get_child(segments.size() - 1) as Node3D
+	var room := $Rooms.get_child(leg_room) as Node3D
 	if room == null: return
 	set_meta("turned", int(get_meta("turned", 0)) + 1)
 	_turn_room = room
@@ -1745,7 +1805,7 @@ func _apply_stage_angle(a: float) -> void:
 ## geometry: nothing collides with it, and it turns with the stage.
 func _drop_photogram(pos: Vector3, facing: float) -> void:
 	if segments.is_empty(): return
-	var room := $Rooms.get_child(segments.size() - 1) as Node3D
+	var room := $Rooms.get_child($Rooms.room_at(pos)) as Node3D
 	if room == null: return
 	var print := MeshInstance3D.new()
 	var quad := PlaneMesh.new()
