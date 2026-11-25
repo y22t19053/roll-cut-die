@@ -88,3 +88,14 @@ python tools/verify_all.py --json
 | C | `codex-c/sprint6-guard` | `tests/test_room_families.gd`、`tests/test_no_softlock.gd`、`tests/softlock_hit_probe.gd`、`tests/run_all.gd`、`tests/only.gd`、`tools/verify_branch.py`、`tools/verify_all.py`，以及路线图、工程状态与本档案。 |
 
 集成裁决：主控按功能合并 B 的房间构建与 E 的门洞，保留 D 的分层配乐与 E 的出画音效。对 `tests/run_all.gd` 取各端新增模块的并集，路线图按编号保留各端回执。C 仅写第 3 行；本次未执行跨分支合并。集成后在候选树重跑完整门禁，核对条件用例已执行。
+
+## 7. Sprint 7 分支与冲突面
+
+| 分支 | 本轮负责范围 |
+|---|---|
+| `codex-g/sprint7-scale` | `relay_run.gd` 的规模常量、`relay_rooms.gd` 的灯架棚位与房间规划 |
+| `codex-f/sprint7-craft` | `relay_run.gd` 的结算逻辑与新增的 `scripts/relay/craft.gd` |
+| `codex-d/sprint7-archive` | `relay_rules.gd` 的档案逻辑与 `title_screen.gd` 的生涯展示 |
+| `codex-c/sprint7-guard` | 仅 `tests/`、`tools/`、`docs/` 中的独立验收与交接档案 |
+
+G 与 F 共用 `relay_run.gd`。主控集成时按常量区和结算区分别核对改动，并保留各支在测试入口注册的用例。
