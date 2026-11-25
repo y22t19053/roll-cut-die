@@ -10,6 +10,7 @@ extends SceneTree
 const Harness = preload("res://tests/harness.gd")
 
 const MODULES := {
+	"touch_layout": preload("res://tests/test_touch_layout.gd"),
 	"camera": preload("res://tests/test_camera.gd"),
 	"ghost": preload("res://tests/test_ghost.gd"),
 	"npc": preload("res://tests/test_npc.gd"),
