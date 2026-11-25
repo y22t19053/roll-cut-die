@@ -133,6 +133,9 @@ var cards: Array = []
 var desk: CanvasLayer
 var slate: CanvasLayer
 var pause_ui: CanvasLayer
+var paused: bool:
+	get:
+		return is_instance_valid(pause_ui) and pause_ui.is_open
 var touch: Node2D
 var fx: Node
 var score: Node
@@ -234,6 +237,10 @@ var out_of_frame := preload("res://scripts/relay/out_of_frame.gd").new()
 var _foley := preload("res://scripts/ui/foley.gd").new()
 
 func _exit_tree() -> void:
+	if GameSession.focus_lost.is_connected(_on_focus_lost):
+		GameSession.focus_lost.disconnect(_on_focus_lost)
+	if GameSession.focus_gained.is_connected(_on_focus_gained):
+		GameSession.focus_gained.disconnect(_on_focus_gained)
 	Engine.time_scale = 1.0
 	if is_instance_valid(_bridge):
 		_bridge.set_process(false)
@@ -380,6 +387,10 @@ func _ready() -> void:
 	# Sample after the actual player and camera have stepped.
 	process_physics_priority = 5
 	_start_leg(resuming and room_pass % 2 == 1)
+	if not GameSession.focus_lost.is_connected(_on_focus_lost):
+		GameSession.focus_lost.connect(_on_focus_lost)
+	if not GameSession.focus_gained.is_connected(_on_focus_gained):
+		GameSession.focus_gained.connect(_on_focus_gained)
 	# The length of the job is on the title's start caption and in the pause page.
 	# It is not the first thing to say here: the first thing is "walk to the line",
 	# and two notices on top of each other is how a tutorial stops being read.
@@ -1347,6 +1358,8 @@ func _step_set_props() -> void:
 
 
 func _physics_process(dt: float) -> void:
+	# Cap the time a single physics tick can advance after a long stall.
+	dt = minf(dt, 0.05)
 	_notice_left = maxf(0.0, _notice_left - dt)
 	if _notice_left <= 0.0 and not _teach_queue.is_empty():
 		_teach(_teach_queue.pop_front())
@@ -1742,8 +1755,17 @@ func _on_score_sent(ok: bool, mine: Dictionary, message: String) -> void:
 	else:
 		desk.append_sheet_lines([_w("今日榜第 %d 名。", "TODAY: number %d on the board.") % rank], true)
 
-## ESC is the only key that stops the clock. Everything else in this game is a
-## decision about the take; this one is a decision about the person playing it.
+func _on_focus_lost() -> void:
+	if phase == Mode.PLAY and not paused and not _dying and _final_cut == null:
+		_open_pause()
+
+
+func _on_focus_gained() -> void:
+	# Leave the pause menu open until the player chooses to resume.
+	pass
+
+
+## ESC and loss of application focus share the same pause menu.
 func _open_pause() -> void:
 	if pause_ui == null: return
 	if pause_ui.is_open:

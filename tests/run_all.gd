@@ -49,6 +49,7 @@ const MODULES := [
 	["relay_walk", preload("res://tests/test_relay_walk.gd")],
 	["relay_link", preload("res://tests/test_relay_link.gd")],
 	["inrun_ui_deai", preload("res://tests/test_inrun_ui_and_deai.gd")],
+	["focus_pause", preload("res://tests/test_focus_pause.gd")],
 	["touch_pad", preload("res://tests/test_touch_pad.gd")],
 	["toy_score", preload("res://tests/test_toy_score.gd")],
 	["score_layers", preload("res://tests/test_score_layers.gd")],

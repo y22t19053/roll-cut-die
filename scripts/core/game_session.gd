@@ -32,6 +32,8 @@ signal ghosts_changed(count: int)
 signal language_changed(lang: String)
 ## Any preference other than language changed (already applied and stored).
 signal settings_changed(key: String, value: Variant)
+signal focus_lost
+signal focus_gained
 
 var takes
 var case_state
@@ -85,6 +87,14 @@ func _ready() -> void:
 	_wire_takes()
 	_init_preferences()
 	Logger.info("session ready, take %d, language %s" % [takes.take_index, Loc.language])
+
+
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_APPLICATION_FOCUS_OUT:
+			focus_lost.emit()
+		NOTIFICATION_APPLICATION_FOCUS_IN:
+			focus_gained.emit()
 
 
 func _wire_takes() -> void:
