@@ -46,13 +46,17 @@ func _render() -> void:
 	var p := UiKit.panel()
 	UiKit.centered(self).add_child(p)
 	_box = VBoxContainer.new()
-	_box.add_theme_constant_override("separation", 22)
+	_box.add_theme_constant_override("separation", 14)
 	p.add_child(_box)
+	var zh: bool = Loc.language == "zh"
+	_box.add_child(UiKit.header_strip("片场工作记录" if zh else "MACGUFFIN WORKS  //  STUDIO RECORD",
+		"确认操作" if zh else "Confirm action"))
 	var msg := UiKit.label(Loc.ui(message_key), 22)
 	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	msg.custom_minimum_size = Vector2(560, 0)
 	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_box.add_child(msg)
+	_box.add_child(UiKit.rule())
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 18)

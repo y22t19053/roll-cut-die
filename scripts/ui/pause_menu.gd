@@ -53,6 +53,7 @@ func open() -> void:
 
 func close() -> void:
 	settings_panel.visible = false
+	_page.show()
 	confirm.visible = false
 	_pending = ""
 	visible = false
@@ -97,23 +98,26 @@ func _render_page_only() -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 14)
 	p.add_child(box)
-	var title := UiKit.label(Loc.ui("menu.paused"), 34, UiKit.ACCENT)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(title)
+	var zh: bool = Loc.language == "zh"
+	box.add_child(UiKit.header_strip("拍摄暂停  //  片场挂起" if zh else "CALL SHEET  //  HOLD FOR WORK",
+		"暂停场记" if zh else "HOLD FOR WORK", "STUDIO"))
 	box.add_child(UiKit.button(Loc.ui("menu.resume"), func() -> void: resume_requested.emit()))
 	box.add_child(UiKit.button(Loc.ui("menu.settings"), _open_settings))
 	box.add_child(UiKit.button(Loc.ui("menu.to_title"), _ask.bind("to_title")))
 	box.add_child(UiKit.button(Loc.ui("menu.quit"), _ask.bind("quit")))
+	box.add_child(UiKit.rule())
 	var hint := UiKit.label(Loc.ui("hint.paused"), 16, UiKit.DIM)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(hint)
 
 
 func _open_settings() -> void:
+	_page.hide()
 	settings_panel.open()
 
 
 func _on_settings_closed() -> void:
+	_page.show()
 	UiKit.focus_first(_page)
 
 

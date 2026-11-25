@@ -4,6 +4,7 @@ extends CanvasLayer
 ## The HUD is a read-out, not a controller: it is told what to say and shows it.
 ## All strings come in already localised.
 
+const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Loc = preload("res://scripts/core/loc.gd")
 const SlateBoard = preload("res://scripts/ui/slate_board.gd")
 const Foley = preload("res://scripts/ui/foley.gd")
@@ -12,16 +13,16 @@ const Foley = preload("res://scripts/ui/foley.gd")
 ## or not a sound device exists to play it.
 signal cue_played(kind: String)
 
-const INK := Color(0.95, 0.94, 0.90)
-const DEATH_RED := Color(1.0, 0.32, 0.28)
+const INK := UiKit.INK
+const DEATH_RED := Color("f0806b")
 ## Banner ink per cue: looking is cool, taking is warm, MARK matches its
 ## counter, a refusal is red. Anything else keeps the plain ink.
 ## Keyed by Foley kind.
 const CUE_INK := {
-	"inspect": Color(0.74, 0.88, 1.0),
-	"pickup": Color(1.0, 0.84, 0.48),
-	"mark": Color(0.55, 0.95, 0.85),
-	"deny": Color(1.0, 0.52, 0.45),
+	"inspect": UiKit.PAPER,
+	"pickup": UiKit.AMBER,
+	"mark": UiKit.MINT,
+	"deny": DEATH_RED,
 }
 const ACCENT_IN := 0.16
 const MARK_PULSE := 0.36
@@ -86,7 +87,7 @@ func _ready() -> void:
 
 	take_label = _mk("", 24, 18, 520, 30, 20, HORIZONTAL_ALIGNMENT_LEFT)
 	mark_label = _mk("", 24, 50, 520, 30, 18, HORIZONTAL_ALIGNMENT_LEFT)
-	mark_label.add_theme_color_override("font_color", Color(0.55, 0.95, 0.85))
+	mark_label.add_theme_color_override("font_color", UiKit.MINT)
 	case_label = _mk("", 0, 0, 420, 260, 17, HORIZONTAL_ALIGNMENT_RIGHT)
 	case_label.anchor_left = 1.0
 	case_label.anchor_right = 1.0
@@ -155,23 +156,20 @@ func _ready() -> void:
 	death_label.offset_bottom = -SlateBoard.BOTTOM_CLEAR + 128.0
 	death_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	death_label.add_theme_color_override("font_color", DEATH_RED)
-	death_label.add_theme_constant_override("outline_size", 12)
+	death_label.add_theme_constant_override("outline_size", 6)
 	death_label.pivot_offset = Vector2(600.0, 60.0)
 	death_label.visible = false
 	mark_label.pivot_offset = Vector2(0.0, 15.0)
 
 
 func _mk(text: String, x: float, y: float, w: float, h: float, fsize: int, align: int) -> Label:
-	var l := Label.new()
-	l.text = text
+	var l := UiKit.label(text, fsize, INK)
 	l.position = Vector2(x, y)
 	l.size = Vector2(w, h)
 	l.horizontal_alignment = align
 	l.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	l.add_theme_font_size_override("font_size", fsize)
-	l.add_theme_color_override("font_color", INK)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.92))
-	l.add_theme_constant_override("outline_size", 6)
+	l.add_theme_constant_override("outline_size", 3)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	screen.add_child(l)
 	return l

@@ -1,13 +1,7 @@
 extends CanvasLayer
-## ESC in the middle of a run. Nothing here touches the run: it stops the clock,
-## offers the two switches a person actually reaches for mid-take (motion and
-## language), and gets out of the way again.
-##
-## Deliberately small. There is no save button because the run saves itself
-## between sets, and no difficulty switch because that is the door you signed.
-
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Loc = preload("res://scripts/core/loc.gd")
+const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
 
 signal resumed()
 signal left_run()
@@ -18,6 +12,10 @@ var briefing := {}
 
 var _dim: ColorRect
 var _col: VBoxContainer
+var _hold_card: PanelContainer
+var _settings: SettingsPanel
+var _rows: Dictionary = {}
+
 
 func _ready() -> void:
 	layer = 24
@@ -25,75 +23,155 @@ func _ready() -> void:
 	visible = false
 	_build()
 
+
 func _build() -> void:
-	_dim = ColorRect.new()
-	_dim.color = Color(0.02, 0.024, 0.026, 0.72)
-	_dim.anchor_right = 1.0
-	_dim.anchor_bottom = 1.0
-	_dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_dim = UiKit.scrim()
 	add_child(_dim)
 	var centre := CenterContainer.new()
-	centre.anchor_right = 1.0
-	centre.anchor_bottom = 1.0
+	centre.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(centre)
+	_hold_card = UiKit.panel()
+	centre.add_child(_hold_card)
 	_col = VBoxContainer.new()
-	_col.add_theme_constant_override("separation", 12)
-	_col.alignment = BoxContainer.ALIGNMENT_CENTER
-	centre.add_child(_col)
+	_col.custom_minimum_size.x = 426
+	_col.add_theme_constant_override("separation", 5)
+	_hold_card.add_child(_col)
+	_hold_card.draw.connect(_draw_tape)
+	_settings = SettingsPanel.new()
+	_settings.name = "Settings"
+	_settings.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_settings)
+	_settings.closed.connect(_on_settings_closed)
+	GameSession.language_changed.connect(_on_language_changed)
 	refresh()
 
-## Rebuilt on open and on language change, so the labels are never stale.
-func refresh() -> void:
-	for c in _col.get_children():
-		# remove_child first: queue_free defers, and a rebuild in the same frame
-		# would otherwise stack the old rows under the new ones for a frame.
-		_col.remove_child(c)
-		c.queue_free()
-	var zh: bool = Loc.language == "zh"
-	var head := UiKit.label("暂停" if zh else "PAUSED", 30, UiKit.INK)
-	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_col.add_child(head)
-	# Where you are, in the same words the HUD uses. A pause screen that only
-	# says "paused" wastes the one moment the player is looking for information.
-	if not briefing.is_empty():
-		var where := ("棚 %02d / %d　　过线 %d / %d" if zh else "SET %02d / %d　　LINE %d / %d") % [
-			int(briefing.get("set", 1)), int(briefing.get("sets", 1)),
-			int(briefing.get("pass", 1)), int(briefing.get("passes", 1))]
-		var seed_line := ("种子 %06X　　死亡 %d" if zh else "SEED %06X　　DEATHS %d") % [
-			int(briefing.get("seed", 0)), int(briefing.get("deaths", 0))]
-		for text: String in [where, seed_line]:
-			var info := UiKit.label(text, 16, UiKit.DIM)
-			info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			_col.add_child(info)
-	_col.add_child(_row("继续这一条" if zh else "Back to the take", _resume))
-	var motion_on: bool = bool(GameSession.settings.get("reduce_motion", false))
-	var scale_now: float = float(GameSession.settings.get("hud_scale", 1.0))
-	_col.add_child(_row(("界面大小：%d%%" % roundi(scale_now * 100.0)) if zh else ("HUD SIZE: %d%%" % roundi(scale_now * 100.0)), _cycle_hud_scale))
-	var pad_now: String = str(GameSession.settings.get("touch_pad", "auto"))
-	_col.add_child(_row(("触控按键：%s" % PAD_NAMES_ZH.get(pad_now, "自动")) if zh
-		else ("TOUCH PAD: %s" % PAD_NAMES_EN.get(pad_now, "AUTO")), _cycle_touch_pad))
-	_col.add_child(_row(("减弱动态效果：%s" % ("开" if motion_on else "关")) if zh else ("REDUCE MOTION: %s" % ("ON" if motion_on else "OFF")), _toggle_motion))
-	_col.add_child(_row(("语言：中文" if zh else "LANGUAGE: English"), _toggle_language))
-	_col.add_child(_row("回到标题" if zh else "Back to the title", _leave))
 
-func _row(text: String, cb: Callable) -> Button:
-	var b := UiKit.button(text, cb)
-	b.custom_minimum_size = Vector2(360, 52)
-	return b
+func _draw_tape() -> void:
+	_hold_card.draw_set_transform(Vector2(31, -4), deg_to_rad(-2.0))
+	_hold_card.draw_rect(Rect2(0, 0, 76, 9), Color("d9c9a6"))
+	_hold_card.draw_set_transform(Vector2.ZERO)
+
+
+func _on_language_changed(_lang: String) -> void:
+	if is_open:
+		refresh()
+
+
+## Preserve the option being operated when its status or language is updated.
+func refresh() -> void:
+	if _col == null:
+		return
+	var focus := get_viewport().gui_get_focus_owner()
+	var row_id: String = ""
+	if focus != null and _col.is_ancestor_of(focus):
+		row_id = str(focus.get_meta("hold_row", ""))
+	UiKit.clear(_col)
+	_rows.clear()
+	var zh: bool = Loc.language == "zh"
+	_col.add_child(UiKit.header_strip("拍摄暂停  //  片场挂起" if zh else "CALL SHEET  //  HOLD FOR WORK",
+		"暂停场记" if zh else "HOLD FOR WORK", "MACGUFFIN WORKS"))
+	if not briefing.is_empty():
+		_status_strip()
+	_row("resume", "继续这一条" if zh else "Back to the take", _resume)
+	var scale_now: float = float(GameSession.settings.get("hud_scale", 1.0))
+	_row("scale", "界面大小" if zh else "HUD SIZE", _cycle_hud_scale, "%d%%" % roundi(scale_now * 100.0))
+	var pad_now: String = str(GameSession.settings.get("touch_pad", "auto"))
+	var pad_stamp: String = str(PAD_NAMES_ZH.get(pad_now, "自动") if zh else PAD_NAMES_EN.get(pad_now, "AUTO"))
+	_row("pad", "触控按键" if zh else "TOUCH PAD", _cycle_touch_pad, pad_stamp)
+	var motion_on: bool = bool(GameSession.settings.get("reduce_motion", false))
+	var motion_stamp: String = ("开" if motion_on else "关") if zh else ("ON" if motion_on else "OFF")
+	_row("motion", "减弱动态效果" if zh else "REDUCE MOTION", _toggle_motion, motion_stamp)
+	_row("language", "语言" if zh else "LANGUAGE", _toggle_language, "中文" if zh else "EN")
+	_col.add_child(UiKit.rule())
+	_row("settings", "更多设置…" if zh else "More settings…", _open_settings)
+	_row("title", "回到标题" if zh else "Back to the title", _leave)
+	if is_open and not _settings.is_open():
+		_focus_row(row_id)
+
+
+func _status_strip() -> void:
+	var strip := HBoxContainer.new()
+	strip.add_theme_constant_override("separation", 2)
+	_col.add_child(strip)
+	var cells: Array[String] = [
+		"SET %02d/%02d" % [int(briefing.get("set", 1)), int(briefing.get("sets", 1))],
+		"LINE %d/%d" % [int(briefing.get("pass", 1)), int(briefing.get("passes", 1))],
+		"SEED %06X" % int(briefing.get("seed", 0)),
+		"NG %d" % int(briefing.get("deaths", 0)),
+	]
+	for cell: String in cells:
+		var stock := PanelContainer.new()
+		stock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stock.add_theme_stylebox_override("panel", UiKit.stock(UiKit.CARBON, UiKit.RULE))
+		var label := UiKit.label(cell, 14, UiKit.AMBER)
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		stock.add_child(label)
+		strip.add_child(stock)
+
+
+func _row(id: String, caption: String, cb: Callable, stamp := "") -> void:
+	var b := UiKit.button(caption, cb, 18)
+	b.custom_minimum_size = Vector2(0, 38)
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.set_meta("hold_row", id)
+	if not stamp.is_empty():
+		var value := UiKit.label(stamp, 15, UiKit.MINT)
+		value.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		b.add_child(value)
+		value.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		value.offset_right = -12
+	_rows[id] = b
+	_col.add_child(b)
+
+
+func _focus_row(id: String) -> void:
+	var button: Button = _rows.get(id, _rows.get("resume")) as Button
+	if button != null:
+		button.grab_focus()
+
+
+func _open_settings() -> void:
+	_hold_card.hide()
+	_dim.hide()
+	_settings.open()
+
+
+func _on_settings_closed() -> void:
+	_hold_card.show()
+	_dim.show()
+	if is_open:
+		_focus_row("settings")
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_open or not event is InputEventKey or not event.pressed or event.echo:
+		return
+	if event.keycode == KEY_ESCAPE or event.physical_keycode == KEY_ESCAPE:
+		get_viewport().set_input_as_handled()
+		if _settings.is_open():
+			_settings.close()
+		else:
+			_resume()
+
 
 func open() -> void:
-	if is_open: return
 	is_open = true
 	visible = true
 	refresh()
 	get_tree().paused = true
 
+
 func close() -> void:
-	if not is_open: return
+	if not is_open:
+		return
 	is_open = false
+	_settings.close()
 	visible = false
 	get_tree().paused = false
+
 
 func _resume() -> void:
 	close()
@@ -114,7 +192,6 @@ func _cycle_touch_pad() -> void:
 	var at: int = PAD_STEPS.find(now)
 	var next: String = PAD_STEPS[(at + 1) % PAD_STEPS.size()] if at >= 0 else "auto"
 	GameSession.set_setting("touch_pad", next)
-	GameSession.save_preferences()
 	refresh()
 
 func _cycle_hud_scale() -> void:
@@ -125,19 +202,15 @@ func _cycle_hud_scale() -> void:
 			next = HUD_STEPS[i]
 			break
 	GameSession.set_setting("hud_scale", next)
-	GameSession.save_preferences()
 	refresh()
 
 func _toggle_motion() -> void:
 	var on: bool = not bool(GameSession.settings.get("reduce_motion", false))
 	GameSession.set_setting("reduce_motion", on)
-	GameSession.save_preferences()
 	refresh()
 
 func _toggle_language() -> void:
-	Loc.set_language("en" if Loc.language == "zh" else "zh")
-	GameSession.set_language(Loc.language)
-	refresh()
+	GameSession.set_language("en" if Loc.language == "zh" else "zh")
 	left_run_keep_open()
 
 ## The parent picks this up to re-render its own text after a language swap.
