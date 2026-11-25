@@ -15,6 +15,14 @@ const Player = preload("res://scripts/player/player.gd")
 static func run(h, tree = null) -> void:
 	h.begin("relay")
 
+	var title_screen: Script = load("res://scripts/ui/title_screen.gd") as Script
+	var title_loaded: bool = title_screen != null and title_screen.can_instantiate()
+	h.ok("title screen script loads", title_loaded)
+	if title_loaded:
+		var run_scene: String = str(title_screen.get_script_constant_map().get("RUN_SCENE", ""))
+		h.eq("the title starts the relay", run_scene, "res://scenes/relay/run.tscn")
+		h.ok("the title's run scene exists", ResourceLoader.exists(run_scene))
+
 	# Supplies belong to the difficulty, and an unknown mode gets nothing.
 	h.eq("novice buys 6 marks", Rules._MARK[0], 6)
 	h.eq("novice buys 3 cuts", Rules._CUT[0], 3)
@@ -115,8 +123,8 @@ static func run(h, tree = null) -> void:
 		if str(c.name).begins_with("TakeNotch"): notches_three += 1
 	h.eq("the first take has one notch", notches_one, 1)
 	h.eq("the third take has three notches", notches_three, 3)
-	one.queue_free()
-	three.queue_free()
+	one.free()
+	three.free()
 	rooms.append_room("s", 0, "fast")
 	h.near("fast dolly runs a 3.4 s lap", float(rooms._dollies[3][0]["period"]), 3.4, 0.001)
 	rooms.append_room("s", 0, "throat")
@@ -355,5 +363,5 @@ static func run(h, tree = null) -> void:
 	h.ok("its centre is not the door any more",
 		not rooms.crossed(rooms._rooms[hollow_room].to_global(Vector3(9.0, 0.05, -1.6)), hollow_room, false))
 
-	rooms.queue_free()
+	rooms.free()
 	h.finish()

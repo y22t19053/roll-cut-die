@@ -51,6 +51,8 @@ var _ring: MeshInstance3D
 var _ring_mat: StandardMaterial3D
 var _alpha := 0.0
 var _armed := false
+var _spawn_pos: Vector3 = Vector3.ZERO
+var _mercy_bodies: Dictionary = {}
 var _notches: Array = []
 
 
@@ -63,12 +65,27 @@ func setup(t: Variant, id: int) -> void:
 	spent = false
 	_armed = false
 	_alpha = 0.0
+	_mercy_bodies.clear()
+	if track != null:
+		var initial: Dictionary = track.sample_at(0.0)
+		_spawn_pos = initial["position"]
+		if is_inside_tree():
+			global_position = _spawn_pos
+		else:
+			position = _spawn_pos
+	else:
+		_spawn_pos = global_position if is_inside_tree() else position
 	if _danger != null:
 		_danger.monitoring = false
 	if _label != null:
 		_label.text = "TAKE %02d" % take_id
 	if _ring_mat != null:
 		_build_notches()
+
+
+func arm_spawn_mercy(player_body: Node3D) -> void:
+	if player_body != null and global_position.distance_to(player_body.global_position) <= DANGER_RADIUS + 0.42:
+		_mercy_bodies[player_body.get_instance_id()] = player_body
 
 
 func _ready() -> void:
@@ -183,6 +200,7 @@ func _build() -> void:
 	_danger.add_child(dc)
 	add_child(_danger)
 	_danger.body_entered.connect(_on_body_entered)
+	_danger.body_exited.connect(_on_body_exited)
 
 
 ## Capture only render state. Never rewind the live Area or playback clock to browse a MARK.
@@ -220,7 +238,16 @@ func _on_body_entered(body: Node3D) -> void:
 	if spent or not playing or not _armed:
 		return
 	if body is CharacterBody3D and body.get("frozen") != null:
+		if bool(body.get("frozen")):
+			_mercy_bodies[body.get_instance_id()] = body
+			return
+		if _mercy_bodies.has(body.get_instance_id()):
+			return
 		caught_player.emit(take_id)
+
+
+func _on_body_exited(body: Node3D) -> void:
+	_mercy_bodies.erase(body.get_instance_id())
 
 
 func _physics_process(dt: float) -> void:
@@ -232,10 +259,18 @@ func _physics_process(dt: float) -> void:
 		playhead = fposmod(playhead, track.duration())
 	var s: Dictionary = track.sample_at(playhead)
 	global_position = s["position"]
+	for body_id: int in _mercy_bodies.keys():
+		var body: Variant = _mercy_bodies[body_id]
+		if not is_instance_valid(body):
+			_mercy_bodies.erase(body_id)
+		elif global_position.distance_to(body.global_position) > DANGER_RADIUS + 0.50:
+			_mercy_bodies.erase(body_id)
 	if _visual != null:
 		_visual.rotation.y = s["facing"]
 	if not _armed:
 		if (strip_age if loop_strip else playhead) >= warmup_seconds:
+			# Keep spawn mercy through arming, including a stationary strip near
+			# _spawn_pos (within 0.35 m). Only separation above revokes it.
 			_armed = true
 			if _danger != null:
 				_danger.set_deferred("monitoring", true)

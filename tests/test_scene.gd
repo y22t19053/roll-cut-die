@@ -90,3 +90,4 @@ static func run(h, tree = null) -> void:
 
 	inst.queue_free()
 	await tree.process_frame
+	await tree.process_frame
