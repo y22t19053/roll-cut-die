@@ -34,6 +34,7 @@ const MODULES := {
 	"phrasebook": preload("res://tests/test_phrasebook.gd"),
 	"sprint7_guard": preload("res://tests/test_sprint7_guard.gd"),
 	"sprint8_guard": preload("res://tests/test_sprint8_guard.gd"),
+	"difficulty": preload("res://tests/test_difficulty.gd"),
 }
 
 ## A dead _main (runtime error inside a module) never reaches quit(), and the

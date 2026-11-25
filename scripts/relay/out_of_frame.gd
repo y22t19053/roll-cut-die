@@ -6,6 +6,7 @@ const WARN_SECONDS := 2.5
 const NG_LIMIT := 3
 const OUT_POSITION := Vector3(1.6, 0.05, -5.2)
 const DOOR := Vector3(1.6, 0.05, -2.94)
+var warn_scale := 1.0
 var _state := "IN"
 var _ng := 0
 var _left := 0.0
@@ -75,7 +76,7 @@ func note_ng() -> void:
 	_ng += 1
 	if _ng == NG_LIMIT and not _triggered:
 		_triggered = true
-		_left = WARN_SECONDS
+		_left = WARN_SECONDS * warn_scale
 		_set_state("WARN")
 
 func advance(seconds: float) -> void:
@@ -193,7 +194,7 @@ func _render() -> void:
 	if _overlay == null: return
 	_overlay.visible = _state != "IN" and playable()
 	_overlay.warning = _state == "WARN"
-	_overlay.clock = WARN_SECONDS - _left
+	_overlay.clock = WARN_SECONDS * warn_scale - _left
 	_overlay.queue_redraw()
 	if _state == "WARN":
 		_label.text = _both("frame.warn") + "  %.1fs" % _left + "\n" + _both("frame.resolve")

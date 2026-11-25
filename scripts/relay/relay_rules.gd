@@ -34,7 +34,15 @@ const _VERDICT_KEYS := {
 const _ARCHIVE_THRESHOLDS := [3, 9, 21, 41]
 const _MARK := [6, 6, 3]
 const _CUT := [3, 3, 2]
+const _PACE := [1.0, 0.92, 0.84]
+const _WARNING_SCALE := [1.0, 0.85, 0.7]
 static var selected_mode: int = 0
+
+static func pace(mode: int) -> float:
+	return _PACE[mode] if mode >= 0 and mode < _PACE.size() else _PACE[0]
+
+static func warning_scale(mode: int) -> float:
+	return _WARNING_SCALE[mode] if mode >= 0 and mode < _WARNING_SCALE.size() else _WARNING_SCALE[0]
 
 static func mark_budget(mode: int) -> int:
 	return _MARK[mode] if mode >= 0 and mode < _MARK.size() else 0

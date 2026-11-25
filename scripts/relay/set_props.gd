@@ -14,6 +14,7 @@ const CLEAR := Color("85dbef")
 const HIT := Color("fc746c")
 const FILM := Color("ffd46d")
 
+var warn_scale := 1.0
 var room: Node3D
 var _view: Node3D
 var _props: Array[Dictionary] = []
@@ -141,7 +142,7 @@ func tick(clock: float, pos: Vector3) -> Array[Dictionary]:
 		var near := _near(i, pos)
 		if s.fire == INF:
 			if near:
-				s.fire = clock + WARNING
+				s.fire = clock + WARNING * warn_scale
 				_emit(events, i, "warn", 0.0)
 			continue
 		var age := clock - float(s.fire)
