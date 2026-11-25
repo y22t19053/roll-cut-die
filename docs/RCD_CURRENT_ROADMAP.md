@@ -106,3 +106,9 @@ Sprint 7 门禁：`tools/verify_all.py` 全过，断言数只增不减，`mesh_g
 Sprint 8 门禁：`tools/verify_all.py` 全过，断言数只增不减，`mesh_get_surface_count` 噪声预算 1，每个交付端附实机截图。
 
 Sprint 8 验收工具：`tests/test_sprint8_guard.gd` + `tools/verify_branch.py`
+
+**收尾结果（2026-11-25 深夜）**：四条全部合入 `master`，门禁 **2,215 条 Godot 断言 + 31 项 Python**、噪声 1、`exit 0`。
+- #1 已合入 `c93973d` / merge `16e6f8d`：`scripts/relay/phrasebook.gd` 四类一次性教学。主控补修：教学原本是一次性 `call_deferred`，而进新棚的「你来到了棚 N」正好在同一帧抢播报槽，教学被盖掉、`mark()` 却已写盘 → 玩家永远看不到。改为 `_queue_teach()` 入队、`_physics_process` 里播报槽空出来才播（`relay_run.gd:159-160` / `:500-503` / `:1348-1350`）；提交 `1f0cd14`，实机截图 `visual/preview/sprint8_live_lesson.png`（机关教学先播，4 秒后灯架教学接上）。
+- #2 已合入 `939a51d` / merge `95de596`：`scripts/relay/next_move.gd`，结算单末行给「差 M 棚 / 下一档已解锁 / 比上一把更干净」。
+- #3 已合入 `f426bb8`：标题页难度区显示解锁条件与本人最远进度，档案区显示「下一级还差 N 枚」；截图 `visual/preview/sprint8_title_board.png`。
+- #4 已合入 `788307c` / merge `c94438a`：`tests/test_sprint8_guard.gd` 防御式断言 + `tools/verify_branch.py` 覆盖新支。
