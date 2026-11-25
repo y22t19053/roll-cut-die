@@ -56,6 +56,17 @@
 | `RCD-Saved-Run-edc7ef0.exe` | 中途存档里程碑构建 | `102,116,160` | `acd9bf03d3cf394b...` | 提交 `edc7ef0`（`relay_run.json` 断点续拍验证） | 仅本地 | 保留 |
 | `RCD-Studio-8535207.exe` / `RCD-Backlot-6200c0d.exe` | 绿幕棚与外景原型包 | `99,254,256` / `99,140,800` | `e87571c92b0c0a2b...` / `b4ed8d7ebe47f527...` | `studiolot`（`8535207`）与 `backlot`（`6200c0d`）独立阶段快照 | 仅本地 | **必须保留**（分阶段视觉与空间考古基准） |
 | 其余 30 份带哈希/代号构建（`RCD-DEV-3.1*`, `RCD-Wager-*`, `RCD-Events-c980a50.exe` 等） | 演进过程构建群 | `98.7 MB – 107.5 MB` | 均已在审计日志固化前 16 位 SHA256 | 完整记录了 11-20 至 11-23 密集冲刺的每一步可运行形态 | 仅本地 | 磁盘空间充裕前一律原样保留，不得清空 `builds/` |
+| `RCD-s5-015e467.exe` | **Sprint 5 定版 Windows 包** | `105,542,320` | `9d76f90b3d28d3b7...` | 提交 `015e467`（互联摄影棚 + 片场机关 + H 灯架 + 本局账本自裁的 Final Cut，1,267 条断言全过） | 待上传（itch 通道阻塞中） | 新版本，保留 |
+| `RCD-s5-015e467-windows.zip` | Sprint 5 定版 Windows 压缩包 | `50,648,056` | `cd44837c30186281...` | 同上，内含单个自包含 exe | 待上传 | 保留 |
+| `RCD-s5-015e467-web.zip` | Sprint 5 Web 包（旧口径） | `30,115,126` | `dcfbafe3fe6dda42...` | 提交 `015e467`，`extensions_support=true` 时导出（源目录 65.9 MB） | 未发布 | 保留作对照 |
+| `RCD-s5d-c91e5ce-web.zip` | **当前 TOY 源包（slim）** | `28,595,949` | `ef12c7586e45c207...` | 提交 `c91e5ce`，关闭 extensions support，源目录 57.2 MB | **是（TOY `59100293499904`）** | 当前线上包 |
+
+## 3.1 平台状态变更（2026-11-25 夜间主控接管）
+
+- **GitHub 公开镜像**：master 已从 `04aa585` 推进到 `c91e5ce`（31 个提交），含 Sprint 5 四路交付与 Final Cut 接通。
+- **Bilibili TOY**：旧 `58061569920000` 已不可解析 —— `toy stats` 与 `toy update` 都返回 `307000 请求参数错误`，通知里有「大包体上传申请未通过」，判定旧 Toy 已被平台移除。已用 slim 包新建 `59100293499904`（slug `roll-cut-die`，public，GAME，`status=auditing`）。
+- **itch `5420775`**：butler 未登录（`butler -v status` 直接要求 OAuth），通道阻塞，需创作者在浏览器点一次授权；`broth.itch.ovh` 与 `itch.ovh` 为 NXDOMAIN 属误判，实际上传域名是 `broth.itch.zone`。
+- **发布脚本**：`tools/make_release.py` 现在会在打包前 prune 掉停产的 `*.wasm` 兄弟文件（Godot 不会自动删旧产物，曾导致 39.7 MB 的 `index.side.wasm` 混进 zip 与 TOY 包）。
 
 ---
 
