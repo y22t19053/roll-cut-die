@@ -1,12 +1,12 @@
 extends RefCounted
-## UiKit — the few widgets every menu screen shares, built in code so the
-## front end, pause menu and settings look like one product.
+## Shared typography and printed-stock controls for the studio menus.
 
-const INK := Color(0.95, 0.94, 0.90)
-const DIM := Color(0.62, 0.62, 0.60)
-const ACCENT := Color(0.886, 0.263, 0.180)  # film orange #E2432E
-const PANEL_BG := Color(0.055, 0.06, 0.07, 0.96)
+const INK := Color("f4efe4")
+const DIM := Color("9e9688")
+const ACCENT := Color("e2432e")
+const PANEL_BG := Color(0.08, 0.08, 0.085, 0.97)
 const SCRIM := Color(0.0, 0.0, 0.0, 0.62)
+const RULE := Color("3a3630")
 
 
 static func label(text: String, size: int = 20, color: Color = INK) -> Label:
@@ -15,7 +15,7 @@ static func label(text: String, size: int = 20, color: Color = INK) -> Label:
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	l.add_theme_constant_override("outline_size", 4)
+	l.add_theme_constant_override("outline_size", 2)
 	return l
 
 
@@ -25,21 +25,23 @@ static func button(text: String, on_pressed: Callable, size: int = 22) -> Button
 	b.custom_minimum_size = Vector2(320, 46)
 	b.add_theme_font_size_override("font_size", size)
 	b.focus_mode = Control.FOCUS_ALL
-	var normal := _box(Color(0.12, 0.125, 0.14, 0.95), Color(0.3, 0.3, 0.32))
-	var hover := _box(Color(0.2, 0.2, 0.22, 0.98), ACCENT)
-	b.add_theme_stylebox_override("normal", normal)
-	b.add_theme_stylebox_override("hover", hover)
-	b.add_theme_stylebox_override("focus", hover)
-	b.add_theme_stylebox_override("pressed", _box(Color(0.886, 0.263, 0.180, 0.8), ACCENT))
-	b.add_theme_stylebox_override("disabled", _box(Color(0.08, 0.08, 0.09, 0.9), Color(0.18, 0.18, 0.2)))
-	b.add_theme_color_override("font_disabled_color", Color(0.4, 0.4, 0.42))
+	b.add_theme_stylebox_override("normal", stock(Color("23211e"), RULE))
+	b.add_theme_stylebox_override("hover", stock(Color("322824"), ACCENT, 4))
+	b.add_theme_stylebox_override("focus", stock(Color.TRANSPARENT, ACCENT, 4, 2))
+	b.add_theme_stylebox_override("pressed", stock(Color("482923"), ACCENT, 4))
+	b.add_theme_stylebox_override("hover_pressed", stock(Color("54312a"), ACCENT, 4))
+	b.add_theme_stylebox_override("disabled", stock(Color("1b1a19"), RULE))
+	for state: String in ["font_color", "font_hover_color", "font_focus_color",
+			"font_pressed_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(state, INK)
+	b.add_theme_color_override("font_disabled_color", DIM)
 	b.pressed.connect(on_pressed)
 	return b
 
 
 static func panel() -> PanelContainer:
 	var p := PanelContainer.new()
-	var sb := _box(PANEL_BG, Color(0.25, 0.25, 0.27))
+	var sb := stock(PANEL_BG, RULE, 1, 2)
 	sb.content_margin_left = 32
 	sb.content_margin_right = 32
 	sb.content_margin_top = 26
@@ -48,16 +50,17 @@ static func panel() -> PanelContainer:
 	return p
 
 
-static func _box(bg: Color, border: Color) -> StyleBoxFlat:
+static func stock(bg: Color, border: Color, edge: int = 1, rule: int = 1) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
 	sb.border_color = border
-	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(3)
-	sb.content_margin_left = 14
-	sb.content_margin_right = 14
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
+	sb.set_border_width_all(rule)
+	sb.border_width_left = edge
+	sb.set_corner_radius_all(1)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 4
+	sb.content_margin_bottom = 4
 	return sb
 
 
@@ -84,10 +87,10 @@ static func clear(node: Node) -> void:
 		c.queue_free()
 
 
-## Focus the first enabled button below `root` (keyboard/gamepad users).
+## Focus the first enabled button below the given menu.
 static func focus_first(root: Node) -> void:
 	for c: Node in root.find_children("*", "BaseButton", true, false):
 		var b := c as BaseButton
-		if b.is_visible_in_tree() and not b.disabled:
+		if b.is_visible_in_tree() and not b.disabled and b.focus_mode != Control.FOCUS_NONE:
 			b.grab_focus()
 			return
