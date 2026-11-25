@@ -38,7 +38,7 @@ const TOUCH := 0.77
 ## dodge.
 const GRACE := 1.2
 const PASSES := 4
-## A run is a seed and six sets in three acts: the seed is printed on the call
+## A run is a seed and twelve sets in four acts: the seed is printed on the call
 ## sheet so two runs can be compared, replayed or argued about.
 static var next_seed := 0## A run that was written down between takes. The title screen decides whether
 ## New Game starts fresh or Continue picks this up.
@@ -47,7 +47,7 @@ var run_seed := 0
 ## How many legs the current set asks for. A short set is faster; a long one
 ## pays a supply. This is the run's only real decision.
 var required_passes := PASSES
-## Which act of three the run is in, what was signed at the last seam, and how
+## Which act of four the run is in, what was signed at the last seam, and how
 ## much grace that act allows. Nothing else changes between acts.
 var act := 0
 var act_mod := ""
@@ -173,6 +173,18 @@ func _sets() -> int:
 	return maxi(segments.size() - _prologue, 0)
 
 var _foley := preload("res://scripts/ui/foley.gd").new()
+
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
+	if is_instance_valid(_bridge):
+		_bridge.set_process(false)
+		if _bridge.get_parent() == null:
+			_bridge.queue_free()
+	# Parented helpers are freed with the run; release any detached previews.
+	for helper: Node in [_preview_camera, _preview_rig, _preview_still, _preview_point]:
+		if is_instance_valid(helper) and helper.get_parent() == null:
+			helper.queue_free()
+
 
 func _ready() -> void:
 	Engine.time_scale = 1.0 # A previous hit-stop must never outlive its run.
@@ -825,7 +837,7 @@ func _offer_contracts() -> Array:
 			"line1": _w("下一节每棚 5 趟", "next act: 5 legs a set"),
 			"line2": _w("现在给 1 CUT", "pays 1 CUT now"), "stamp": _w("+1 CUT", "+1 CUT")},
 		{"kind": "contract", "contract": "blackout", "title": _w("不许宽限", "BLACKOUT"),
-			"line1": _w("下一节没有 0.75 秒宽限", "next act: no 0.75 s grace"),
+			"line1": _w("下一节宽限压到 0.3 秒", "next act: 0.3 s grace only"),
 			"line2": _w("接片作废，给 2 MARK", "no splice, +2 MARK now"), "stamp": _w("+2 MARK", "+2 MARK")},
 	]
 

@@ -326,7 +326,6 @@ func _begin_take() -> void:
 	phase = Phase.ROLLING
 	var idx: int = GameSession.takes.take_index
 	_clear_ghosts()
-	_spawn_ghosts()
 	# Experimental inherited scenes keep their authored spawn and timing protocol.
 	var studio := scene_file_path == "res://scenes/main/main.tscn"
 	var entrance := spawn_pos
@@ -340,14 +339,16 @@ func _begin_take() -> void:
 			_show_fatal()
 			return
 		entrance = selected
+	player.teleport(entrance, 0.0)
+	player.set_frozen(true)
+	_spawn_ghosts()
+	if studio:
 		for g: Node in ghost_nodes:
 			g.playing = false
 			g.global_position = g.track.sample_at(0).position
 	for n: Node in npcs:
 		n.reset_phase()
 		n.set_active(not studio)
-	player.teleport(entrance, 0.0)
-	player.set_frozen(true)
 	_refresh_evidence()
 	recorder.setup(player, rig, idx)
 	recorder.recording = false
@@ -375,6 +376,8 @@ func _spawn_ghosts() -> void:
 		g.name = "Ghost_%02d" % int(item.get("take", 0))
 		add_child(g)
 		g.setup(tr, int(item.get("take", 0)))
+		if player != null:
+			g.arm_spawn_mercy(player)
 		g.caught_player.connect(_on_ghost_caught)
 		ghost_nodes.append(g)
 
@@ -697,18 +700,19 @@ func _cut_to(p: Dictionary) -> void:
 	_world_t = wt
 	_world_running = false
 	_clear_ghosts()
+	player.teleport(point["pos"], float(point["facing"]))
+	player.set_frozen(true)
 	_spawn_ghosts()
 	for g: Node in ghost_nodes:
 		g.playing = false
 		g.playhead = wt
 		g.global_position = g.track.sample_at(wt)["position"]
+		g.arm_spawn_mercy(player)
 	# Restore the leg and remaining wait, without simulating the entire take again.
 	for n: Node in npcs:
 		n.set_active(false)
 		n.restore_phase(point.npc_phases[n.npc_id])
 
-	player.teleport(point["pos"], float(point["facing"]))
-	player.set_frozen(true)
 	rig.setup(player)
 	rig.restore_mark_motion(point)
 	rig.set_physics_process(false) # Do not consume the saved momentum behind the slate.
