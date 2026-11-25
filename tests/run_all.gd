@@ -15,7 +15,7 @@ extends SceneTree
 ##
 ## The watchdog exists because a runtime error inside a module kills `_main`
 ## before it can print a summary or call quit(), leaving headless Godot spinning
-## forever with no output. The watchdog is a separate coroutine, so it survives
+## forever with no output. The watchdog uses a separate timer, so it survives
 ## that abort and reports which module was running.
 
 const Harness = preload("res://tests/harness.gd")
@@ -41,7 +41,6 @@ const MODULES := [
 	["toy_score", preload("res://tests/test_toy_score.gd")],
 ]
 
-var _finished := false
 var _current := "(startup)"
 
 
@@ -51,9 +50,6 @@ func _init() -> void:
 
 
 func _watchdog() -> void:
-	await create_timer(WATCHDOG_SECONDS).timeout
-	if _finished:
-		return
 	print("")
 	print("RCD TESTS: WATCHDOG — no summary after %.0f s, still inside module '%s'."
 		% [WATCHDOG_SECONDS, _current])
@@ -62,7 +58,8 @@ func _watchdog() -> void:
 
 
 func _main() -> void:
-	call_deferred("_watchdog")
+	var watchdog := create_timer(WATCHDOG_SECONDS)
+	watchdog.timeout.connect(_watchdog)
 
 	var passed := 0
 	var failed := 0
@@ -92,5 +89,6 @@ func _main() -> void:
 	else:
 		print("RCD TESTS: FAILED — %s" % ", ".join(broken))
 		print("RCD TESTS: %d passed, %d failed, %.1f s" % [passed, failed, secs])
-	_finished = true
+	await process_frame
+	watchdog.timeout.disconnect(_watchdog)
 	quit(0 if failed == 0 else 1)
