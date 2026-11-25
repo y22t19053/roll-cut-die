@@ -11,7 +11,6 @@ import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PYTHON = Path.home() / ".dsh/dsh-runtimes/dsh-primary-runtime/dependencies/python/python.exe"
 GODOT = Path.home() / "Desktop/工具/程序/Godot_v4.3-stable/godot.exe"
 
 
@@ -40,7 +39,7 @@ def main():
         parser.error("timeout must be positive and baseline nonnegative")
 
     start = time.monotonic()
-    python = PYTHON if PYTHON.is_file() else sys.executable
+    python = sys.executable
     ok, out, err = run([python, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], args.timeout)
     count = re.search(r"^Ran (\d+) tests? in ", err, re.MULTILINE)
     python_tests = int(count[1]) if count else 0

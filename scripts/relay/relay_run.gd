@@ -8,6 +8,7 @@ const Orbit = preload("res://scripts/camera/roll_modes.gd").ORBIT
 const Track = preload("res://scripts/ghost/ghost_track.gd")
 const Ghost = preload("res://scripts/ghost/ghost_actor.gd")
 const Rules = preload("res://scripts/relay/relay_rules.gd")
+const Craft = preload("res://scripts/relay/craft.gd")
 const Splice = preload("res://scripts/relay/safety_splice.gd")
 const Loc = preload("res://scripts/core/loc.gd")
 const MarkBeacon = preload("res://scripts/ui/mark_beacon.gd")
@@ -94,6 +95,7 @@ var cuts_used := 0
 ## Takes crossed once the prologue was over: what the score is made of.
 var run_legs := 0
 var _seen_hints := {}
+var _mark_hint_pending := false
 ## Ghosts the tape handed you back inside of. They stop counting until you
 ## step out: a respawn is never the player's mistake.
 var _inside := {}
@@ -871,6 +873,7 @@ func _finish_leg() -> void:
 		fx.flash(Color("9ceccb"), 0.14, 0.02, 0.24)
 		fx.edge_pulse(Color("ffde79"))
 		_show_notice(_w("这一棚抢下天光。多给你一枚打点。", "You beat the light. One spare MARK."), 2.5)
+		_mark_hint_pending = true
 	if room_pass < required_passes:
 		_save_run() # One take is in the can; a quit now costs nothing.
 		score.cue("line")
@@ -958,6 +961,7 @@ func _apply_contract(id: String) -> void:
 			cut_stock += 1
 		"blackout":
 			mark_stock += 2
+			_mark_hint_pending = true
 			splice = Splice.new()
 			act_grace = 0.30
 	score.cue("pickup")
@@ -1165,7 +1169,9 @@ func _pick_card(i: int) -> void:
 	if phase == Mode.ITEM and i >= 0 and i < 3:
 		match i:
 			0: splice.offer()
-			1: mark_stock += 1
+			1:
+				mark_stock += 1
+				_mark_hint_pending = true
 			2: cut_stock += 1
 		score.cue("pickup")
 		phase = Mode.PICK
@@ -1195,7 +1201,9 @@ func _pick_card(i: int) -> void:
 	if act_mod == "rush": required_passes = maxi(required_passes - 1, 2)
 	elif act_mod == "overtime": required_passes += 1
 	match str(c.get("reward","")):
-		"mark": mark_stock += 1
+		"mark":
+			mark_stock += 1
+			_mark_hint_pending = true
 		"cut": cut_stock += 1
 		"splice": splice.offer()
 	act_mod = "" # A contract covers one act, never the whole run.
@@ -1272,6 +1280,7 @@ func _step_set_props() -> void:
 				mark_stock += 1
 				fx.edge_pulse(SetProps.FILM, 0.80, 0.32)
 				_show_notice(Loc.ui("props.pickup"), 2.2)
+				_mark_hint_pending = true
 			"hit":
 				fx.edge_pulse(SetProps.HIT, 0.7, 0.24)
 				if event.kind == "clap":
@@ -1404,6 +1413,11 @@ func _physics_process(dt: float) -> void:
 	if here == leg_room: _first_lessons()
 	_read_note()
 	_brush_spot()
+	# Pickers hide notices, so teach the first MARK when the floor is playable.
+	if _mark_hint_pending and not slate.is_running():
+		_mark_hint_pending = false
+		_hint("first_mark", "标记就是一条命：按 M 把它落在这里，失手自动回来。",
+			"A mark is a life: press M to plant it here, and a collision brings you back.")
 	_refresh()
 
 ## Each family owns one object in its set (crates, a ring, the rail). Brushing it
@@ -1580,6 +1594,7 @@ func _settle_sheet(won: bool) -> void:
 	# One number, decided once, from the run's own record: how far, how clean,
 	# what it cost. Time is free until the clock is out.
 	score_info = Rules.run_score(run_legs, act, deaths, cuts_used, active_clock, deaths == 0)
+	score_info["craft_bonus"] = Craft.shoot(mark_stock, cut_stock, deaths)["bonus"]
 	var best: int = Rules.record_daily(int(score_info["total"])) if daily else 0
 	if not _recorded:
 		_recorded = true
@@ -1587,6 +1602,7 @@ func _settle_sheet(won: bool) -> void:
 	var lines: Array = [
 		_w("走完 %d / %d 棚　　废条 %d　　死亡 %d", "SETS %d / %d   WASTED %d   DEATHS %d") % [segments.size(),MODULES,maxi(tracks.size()-segments.size(),0),deaths],
 		_w("手上还剩　标记 %d　剪 %d", "LEFT   MARKS %d   CUTS %d") % [mark_stock,cut_stock],
+		Craft.score_line(mark_stock, cut_stock, deaths),
 	]
 	if daily:
 		lines.append(_w("今日 %s　得分 %d　自己最好 %d", "DAY %s   SCORE %d   YOUR BEST %d")
