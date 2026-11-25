@@ -5,9 +5,11 @@ extends CanvasLayer
 ## row; the panel never touches game state. One row per point, the selected row
 ## gets a highlight bar and a ">" so it reads without colour too.
 
+const UiKit = preload("res://scripts/ui/ui_kit.gd")
+
 const ROW_H := 30.0
 const WIDTH := 860.0
-const HIGHLIGHT := Color(0.886, 0.263, 0.180, 0.55)  # film orange #E2432E
+const HIGHLIGHT := Color("503029")
 
 var title_label: Label
 var footer_label: Label
@@ -17,6 +19,7 @@ var selected := -1
 var _root: Control
 var _bg: ColorRect
 var _bar: ColorRect
+var _rule: ColorRect
 var _rows: PackedStringArray = PackedStringArray()
 
 
@@ -29,7 +32,7 @@ func _ready() -> void:
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	_bg = ColorRect.new()
-	_bg.color = Color(0.02, 0.02, 0.025, 0.86)
+	_bg.color = Color("18191cf2")
 	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_bg)
 
@@ -38,18 +41,26 @@ func _ready() -> void:
 	_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_bar.visible = false
 	_root.add_child(_bar)
+	var edge := ColorRect.new()
+	edge.color = UiKit.ACCENT
+	edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bar.add_child(edge)
+	edge.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+	edge.offset_right = 3
+	_rule = UiKit.rule()
+	_rule.color = UiKit.ACCENT.darkened(0.30)
+	_bg.add_child(_rule)
+	_rule.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_rule.offset_bottom = 1
 
 	title_label = _mk(22)
+	title_label.add_theme_color_override("font_color", UiKit.AMBER)
 	footer_label = _mk(16)
 	visible = false
 
 
 func _mk(fsize: int) -> Label:
-	var l := Label.new()
-	l.add_theme_font_size_override("font_size", fsize)
-	l.add_theme_color_override("font_color", Color(0.95, 0.94, 0.90))
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.92))
-	l.add_theme_constant_override("outline_size", 5)
+	var l := UiKit.label("", fsize)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.anchor_left = 0.5
 	l.anchor_right = 0.5
