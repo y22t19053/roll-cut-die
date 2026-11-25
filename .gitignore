@@ -29,3 +29,8 @@ tools/.dev_autoload.bak
 
 # Screenshots taken through the interaction server during a run.
 shots/
+
+# Reference stills under visual/preview/ are imported by every export/editor open,
+# which spawns an .import sidecar next to each PNG. The stills are committed; the
+# sidecars are regenerated on demand and would otherwise dirty the tree constantly.
+visual/preview/*.import
