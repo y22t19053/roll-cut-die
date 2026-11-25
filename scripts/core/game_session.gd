@@ -85,6 +85,7 @@ func _ready() -> void:
 	takes = TakeManager.new()
 	case_state = CaseState.new()
 	_wire_takes()
+	_wire_focus()
 	_init_preferences()
 	Logger.info("session ready, take %d, language %s" % [takes.take_index, Loc.language])
 
@@ -95,6 +96,27 @@ func _notification(what: int) -> void:
 			focus_lost.emit()
 		NOTIFICATION_APPLICATION_FOCUS_IN:
 			focus_gained.emit()
+
+
+## Browsers never send the application-level focus pair: switching tabs fires
+## the canvas `blur`, which Godot forwards as a window focus signal. Both paths
+## land on the same two signals so a run pauses wherever the player went.
+func _wire_focus() -> void:
+	var win := get_window()
+	if win == null:
+		return
+	if not win.focus_exited.is_connected(_on_window_focus_out):
+		win.focus_exited.connect(_on_window_focus_out)
+	if not win.focus_entered.is_connected(_on_window_focus_in):
+		win.focus_entered.connect(_on_window_focus_in)
+
+
+func _on_window_focus_out() -> void:
+	focus_lost.emit()
+
+
+func _on_window_focus_in() -> void:
+	focus_gained.emit()
 
 
 func _wire_takes() -> void:
@@ -257,8 +279,12 @@ func apply_engine_settings() -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	elif not want_full and is_full:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-	DisplayServer.window_set_vsync_mode(
-		DisplayServer.VSYNC_ENABLED if bool(settings["vsync"]) else DisplayServer.VSYNC_DISABLED)
+	# The web display server cannot change V-Sync; asking it logs a user warning
+	# into the browser console on every settings apply, for a preference no
+	# browser build can honour anyway. Fullscreen stays — that one works.
+	if DisplayServer.get_name() != "web":
+		DisplayServer.window_set_vsync_mode(
+			DisplayServer.VSYNC_ENABLED if bool(settings["vsync"]) else DisplayServer.VSYNC_DISABLED)
 
 
 # --- front end ---------------------------------------------------------------

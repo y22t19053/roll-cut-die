@@ -61,6 +61,16 @@ static func _run_focus(h: Harness, tree: SceneTree, session: Node, packed: Packe
 	session.notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
 	h.ok("the player can resume and stay in play", not tree.paused and not inst.paused)
 
+	# A browser tab switch never sends the application-level pair; it fires the
+	# canvas blur, which Godot forwards as window focus. That path must pause too.
+	tree.root.focus_exited.emit()
+	h.ok("a window focus loss pauses as well (browser tab switch)", tree.paused and inst.paused)
+	tree.paused = false
+	inst.pause_ui._resume()
+	h.ok("resuming after a window focus loss clears both flags", not tree.paused and not inst.paused)
+	tree.root.focus_entered.emit()
+	h.ok("window focus gain does not auto-resume anything", not tree.paused and not inst.paused)
+
 	inst._notice_left = 2.0
 	inst._physics_process(1.0)
 	h.near("a one-second tick uses 50 ms of notice time", inst._notice_left, 1.95)
