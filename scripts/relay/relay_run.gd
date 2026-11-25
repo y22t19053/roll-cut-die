@@ -17,6 +17,8 @@ const FrameFX = preload("res://scripts/relay/frame_fx.gd")
 const Save = preload("res://scripts/relay/relay_save.gd")
 const TouchPad = preload("res://scripts/relay/touch_pad.gd")
 const ToyBridge = preload("res://scripts/relay/toy_bridge.gd")
+const FinalCut = preload("res://scripts/relay/final_cut.gd")
+const FinalReel = preload("res://scripts/relay/final_cut_reel.gd")
 const MODULES := 12
 ## The shapes the run draws from. I, L and O come first because they are the three
 ## honest answers to "what happens when the crew rebuilds it the other way round?":
@@ -45,6 +47,11 @@ static var next_seed := 0## A run that was written down between takes. The title
 ## New Game starts fresh or Continue picks this up.
 static var pending_resume := {}
 var run_seed := 0
+## A terminal report can supply this without changing any Relay win rules.
+var verdict := ""
+var _final_cut: Control
+var _final_cut_played := false
+var _final_outtakes: Array = []
 ## How many legs the current set asks for. A short set is faster; a long one
 ## pays a supply. This is the run's only real decision.
 var required_passes := PASSES
@@ -434,7 +441,8 @@ func _serialize_run() -> Dictionary:
 		"room_pass": room_pass, "segments": plan, "mark_stock": mark_stock, "cut_stock": cut_stock,
 		"free_cut": free_cut, "splice": splice.has_splice(), "deaths": deaths, "tracks": rec,
 		"room_track_start": room_track_start, "act": act, "act_mod": act_mod, "act_grace": act_grace,
-		"tutorial": _tutorial, "tut_next": _tut_next, "prologue": _prologue}
+		"tutorial": _tutorial, "tut_next": _tut_next, "prologue": _prologue,
+		"verdict": verdict, "final_outtakes": _final_outtakes}
 
 
 ## Written between takes, never mid-take: a leg only counts once it is in the can.
@@ -445,6 +453,8 @@ func _save_run() -> void:
 
 func _apply_run(d: Dictionary) -> void:
 	run_seed = int(d.get("seed", run_seed))
+	verdict = str(d.get("verdict", ""))
+	_final_outtakes = d.get("final_outtakes", []) if d.get("final_outtakes") is Array else []
 	_rng.seed = run_seed
 	difficulty = int(d.get("difficulty", difficulty))
 	required_passes = int(d.get("required_passes", PASSES))
@@ -1366,6 +1376,7 @@ func _hit(source: int) -> bool:
 			desk.show_message(_w("接片续拍", "SPLICED"))
 		return false
 	deaths += 1
+	_final_outtakes.append(FinalReel.relay_outtake(live, elapsed, "die", source))
 	score.cue("trap" if source == 0 else "hit")
 	rig.add_shake(1.0)
 	fx.flash(Color("f3dfad"), 0.34, 0.0, 0.22)
@@ -1406,6 +1417,27 @@ func _hit(source: int) -> bool:
 ## how far, how many takes, how many deaths, and the seed to replay it.
 func _show_sheet(won: bool) -> void:
 	if not is_inside_tree(): return
+	if _final_cut != null: return
+	if won and not _final_cut_played:
+		var reel := FinalReel.from_run(verdict, GameSession, tracks, _final_outtakes)
+		if not reel.is_empty():
+			verdict = reel["verdict"]
+			_final_cut_played = true
+			reel.merge({"seed": run_seed, "secs": active_clock, "deaths": deaths, "legs": run_legs})
+			_freeze()
+			if slate.is_running(): slate.hide_slate()
+			_final_cut = FinalCut.new()
+			add_child(_final_cut)
+			_final_cut.finished.connect(func() -> void:
+				_final_cut.queue_free()
+				_final_cut = null
+				_settle_sheet(true), CONNECT_ONE_SHOT)
+			_final_cut.play(reel)
+			return
+	_settle_sheet(won)
+
+
+func _settle_sheet(won: bool) -> void:
 	# The run is over, so the board gets out of the way instead of printing the
 	# DIE. card over the page that explains what the run was.
 	if slate.is_running(): slate.hide_slate()
@@ -1534,6 +1566,7 @@ func touch_key(key: int) -> void:
 
 
 func _press(key: int) -> void:
+	if _final_cut != null: return
 	# Whatever else is on screen, ESC always does something. On the cutting desk it
 	# leaves the desk (the old behaviour, and the cheapest way out); everywhere
 	# else it opens the pause menu, including while a card is up — a card that
@@ -1580,6 +1613,7 @@ func _press(key: int) -> void:
 					else:
 						cut_stock -= 1
 						cuts_used += 1
+					if not forced_cut: _final_outtakes.append(FinalReel.relay_outtake(live, elapsed, "cut"))
 					forced_cut = false
 					_board_cut()
 					_leave_cut()
