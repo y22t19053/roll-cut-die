@@ -7,9 +7,8 @@ extends Node2D
 ## it does under D — the pad must not become the camera-relative stick that would
 ## quietly undo the whole game.
 ##
-## Layout is in canvas units (project stretch is canvas_items + expand), sized off
-## the shorter side of the visible rect, so a 6" phone and a 13" tablet both get
-## buttons you can actually hit instead of 25-pixel slivers. Pinching zooms; the
+## Layout uses displayed pixels so stretching a small iframe preserves thumb target
+## sizes. The live node converts canvas input to those pixels. Pinching zooms; the
 ## camera distance is a view setting like brightness — it changes what you can see,
 ## never what can hit you.
 ##
@@ -26,10 +25,14 @@ const M_DONE := 3
 const M_LOST := 4
 const M_ITEM := 5
 
-## Canvas units of button radius per unit of the shorter visible side.
+## Pixels of button radius per unit of the shorter visible side.
 const SCALE := 0.13
-const SCALE_MIN := 96.0
+const SCALE_MIN := 44.0
 const SCALE_MAX := 216.0
+const HUD_TOP := 64.0
+const SHEET_BOTTOM := 96.0
+const STICK_SLOP := 1.35
+const BUTTON_SLOP := 1.14
 const DEADZONE := 0.34
 
 const PAPER := Color(0.933, 0.898, 0.796)
@@ -44,7 +47,8 @@ var rig: Node = null
 var _u := 140.0
 var _stick_center := Vector2.ZERO
 var _stick_radius := 130.0
-var _slots: Array = []
+var _stick: Rect2
+var _slots: Array[Rect2] = []
 var _buttons: Array = []
 var _press_index := -1
 var _held := {}
@@ -56,6 +60,7 @@ var _pinch_dist := 12.0
 var _font: Font
 var _visible_now := false
 var _last_size := Vector2.ZERO
+var _last_pixels := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -73,27 +78,48 @@ func _ready() -> void:
 
 ## --- layout maths (pure, testable) ------------------------------------------
 
+static func layout(viewport: Vector2, scale_hint: float = -1.0) -> Dictionary:
+	# Reserve the complete circular hit areas, including the forgiving outer rings.
+	var preferred := scale_hint if scale_hint > 0.0 else minf(viewport.x, viewport.y) * SCALE
+	var u := clampf(preferred, SCALE_MIN, SCALE_MAX)
+	var primary_r := 0.80 * BUTTON_SLOP
+	var secondary_r := 0.60 * BUTTON_SLOP
+	var step := 1.66
+	var margin := 0.32
+	var cluster_span := margin + primary_r + step + secondary_r
+	var available_height := viewport.y - HUD_TOP - SHEET_BOTTOM
+	var total_span := margin + 2.0 * 0.95 * STICK_SLOP + margin + cluster_span
+	u = maxf(0.0, minf(u, minf(available_height / cluster_span, viewport.x / total_span)))
+	var inset := margin * u
+	var bottom := viewport.y - SHEET_BOTTOM - inset
+	var stick_side := 2.0 * 0.95 * STICK_SLOP * u
+	var stick := Rect2(Vector2(inset, bottom - stick_side), Vector2.ONE * stick_side)
+	var primary := Vector2(viewport.x - inset - primary_r * u, bottom - primary_r * u)
+	var buttons: Array[Rect2] = []
+	for offset: Vector2 in [Vector2.ZERO, Vector2.LEFT, Vector2.UP, Vector2(-1, -1)]:
+		var radius := secondary_r
+		if offset == Vector2.ZERO:
+			radius = primary_r
+		elif offset == Vector2(-1, -1):
+			radius = 0.52 * BUTTON_SLOP
+		var half_size := Vector2.ONE * radius * u
+		buttons.append(Rect2(primary + offset * step * u - half_size, half_size * 2.0))
+	return {"u": u, "stick": stick, "buttons": buttons, "hud_top": HUD_TOP, "sheet_bottom": SHEET_BOTTOM}
+
+
 static func pad_scale(visible: Vector2) -> float:
-	return clampf(minf(visible.x, visible.y) * SCALE, SCALE_MIN, SCALE_MAX)
+	return layout(visible).u
 
 
 static func stick_origin(visible: Vector2, u: float) -> Vector2:
-	var m := u * 0.32
-	return Vector2(m + u * 0.95, visible.y - m - u * 0.95)
+	return (layout(visible, u).stick as Rect2).get_center()
 
 
 static func button_slots(visible: Vector2, u: float) -> Array:
-	## Four circular targets, biggest at the corner: a thumb can find the primary
-	## action without looking, the rest stay in the same place every phase.
-	var m := u * 0.32
-	var step := u * 1.66
-	var primary := Vector2(visible.x - m - u * 0.80, visible.y - m - u * 0.80)
-	return [
-		{"pos": primary, "r": u * 0.80},
-		{"pos": primary - Vector2(step, 0.0), "r": u * 0.60},
-		{"pos": primary - Vector2(0.0, step), "r": u * 0.60},
-		{"pos": primary - Vector2(step, step), "r": u * 0.52},
-	]
+	var slots := []
+	for rect: Rect2 in layout(visible, u).buttons:
+		slots.append({"pos": rect.get_center(), "r": rect.size.x * 0.5 / BUTTON_SLOP})
+	return slots
 
 
 ## Eight sectors, not a free analogue angle: the keys are four directions with a
@@ -193,19 +219,23 @@ func pad_preference() -> String:
 
 
 func _layout() -> void:
-	var visible: Vector2 = get_viewport().get_visible_rect().size
-	_u = pad_scale(visible)
-	_stick_center = stick_origin(visible, _u)
-	_stick_radius = _u * 0.95
-	_slots = button_slots(visible, _u)
+	_last_size = get_viewport_rect().size
+	_last_pixels = Vector2(get_window().size)
+	if _last_pixels.x <= 0.0 or _last_pixels.y <= 0.0:
+		return
+	scale = _last_size / _last_pixels
+	var geometry := layout(_last_pixels)
+	_u = geometry.u
+	_stick = geometry.stick
+	_stick_center = _stick.get_center()
+	_stick_radius = _stick.size.x * 0.5 / STICK_SLOP
+	_slots = geometry.buttons
 	_buttons = buttons_for(_mode())
 	queue_redraw()
 
 
 func _process(_dt: float) -> void:
-	var shape := get_viewport().get_visible_rect().size
-	if shape != _last_size:
-		_last_size = shape
+	if get_viewport_rect().size != _last_size or Vector2(get_window().size) != _last_pixels:
 		_layout()
 	var want := (
 		wanted(_mode(), _board_running())
@@ -234,10 +264,9 @@ func _release_all() -> void:
 
 
 func _slot_at(p: Vector2) -> int:
-	for i in range(_slots.size()):
-		var s: Dictionary = _slots[i]
-		var r: float = float(s["r"]) * 1.14
-		if p.distance_to(s["pos"] as Vector2) <= r:
+	for i in range(mini(_slots.size(), _buttons.size())):
+		var slot := _slots[i]
+		if p.distance_to(slot.get_center()) <= slot.size.x * 0.5:
 			return i
 	return -1
 
@@ -246,7 +275,7 @@ func _input(event: InputEvent) -> void:
 	if not _visible_now:
 		return
 	if event is InputEventScreenTouch:
-		var t := event as InputEventScreenTouch
+		var t := make_input_local(event) as InputEventScreenTouch
 		if t.pressed:
 			var slot := _slot_at(t.position)
 			if slot >= 0:
@@ -255,7 +284,7 @@ func _input(event: InputEvent) -> void:
 				_act(slot)
 				_accept()
 				return
-			if t.position.distance_to(_stick_center) <= _stick_radius * 1.35:
+			if t.position.distance_to(_stick_center) <= _stick.size.x * 0.5:
 				_stick_id = t.index
 				_set_stick(t.position)
 				_accept()
@@ -275,7 +304,7 @@ func _input(event: InputEvent) -> void:
 		_accept()
 		return
 	if event is InputEventScreenDrag:
-		var d := event as InputEventScreenDrag
+		var d := make_input_local(event) as InputEventScreenDrag
 		if d.index == _stick_id:
 			_set_stick(d.position)
 			_accept()
@@ -352,9 +381,9 @@ func _draw() -> void:
 	draw_arc(knob, u * 0.30, 0.0, TAU, 32, Color(PAPER.r, PAPER.g, PAPER.b, 0.44), u * 0.028, true)
 	# Buttons.
 	for i in range(mini(_slots.size(), _buttons.size())):
-		var s: Dictionary = _slots[i]
-		var c: Vector2 = s["pos"]
-		var r: float = float(s["r"])
+		var slot := _slots[i]
+		var c := slot.get_center()
+		var r := slot.size.x * 0.5 / BUTTON_SLOP
 		var on: bool = _held.values().has(i)
 		var tint := AMBER if i == 0 else MINT
 		draw_circle(c, r, Color(tint.r, tint.g, tint.b, 0.20 if on else 0.11))

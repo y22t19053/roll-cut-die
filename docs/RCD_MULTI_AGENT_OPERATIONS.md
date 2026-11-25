@@ -101,3 +101,7 @@ python tools/verify_all.py --json
 G 与 F 共用 `relay_run.gd`。主控集成时按常量区和结算区分别核对改动，并保留各支在测试入口注册的用例。
 
 并行支的验收顺序：先在本支运行 `tools/verify_all.py --baseline 2107`，通过后运行 `tools/verify_branch.py --baseline 2107` 核对报告里的工作树路径，最后由主控在合并后的工作树再跑一次全量门禁。
+
+## Sprint 9 · C 支触屏交接
+
+C 在 `codex-c/sprint9-touch` worktree 内提交触控板、测试与预览、两张实拍及两份交接文档。主控负责合并、推送和更新路线图与决策日志。集成时保留两个测试入口中的 `touch_layout` 注册，按 `tools/verify_all.py --baseline 2215` 复核断言与噪声，并核对 `visual/preview/sprint9_touch_640.png` 和 `sprint9_touch_844.png` 的原始像素尺寸。
