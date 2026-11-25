@@ -89,6 +89,21 @@ def web_files() -> list[pathlib.Path]:
     ]
 
 
+def prune_web() -> None:
+    """Godot never deletes an output it stopped producing. Turning a preset option off
+    (e.g. extensions support) leaves the old wasm in builds/web, and that stale binary
+    would ship inside the web zip and the TOY mirror. Only stale *.wasm siblings are
+    pruned -- the loader names the wasm it wants inside index.js."""
+    text = (WEB / "index.html").read_text(encoding="utf-8", errors="replace")
+    for js in WEB.glob("index*.js"):
+        text += js.read_text(encoding="utf-8", errors="replace")
+    for path in sorted(WEB.glob("index*.wasm")):
+        if path.name in text or (WEB / "index.wasm").samefile(path):
+            continue
+        path.unlink()
+        print(f"[release] pruned stale {path.name}")
+
+
 def mirror_toy() -> None:
     if TOY.exists():
         shutil.rmtree(TOY)
@@ -150,6 +165,7 @@ def main() -> int:
         if not args.skip_web:
             export("Web", WEB / "index.html", "export Web -> builds/web/index.html")
             run([python, str(ROOT / "tools" / "patch_web_shell.py"), str(WEB / "index.html")], "patch web shell")
+            prune_web()
             mirror_toy()
             zip_dir(web_zip, web_files(), WEB)
             made.append(web_zip)
