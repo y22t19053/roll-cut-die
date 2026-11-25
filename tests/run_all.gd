@@ -47,6 +47,7 @@ const MODULES := [
 	["inrun_ui_deai", preload("res://tests/test_inrun_ui_and_deai.gd")],
 	["touch_pad", preload("res://tests/test_touch_pad.gd")],
 	["toy_score", preload("res://tests/test_toy_score.gd")],
+	["score_layers", preload("res://tests/test_score_layers.gd")],
 	["gantry", preload("res://tests/test_gantry.gd")],
 ]
 

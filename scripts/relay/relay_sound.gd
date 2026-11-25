@@ -22,33 +22,40 @@ const TUNES := {
 	"clear": [[0,62,0.32],[0.10,69,0.32],[0.22,74,0.40]],
 	"win": [[0,62,0.35],[0.14,65,0.31],[0.28,69,0.34],[0.54,74,0.42],[0.54,65,0.19]]}
 const PRIORITY := {"sprint":7,"light_bonus":8,"belt":1,"wire":3,"key_safe":2,"catwalk":2,"stage_turn":4,"near":0,"line":1,"draw":2,"choose":3,"pickup":4,"trap":9,"hit":10,"clear":7,"win":11}
+const DANGER_BEATS := 4.0
+const SILENT_DB := -60.0
+const DRIVE_PARTS := ["drive", "answers", "sprint"]
+enum State { IDLE, PROGRESS, DANGER, SPRINT, WRAP }
+enum Ending { NONE, COLLISION, WIN }
+
 static var _score: AudioStreamWAV
 static var _cues := {}
+static var _drive_streams: Array[AudioStreamWAV] = []
+static var _murmur_stream: AudioStreamWAV
 static var _danger_stream: AudioStreamWAV
-const DANGER_BEATS := 4.0
-## Bed of tension: a four-beat pulse under the score. It is not a warning label;
-## it says the room is being watched from somewhere close.
+static var _calm_stream: AudioStreamWAV
+static var _coda_stream: AudioStreamWAV
+var _collision_stream: AudioStream
 var _danger := AudioStreamPlayer.new()
-var _danger_target := -60.0
+var _danger_level := 0.0
 var _ducked := false
-var _act_lift := 0.0
 var _act_index: int = 0
 var _final_sprint: bool = false
 var _still_seconds: float = 0.0
+var _ending := Ending.NONE
+var _cue_duck_db := 0.0
+var _cue_duck_until := 0
 var _drive := AudioStreamPlayer.new()
+var _drive_mix := AudioStreamSynchronized.new()
 var _murmur := AudioStreamPlayer.new()
-static var _drive_stream: AudioStreamWAV
-static var _murmur_stream: AudioStreamWAV
 var _music := AudioStreamPlayer.new()
 var _fx := AudioStreamPlayer.new()
 var _lock_until := 0
 var _rank := -1
 var _last := {}
-## Three states of the same four notes. The recordings in assets/audio are used
-## when the project has imported them; the same parts are also synthesised here,
-## so a fresh checkout still has a score.
-const BED_PATHS := {"calm": "res://assets/audio/bed_calm.wav",
-	"tense": "res://assets/audio/bed_tense.wav", "halt": "res://assets/audio/bed_halt.wav"}
+## Keep the recorded tension and collision beds, with procedural fallbacks.
+const BED_PATHS := {"tense": "res://assets/audio/bed_tense.wav",
+	"halt": "res://assets/audio/bed_halt.wav"}
 const BED_BPM := 72.0
 const BED_BEAT := 60.0 / BED_BPM
 const MOTIF := [146.83, 174.61, 220.00, 261.63] # D3 F3 A3 C4
@@ -87,38 +94,32 @@ func _ready() -> void:
 		_cues["hit"] = Foley.make_stream("death")
 		for kind: String in ["sprint", "light_bonus", "belt", "wire", "key_safe", "catwalk", "stage_turn"]:
 			_cues[kind] = Foley.make_stream(kind)
-		_drive_stream = _compose_drive()
+		_drive_streams = [_compose_drive(), _compose_answers(), _compose_sprint()]
 		_murmur_stream = _compose_murmur()
+		_danger_stream = _compose_danger()
+		_calm_stream = _compose_bed("calm")
+		_coda_stream = _compose_coda()
 	_drive.name = "Drive"
-	_drive.stream = _drive_stream
-	_drive.volume_db = -28.0
+	_drive_mix.stream_count = DRIVE_PARTS.size()
+	for i: int in DRIVE_PARTS.size():
+		_drive_mix.set_sync_stream(i, _drive_streams[i])
+	_drive.stream = _drive_mix
 	_murmur.name = "Murmur"
 	_murmur.stream = _murmur_stream
-	_murmur.volume_db = -60.0
-	_murmur.play()
-	_music.volume_db = -11.5
 	_music.stream = _score
-	# Start both equal-length stems in the same audio mix block.
-	_music.play()
-	_drive.play()
 	_danger.name = "Tension"
 	_danger.bus = &"Master"
 	add_child(_danger)
-	if _danger_stream == null:
-		_danger_stream = _compose_danger()
 	_danger.stream = _danger_stream
-	_danger.volume_db = -60.0
-	_danger.play()
-	for pair: Array in [["calm", _calm, _calm_db], ["tense", _tense, -60.0], ["halt", _halt, -60.0]]:
+	_collision_stream = _bed("halt")
+	for pair: Array in [["calm", _calm], ["tense", _tense], ["halt", _halt]]:
 		var key: String = pair[0]
 		var deck: AudioStreamPlayer = pair[1]
 		deck.name = "Bed_%s" % key
 		deck.bus = &"Master"
 		add_child(deck)
-		deck.stream = _bed(key)
-		deck.volume_db = float(pair[2])
-		if key != "halt":
-			deck.play()
+	_calm.stream = _calm_stream
+	_tense.stream = _bed("tense")
 	_dress.name = "Dress"
 	_dress.bus = &"Master"
 	_dress.volume_db = -26.0
@@ -127,34 +128,20 @@ func _ready() -> void:
 	_dress_fx.bus = &"Master"
 	_dress_fx.volume_db = -14.0
 	add_child(_dress_fx)
+	_update_mix(INF)
+	# Start all equal-length 108 BPM parts in the same audio mix block.
+	for deck: AudioStreamPlayer in [_music, _drive, _calm, _tense, _danger, _murmur]:
+		deck.play()
 
 
 ## How close the nearest armed ghost is, 0..1. The score is being listened to
 ## from across the room or from inside it; nothing here is a rule.
 func set_danger(v: float) -> void:
-	if not is_node_ready() or _danger.stream == null:
-		return
-	var w: float = clampf(v, 0.0, 1.0)
-	var target: float = -60.0 if v <= 0.01 else lerpf(-24.0, -9.0, w)
-	if absf(target - _danger_target) >= 0.4:
-		_danger_target = target
-	# The bed changes state with the same information: one note of the world.
-	if _beds_muted:
-		return
-	var calm_target := lerpf(-22.0, -31.0, w)
-	var tense_target: float = -60.0 if w <= 0.02 else lerpf(-24.0, -12.0, w)
-	# The last act never goes fully quiet: the room has been counting takes.
-	tense_target += _act_lift
-	if absf(calm_target - _calm_db) >= 0.5:
-		_calm_db = calm_target
-	if absf(tense_target - _tense_db) >= 0.5:
-		_tense_db = tense_target
+	_danger_level = clampf(v, 0.0, 1.0)
 
 
-## The last act does not go quiet: the room has been counting takes all along.
 func set_act(act_index: int) -> void:
 	_act_index = clampi(act_index, 0, 3)
-	_act_lift = clampf(float(act_index) * 1.4, 0.0, 3.2)
 
 
 func set_final_sprint(active: bool) -> void:
@@ -166,26 +153,88 @@ func set_stillness(still_seconds: float) -> void:
 
 
 func _process(delta: float) -> void:
-	# One owner per gain: no accumulating per-frame volume tweens.
-	var quiet: bool = _beds_muted or _ducked or _out_of_frame
-	var duck_db: float = -18.0 if _out_of_frame else (-8.5 if _ducked else 0.0)
-	var music_db: float = -60.0 if _beds_muted else -11.5 + duck_db
-	_music.volume_db = move_toward(_music.volume_db, music_db, delta * 100.0)
-	for pair: Array in [[_calm, _calm_db], [_tense, _tense_db], [_danger, _danger_target], [_dress, -26.0]]:
+	_update_mix(delta)
+
+
+## Pure targets in dB, plus the heartbeat rate. The calm/tense crossfade
+## follows proximity even while the sprint rhythm has the foreground.
+static func _mix_targets(act: int, danger: float, final_sprint: bool, ducked := false,
+		ending := Ending.NONE, still_seconds := 0.0, reduce_motion := false,
+		cue_duck_db := 0.0, out_of_frame := false) -> Dictionary:
+	act = clampi(act, 0, 3)
+	danger = clampf(danger, 0.0, 1.0)
+	var tension := smoothstep(0.35, 0.70, danger)
+	var urgency := smoothstep(0.35, 1.0, danger)
+	var state := State.IDLE if act == 0 else State.PROGRESS
+	if danger >= 0.60:
+		state = State.DANGER
+	if final_sprint:
+		state = State.SPRINT
+	if ducked or ending != Ending.NONE:
+		state = State.WRAP
+
+	var targets := {
+		"state": state,
+		"calm": lerpf(-21.0 if act == 0 else -26.0, -41.0, tension),
+		"tense": lerpf(SILENT_DB, -17.0, tension),
+		"danger": lerpf(SILENT_DB, -17.0, smoothstep(0.35, 0.85, danger)),
+		"danger_pitch": lerpf(1.0, 1.50, urgency),
+		"music": lerpf(-17.5, -29.0, tension) if act >= 1 else SILENT_DB,
+		"drive": lerpf(-22.0, -34.0, tension) if act >= 2 else SILENT_DB,
+		"answers": lerpf(-19.0, -32.0, tension) if act >= 3 else SILENT_DB,
+		"sprint": SILENT_DB,
+		"dress": -35.0 if act == 0 else -28.0,
+		"murmur": -34.0 if still_seconds >= 2.0 and not ducked else SILENT_DB,
+		"halt": SILENT_DB,
+	}
+	if final_sprint:
+		targets["music"] = -21.0
+		targets["drive"] = -28.0 if act >= 2 else SILENT_DB
+		targets["answers"] = -27.0 if act >= 3 else SILENT_DB
+		targets["sprint"] = -16.0
+		targets["danger"] = minf(targets["danger"], -24.0)
+		targets["tense"] = minf(targets["tense"], -22.0)
+		targets["murmur"] = SILENT_DB
+	if reduce_motion:
+		targets["drive"] -= 12.0
+		targets["sprint"] -= 12.0
+	# Off the frame the set is behind you: everything sits 18 dB down and the
+	# room murmur takes over, so the way back is audible rather than visible.
+	if out_of_frame:
+		for part: String in ["calm", "tense", "danger", "music", "drive", "answers", "sprint", "dress"]:
+			targets[part] = maxf(SILENT_DB, targets[part] - 18.0)
+		targets["murmur"] = -26.0
+	# Use the stronger duck while cues overlap a slate. The coda has its own
+	# envelope and stays independent once the run has ended.
+	var attenuation := maxf(12.0 if ducked else 0.0, cue_duck_db)
+	for part: String in ["calm", "tense", "danger", "music", "drive", "answers", "sprint", "dress", "murmur"]:
+		targets[part] = SILENT_DB if ending != Ending.NONE else maxf(SILENT_DB, targets[part] - attenuation)
+	match ending:
+		Ending.COLLISION: targets["halt"] = -25.0
+		Ending.WIN: targets["halt"] = -13.0
+	return targets
+
+
+func _update_mix(delta: float) -> void:
+	var fx_duck := _cue_duck_db if Time.get_ticks_msec() < _cue_duck_until else 0.0
+	var targets := _mix_targets(_act_index, _danger_level, _final_sprint, _ducked,
+		_ending, _still_seconds, _reduce_motion(), fx_duck, _out_of_frame)
+	var fall := 900.0 if _ending == Ending.COLLISION else 180.0
+	for pair: Array in [[_music, "music"], [_calm, "calm"], [_tense, "tense"],
+			[_danger, "danger"], [_dress, "dress"], [_murmur, "murmur"]]:
 		var deck: AudioStreamPlayer = pair[0]
-		var level: float = -60.0 if _beds_muted else maxf(-60.0, float(pair[1]) + duck_db)
-		deck.volume_db = move_toward(deck.volume_db, level, delta * 140.0)
-	var drive_db: float = lerpf(-28.0, -15.0, float(_act_index) / 3.0)
-	if _final_sprint: drive_db += 3.5
-	if _reduce_motion(): drive_db -= 12.0
-	if _ducked: drive_db -= 8.5
-	if _out_of_frame: drive_db -= 18.0
-	if _beds_muted: drive_db = -60.0
-	_drive.volume_db = move_toward(_drive.volume_db, drive_db, delta * 48.0)
-	var murmur_db: float = -26.0 if _out_of_frame else (-34.0 if _still_seconds >= 2.0 and not quiet else -60.0)
-	_murmur.volume_db = move_toward(_murmur.volume_db, murmur_db, delta * (104.0 if quiet or _still_seconds < 0.2 else 26.0))
-	_music.pitch_scale = 1.0
-	_drive.pitch_scale = 1.0
+		var target: float = targets[pair[1]]
+		var rise := 26.0 if deck == _murmur else 160.0
+		deck.volume_db = move_toward(deck.volume_db, target, delta * (fall if target < deck.volume_db else rise))
+	for i: int in DRIVE_PARTS.size():
+		var current := _drive_mix.get_sync_stream_volume(i)
+		var target: float = targets[DRIVE_PARTS[i]]
+		var speed := fall if target < current else 160.0
+		if DRIVE_PARTS[i] == "sprint":
+			speed = 900.0 if target < current else 460.0
+		_drive_mix.set_sync_stream_volume(i, move_toward(current, target, delta * speed))
+	_danger.pitch_scale = move_toward(_danger.pitch_scale, targets["danger_pitch"], delta * 2.5)
+	_halt.volume_db = targets["halt"]
 
 
 ## Each family of set has its own pitch for the same two beds, plus one layer of
@@ -266,15 +315,14 @@ func duck(on: bool) -> void:
 static func _compose_danger() -> AudioStreamWAV:
 	var buf := PackedFloat32Array()
 	buf.resize(roundi(DANGER_BEATS * BEAT * RATE))
-	for b in int(DANGER_BEATS):
-		var at := roundi(float(b) * BEAT * RATE)
-		var n := ceili(0.42 * RATE)
-		for i in n:
-			var t := float(i) / RATE
-			var s := sin(TAU * 55.0 * t) * 0.55 + sin(TAU * 82.5 * t) * 0.22
-			if b % 2 == 1:
-				s += sin(TAU * 1760.0 * t) * exp(-90.0 * t) * 0.25
-			buf[(at + i) % buf.size()] += s * exp(-9.0 * t) * minf(t / 0.004, 1.0) * 0.5
+	for beat in int(DANGER_BEATS):
+		for stroke: int in 2:
+			var at := roundi((float(beat) + 0.28 * stroke) * BEAT * RATE)
+			for i in ceili(0.24 * RATE):
+				var t := float(i) / RATE
+				var tone := sin(TAU * 55.0 * t) * 0.55 + sin(TAU * 82.5 * t) * 0.22
+				var accent := 0.90 if stroke == 0 else 0.48
+				buf[(at + i) % buf.size()] += tone * exp(-18.0 * t) * minf(t / 0.004, 1.0) * accent
 	return _wav(buf, true)
 
 ## The bed: the recorded loop when the project has imported it, otherwise the
@@ -336,25 +384,26 @@ static func _compose_bed(kind: String) -> AudioStreamWAV:
 	var beats := 16.0
 	var buf := PackedFloat32Array()
 	buf.resize(roundi(beats * BED_BEAT * RATE))
-	# A pad that breathes rather than holds: three low sines and a slow swell.
+	var tense := kind == "tense"
+	# The calm pad falls away before the loop comes back around.
 	for pair: Array in [[73.42, 0.16], [110.0, 0.09], [146.83, 0.07]]:
 		var step := TAU * float(pair[0]) / RATE
 		for i in buf.size():
 			var t := float(i) / RATE
-			buf[i] += sin(step * i) * (0.75 + 0.25 * sin(TAU * 0.05 * t)) * float(pair[1])
-	# The motif: four notes. Calm leaves them to ring, tense runs them short.
-	var tense := kind == "tense"
-	for rep in (2 if tense else 1):
-		var gap := BED_BEAT * (0.5 if tense else 1.0)
-		for k in MOTIF.size():
-			_add_tone(buf, (float(rep) * 8.0 * BED_BEAT) + float(k) * gap, float(MOTIF[k]),
-				0.9 if tense else 2.4, 0.15 if tense else 0.17)
+			var swell := 0.75 + 0.25 * sin(TAU * 0.05 * t)
+			if not tense:
+				swell = smoothstep(0.0, BED_BEAT, t) * (1.0 - smoothstep(5.0 * BED_BEAT, 12.0 * BED_BEAT, t))
+			buf[i] += sin(step * i) * swell * float(pair[1])
 	if tense:
+		for rep in 2:
+			for k in MOTIF.size():
+				_add_tone(buf, (float(rep) * 8.0 + float(k) * 0.5) * BED_BEAT, MOTIF[k], 0.9, 0.15)
 		for step_i in int(beats * 2.0):
 			_add_pulse(buf, float(step_i) * BED_BEAT * 0.5, 41.2 if step_i % 4 == 0 else 55.0)
 	else:
-		for bar in int(beats / 4.0):
-			_add_tick(buf, float(bar) * 4.0 * BED_BEAT + 0.11)
+		_add_tone(buf, 0.5 * BED_BEAT, MOTIF[0], 2.4, 0.25)
+		_add_tone(buf, 4.0 * BED_BEAT, MOTIF[1], 2.4, 0.19)
+		_normalize(buf, 0.62)
 	return _wav(buf, true)
 
 
@@ -493,45 +542,41 @@ func cue(kind: String) -> void:
 	if now - int(_last.get(kind,-1200)) < refractory: return
 	if now < _lock_until and int(PRIORITY[kind]) < _rank: return
 	_rank = PRIORITY[kind]
-	_lock_until = now + (650 if kind == "light_bonus" else (300 if kind in ["clear","win"] else 100))
-	_last[kind] = now
-	if kind == "hit" or kind == "trap":
-		_halt_bed()
-	elif kind == "win":
-		_mute_beds()
 	_fx.stream = _cues[kind]
+	var collision := kind in ["hit", "trap"]
+	_lock_until = now + (650 if kind == "light_bonus" else (300 if kind == "clear" else 100))
+	if collision or kind == "win":
+		_lock_until = now + ceili(_fx.stream.get_length() * 1000.0)
+	_last[kind] = now
+	if collision:
+		_ending = Ending.COLLISION
+		_still_seconds = 0.0
+		_halt.stream = _collision_stream
+		_update_mix(0.02)
+		_halt.play()
+	elif kind == "win":
+		_ending = Ending.WIN
+		_still_seconds = 0.0
+		_halt.stream = _coda_stream
+		_update_mix(0.03)
+		_halt.play()
+	elif kind in ["line", "clear", "pickup", "sprint", "stage_turn", "wire", "light_bonus"]:
+		_cue_duck_db = 3.0
+		_cue_duck_until = now + mini(300, ceili(_fx.stream.get_length() * 1000.0))
 	_fx.volume_db = -4 if kind != "near" else -8
 	_fx.play()
-
-
-## A collision stops the bed: the room goes quiet under the board.
-func _halt_bed() -> void:
-	_beds_muted = true
-	_still_seconds = 0.0
-	_calm_db = -60.0
-	_tense_db = -60.0
-	_halt.volume_db = -11.0
-	_halt.play()
-
-
-func _mute_beds() -> void:
-	_beds_muted = true
-	_still_seconds = 0.0
-	_calm_db = -60.0
-	_tense_db = -60.0
 
 
 ## A new take brings the room back; the score picks up where the room is.
 func resume_beds() -> void:
 	if not is_node_ready(): return
-	_beds_muted = false
+	_ending = Ending.NONE
 	_still_seconds = 0.0
+	_danger_level = 0.0
 	_halt.stop()
-	_calm_db = -22.0
-	_tense_db = -60.0
-	_danger_target = -60.0
 	if not _calm.playing: _calm.play()
 	if not _tense.playing: _tense.play()
+
 
 static func _compose() -> AudioStreamWAV:
 	var buf := PackedFloat32Array()
@@ -551,7 +596,6 @@ static func _compose() -> AudioStreamWAV:
 			if b % 4 == 3: _lay(buf, bank, at, root + 12, 0, 0.22)
 			_lay(buf, bank, at + 0.5 * BEAT, int(tones[b % tones.size()]), 1, 0.26)
 			if b % 2 == 1: _lay(buf, bank, at + 0.75 * BEAT, int(tones[0]) + 12, 1, 0.12)
-	for n: Array in ANSWERS: _lay(buf, bank, float(n[0]) * BEAT, int(n[1]), 2, float(n[2]))
 	_normalize(buf, 0.82)
 	return _wav(buf, true)
 
@@ -567,22 +611,71 @@ static func _compose_drive() -> AudioStreamWAV:
 	buf.resize(roundi(32.0 * BEAT * RATE))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 10832
-	for beat: int in 128:
-		var start: int = roundi(float(beat) * BEAT * 0.25 * RATE)
-		var gain: float = 0.32 if beat % 2 == 0 else 0.10
-		for i: int in roundi(0.065 * RATE):
-			var t: float = float(i) / RATE
-			var click: float = rng.randf_range(-1.0, 1.0) * 0.4 + sin(TAU * 1650.0 * t) * 0.3
-			buf[(start + i) % buf.size()] += click * exp(-t * 95.0) * minf(t / 0.002, 1.0) * gain
-		if beat % 4 == 0: _add_pulse(buf, float(beat) * BEAT * 0.25, 73.416)
-	# Upper chord tones brighten gently as the act raises this stem, in tune.
+	for beat: int in 32:
+		var at := float(beat) * BEAT
+		_add_pulse(buf, at, 73.416)
+		_add_click(buf, rng, at + 0.5 * BEAT, 0.22)
+		if beat % 2 == 1:
+			_add_click(buf, rng, at + 0.75 * BEAT, 0.13)
+	_normalize(buf, 0.72)
+	return _wav(buf, true)
+
+
+static func _compose_answers() -> AudioStreamWAV:
+	var buf := PackedFloat32Array()
+	buf.resize(roundi(32.0 * BEAT * RATE))
+	var bank: Dictionary = {}
+	for note: Array in ANSWERS:
+		_lay(buf, bank, float(note[0]) * BEAT, int(note[1]), 2, float(note[2]))
+	_normalize(buf, 0.62)
+	return _wav(buf, true)
+
+
+static func _compose_sprint() -> AudioStreamWAV:
+	var buf := PackedFloat32Array()
+	buf.resize(roundi(32.0 * BEAT * RATE))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 10843
+	for step: int in 128:
+		var at := float(step) * BEAT * 0.25
+		var accent := 0.11
+		if step % 8 == 4:
+			accent = 0.43
+		elif step % 2 == 0:
+			accent = 0.24
+		_add_click(buf, rng, at, accent)
+		if step % 8 in [0, 3, 6]:
+			_add_pulse(buf, at, 73.42 if step % 8 == 0 else 55.0)
 	var bank: Dictionary = {}
 	for chord: Array in Harmony.CHORDS:
 		var tones: Array = chord[3]
 		for step: int in int(float(chord[1]) * 2.0):
-			_lay(buf, bank, (float(chord[0]) + float(step) * 0.5) * BEAT, int(tones[step % tones.size()]) + 12, 1, 0.045)
-	_normalize(buf, 0.72)
+			var at := (float(chord[0]) + 0.25 + float(step) * 0.5) * BEAT
+			_lay(buf, bank, at, int(tones[step % tones.size()]) + 12, 1, 0.18)
+	_normalize(buf, 0.75)
 	return _wav(buf, true)
+
+
+static func _add_click(buf: PackedFloat32Array, rng: RandomNumberGenerator, at: float, gain: float) -> void:
+	var start := roundi(at * RATE)
+	for i in roundi(0.065 * RATE):
+		var t := float(i) / RATE
+		var click := rng.randf_range(-1.0, 1.0) * 0.4 + sin(TAU * 1650.0 * t) * 0.3
+		buf[(start + i) % buf.size()] += click * exp(-t * 95.0) * minf(t / 0.002, 1.0) * gain
+
+
+static func _compose_coda() -> AudioStreamWAV:
+	var buf := PackedFloat32Array()
+	buf.resize(roundi(4.0 * RATE))
+	# Let the win sting crest, then settle onto a low D-minor chord.
+	_add_tone(buf, 0.85, MOTIF[2], 1.55, 0.30)
+	_add_tone(buf, 1.12, MOTIF[1], 1.6, 0.27)
+	_add_tone(buf, 1.46, MOTIF[0], 2.45, 0.40)
+	_add_tone(buf, 1.46, MOTIF[0] * 0.5, 2.45, 0.20)
+	for i in buf.size():
+		buf[i] *= 1.0 - smoothstep(3.0, 3.9, float(i) / RATE)
+	_normalize(buf, 0.62)
+	return _wav(buf, false)
 
 
 static func _compose_murmur() -> AudioStreamWAV:
