@@ -16,6 +16,8 @@ const NightStageMusic = preload("res://scripts/ui/night_stage_music.gd")
 const RUN_SCENE := "res://scenes/relay/run.tscn"
 ## Only read for its constants (how many sets a run has), never instantiated.
 const RunScript = preload("res://scripts/relay/relay_run.gd")
+const Rules = preload("res://scripts/relay/relay_rules.gd")
+const ToyBridge = preload("res://scripts/relay/toy_bridge.gd")
 const GLYPH_X := 64
 
 var settings_panel: Control
@@ -25,6 +27,13 @@ var _menu: Control
 var _motion_toggle: Button
 var _in_credits := false
 var _failed := false
+## The board, if the platform is there. Cached, because the menu is rebuilt on
+## every language and setting change and a rebuild must not erase a rank.
+var _bridge: Node = null
+var _today: Label = null
+var _board_rows: Array = []
+var _board_mine: Dictionary = {}
+var _board_tries := 0
 
 
 func _ready() -> void:
@@ -54,6 +63,7 @@ func _ready() -> void:
 	settings_panel.closed.connect(_focus_menu)
 	GameSession.language_changed.connect(_on_language_changed)
 	_render()
+	_start_board()
 	_focus_menu()
 	Logger.info("title ready")
 
@@ -209,7 +219,11 @@ func _render() -> void:
 		modes.set_item_disabled(i, not available)
 	if not rules.unlocked(rules.selected_mode): rules.selected_mode = 0
 	modes.select(rules.selected_mode)
-	modes.item_selected.connect(func(i: int) -> void: rules.selected_mode = i)
+	modes.item_selected.connect(func(i: int) -> void:
+		rules.selected_mode = i
+		# Boards are per difficulty, so the label must be asked again or it would
+		# keep showing the rank of a run that was played on another ladder.
+		_start_board())
 	buttons.add_child(modes)
 	# What the player has done before: a record, never a head start.
 	var ran: Dictionary = rules.meta()
@@ -222,7 +236,14 @@ func _render() -> void:
 	var daily := _secondary(UiKit.button(
 		("每日挑战" if zh else "DAILY CHALLENGE") + (" %06X" % rules.daily_seed()), _on_daily))
 	daily.name = "Daily"
+	daily.tooltip_text = ("同一天所有人同一张图，只比谁走得更好" if zh
+		else "The same map for everyone today; the board compares how you walked it")
 	buttons.add_child(daily)
+	_today = UiKit.label(_today_text(zh), 15, UiKit.DIM)
+	_today.name = "Today"
+	_today.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_today.custom_minimum_size = Vector2(520, 0)
+	buttons.add_child(_today)
 	var rule := ColorRect.new()
 	rule.color = Color(UiKit.DIM, 0.35)
 	rule.custom_minimum_size = Vector2(220, 2)
@@ -410,12 +431,71 @@ func _leave(path: String) -> Error:
 func _on_new_game() -> void:
 	var run = load("res://scripts/relay/relay_run.gd")
 	run.pending_resume = {} # A new run never continues the one left open.
+	# A daily seed that was never consumed (the scene refused to load) must not
+	# quietly turn the next new game into today's map.
+	run.next_seed = 0
 	var err := _leave(RUN_SCENE)
 	if err != OK:
 		Logger.error("cannot open relay run: %s" % error_string(err))
 		_failed = true
 		_render()
 		_focus_menu()
+
+
+## The daily board: asked for once when the menu opens, and again whenever the
+## difficulty changes. On desktop, in the editor and on a preview page there is
+## no platform to ask, so the line keeps to what the machine already knows.
+func _start_board() -> void:
+	if not ToyBridge.available():
+		# The shell loads the SDK asynchronously, and the menu is built one frame
+		# after boot: on a phone the first frame can win that race. Ask a few more
+		# times, then stop — a board is never a reason to keep a timer alive.
+		if OS.has_feature("web") and _board_tries < 8:
+			_board_tries += 1
+			get_tree().create_timer(1.5).timeout.connect(_start_board)
+		return
+	_board_tries = 0
+	if _bridge == null:
+		_bridge = ToyBridge.new()
+		_bridge.name = "ToyBridge"
+		add_child(_bridge)
+		_bridge.ranks_ready.connect(_on_ranks)
+	_bridge.probe_ranks(Rules.board_for(Rules.selected_mode), "day", 3)
+
+
+func _on_ranks(rows: Array, mine: Dictionary) -> void:
+	_board_rows = rows
+	_board_mine = mine
+	if is_instance_valid(_today):
+		_today.text = _today_text(Loc.language == "zh")
+
+
+## One line, always true: the date and the local best are known without a
+## network. The rank and the leader's score replace the second half when they
+## arrive, and never invent anything when they do not.
+func _today_text(zh: bool) -> String:
+	var best: int = Rules.daily_best()
+	var head := ""
+	if zh:
+		head = "今日 %s · 你的最好 %d" % [Rules.daily_key(), best]
+	else:
+		head = "TODAY %s · YOUR BEST %d" % [Rules.daily_key(), best]
+	if _board_rows.is_empty() and _board_mine.is_empty():
+		return head
+	var lead := 0
+	if not _board_rows.is_empty():
+		var first: Dictionary = _board_rows[0]
+		lead = int(first.get("score", 0))
+	var rank := int(_board_mine.get("rank", 0))
+	if rank <= 0 and lead <= 0:
+		return head
+	if zh:
+		if rank > 0:
+			return "%s · 今日第 %d 名（榜首 %d）" % [head, rank, lead]
+		return "%s · 今日榜首 %d（你还没上榜）" % [head, lead]
+	if rank > 0:
+		return "%s · TODAY #%d (LEADER %d)" % [head, rank, lead]
+	return "%s · TODAY LEADER %d (UNRANKED)" % [head, lead]
 
 
 ## The daily seed: one seed a day for everyone, so two runs can be compared

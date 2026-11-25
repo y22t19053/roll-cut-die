@@ -25,7 +25,9 @@ LINE = re.compile(r'^McpInteractionServer\s*=')
 BACKUP = ROOT / "tools" / ".dev_autoload.bak"
 
 
-def read_lines() -> list[str]:
+def read_lines():
+    # Kept unannotated on purpose: this box has both a Python 2.7 `python` on PATH
+    # and a 3.12 alongside DSH, and the tools here must run under the latter.
     return PROJECT.read_text(encoding="utf-8").splitlines(keepends=True)
 
 

@@ -15,6 +15,7 @@ const SlateUI = preload("res://scripts/ui/slate_ui.gd")
 const FrameFX = preload("res://scripts/relay/frame_fx.gd")
 const Save = preload("res://scripts/relay/relay_save.gd")
 const TouchPad = preload("res://scripts/relay/touch_pad.gd")
+const ToyBridge = preload("res://scripts/relay/toy_bridge.gd")
 const MODULES := 12
 ## The shapes the run draws from. I, L and O come first because they are the three
 ## honest answers to "what happens when the crew rebuilds it the other way round?":
@@ -67,6 +68,17 @@ var free_cut := 1
 ## A run is only written down in the record book once, however often the sheet
 ## ends up on screen.
 var _recorded := false
+## What this run was worth, and what the board said about it. Both are decided
+## once, when the sheet goes up: a score that kept changing while the page was
+## being read would be a number nobody could argue about.
+var score_info := {}
+var _score_sent := false
+var _bridge: Node = null
+## Cuts that actually cost a supply. The free first splice is a lesson, not a
+## decision, so it is not on the bill.
+var cuts_used := 0
+## Takes crossed once the prologue was over: what the score is made of.
+var run_legs := 0
 var _seen_hints := {}
 ## Ghosts the tape handed you back inside of. They stop counting until you
 ## step out: a respawn is never the player's mistake.
@@ -736,6 +748,10 @@ func _finish_leg() -> void:
 	rig.add_shake(0.2)
 	fx.flash(Color("9ceccb"), 0.12, 0.0, 0.14)
 	room_pass += 1
+	# The prologue is teaching, not a run: its takes are real recordings but they
+	# are not on the bill, and every player crosses them the same number of times.
+	if not _in_prologue():
+		run_legs += 1
 	# Chasing the light: a take crossed inside LIGHT_TARGET counts as one the crew
 	# did not have to wait for. Clear a whole set that way and the crew hands you a
 	# spare. No penalty for being slow — the light is an offer, not a clock.
@@ -1326,19 +1342,40 @@ func _show_sheet(won: bool) -> void:
 	# DIE. card over the page that explains what the run was.
 	if slate.is_running(): slate.hide_slate()
 	var prev_best: int = int(Rules.meta().get("best_set", 0))
+	var daily := _is_daily()
+	# One number, decided once, from the run's own record: how far, how clean,
+	# what it cost. Time is free until the clock is out.
+	score_info = Rules.run_score(run_legs, act, deaths, cuts_used, active_clock, deaths == 0)
+	var best: int = Rules.record_daily(int(score_info["total"])) if daily else 0
 	if not _recorded:
 		_recorded = true
 		Rules.record_run(segments.size(), deaths, won, run_seed)
 	var lines: Array = [
 		_w("走完 %d / %d 棚　　废条 %d　　死亡 %d", "SETS %d / %d   WASTED %d   DEATHS %d") % [segments.size(),MODULES,maxi(tracks.size()-segments.size(),0),deaths],
 		_w("手上还剩　标记 %d　剪 %d", "LEFT   MARKS %d   CUTS %d") % [mark_stock,cut_stock],
-		_w("种子 %06X", "SEED %06X") % run_seed,
-		_w("空格：再来一局　R：同种子重开", "SPACE: new run   R: same seed"),
 	]
+	if daily:
+		lines.append(_w("今日 %s　得分 %d　自己最好 %d", "DAY %s   SCORE %d   YOUR BEST %d")
+			% [Rules.daily_key(), int(score_info["total"]), maxi(best, int(score_info["total"]))])
+	else:
+		lines.append(_w("这一条值 %d 分", "THIS REEL IS WORTH %d") % int(score_info["total"]))
+	# The bill, in the same units the number was made of. A player who reads it can
+	# see which line they would have to change to score better, which is the only
+	# way a score is a reason to play a second time.
+	lines.append(_w("趟 %d×%d　节 %d×%d　死 −%d　剪 −%d",
+		"LEGS %d×%d   ACTS %d×%d   DEATHS −%d   CUTS −%d")
+		% [int(score_info["legs"]), Rules.SCORE_LEG, int(score_info["acts"]), Rules.SCORE_ACT,
+			int(score_info["deaths"]) * -Rules.SCORE_DEATH, int(score_info["cuts"]) * -Rules.SCORE_CUT])
+	lines.append(_w("种子 %06X", "SEED %06X") % run_seed)
+	lines.append(_w("空格：再来一局　R：同种子重开", "SPACE: new run   R: same seed"))
 	# The only thing this game keeps between runs is how far you got. Saying it out
 	# loud is the whole progression: there is no tree, no currency, no unlocks.
 	if segments.size() > prev_best:
 		lines.insert(0, _w("走得最远的一次。", "The furthest you have been."))
+	if not won and daily:
+		# A board needs one rule or it is just a list of numbers: the reels that
+		# ran out are the ones that count.
+		lines.insert(0, _w("没接通的一局不上榜。", "A reel that never ran out does not go on the board."))
 	if won:
 		desk.show_call_sheet(_w("全部接通","ANSWER PRINT"), lines, true, Loc.language == "zh")
 	else:
@@ -1347,6 +1384,42 @@ func _show_sheet(won: bool) -> void:
 		# left by somebody who was there, not like a system message about a score.
 		lines.insert(1,_w("场务把这条剪了。他说明天再来。","The stagehand cut this one. He says come back tomorrow."))
 		desk.show_call_sheet(_w("这卷到头了","END OF REEL"), lines, false, Loc.language == "zh")
+	# Only a finished reel goes on the board, and only if the platform is there:
+	# on a desktop build, in the editor, or on a preview page this is a no-op.
+	if won and daily: _send_score()
+
+
+## A daily run is the one that carries today's seed: the same map for everyone,
+## which is the only thing two strangers can fairly be ranked on.
+func _is_daily() -> bool:
+	return run_seed == Rules.daily_seed()
+
+
+func _send_score() -> void:
+	if _score_sent: return
+	if not ToyBridge.available(): return
+	_score_sent = true
+	if _bridge == null:
+		_bridge = ToyBridge.new()
+		_bridge.name = "ToyBridge"
+		_bridge.score_sent.connect(_on_score_sent)
+		add_child(_bridge)
+	_bridge.send_score(Rules.board_for(difficulty), int(score_info.get("total", 0)), "day", 5)
+
+
+func _on_score_sent(ok: bool, mine: Dictionary, message: String) -> void:
+	if not is_inside_tree(): return
+	if not ok:
+		# Silence is not an error the player should have to act on: the run is
+		# still over, the page still says what it was, and one line says why there
+		# is no rank on it.
+		desk.append_sheet_lines([_w("榜单没有回应（%s）。", "The board did not answer (%s).") % message])
+		return
+	var rank := int(mine.get("rank", 0))
+	if rank <= 0:
+		desk.append_sheet_lines([_w("今日榜：这次没排上。", "TODAY: not ranked yet.")])
+	else:
+		desk.append_sheet_lines([_w("今日榜第 %d 名。", "TODAY: number %d on the board.") % rank])
 
 ## ESC is the only key that stops the clock. Everything else in this game is a
 ## decision about the take; this one is a decision about the person playing it.
@@ -1436,6 +1509,7 @@ func _press(key: int) -> void:
 						desk.show_message(_w("第一次剪回不收钱。", "The first splice is free."))
 					else:
 						cut_stock -= 1
+						cuts_used += 1
 					forced_cut = false
 					_board_cut()
 					_leave_cut()

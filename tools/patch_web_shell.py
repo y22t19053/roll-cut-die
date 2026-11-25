@@ -1,11 +1,16 @@
-"""One fix to Godot's exported HTML shell: touches on the canvas must not be
-interpreted as page gestures.
+"""Two fixes to Godot's exported HTML shell.
 
-Godot's stock shell puts `touch-action: none` on `body`, which does not help —
-touch-action is resolved on the element the finger actually lands on, and on this
-game that element is always `#canvas`. Without the rule a two-finger pinch meant
-for the camera can be read as a page zoom, and a double tap can zoom the whole
-page instead of pressing a pad button.
+1. Touches on the canvas must not be read as page gestures. Godot's stock shell
+   puts `touch-action: none` on `body`, which does not help — touch-action is
+   resolved on the element the finger lands on, and here that element is always
+   `#canvas`. Without the rule a two-finger pinch meant for the camera can zoom
+   the whole page, and a double tap zooms instead of pressing a pad button.
+
+2. The Bilibili TOY page does not hand its SDK to the game: `window.Toy` is
+   undefined inside the toy iframe (verified on the published page), so a game
+   that wants a leaderboard has to ask for the SDK itself. It is loaded only when
+   the page is actually running under bilibilitoy.com, so itch and local builds
+   never make a third-party request for a platform they do not have.
 
 Run after every Web export:
 
@@ -25,16 +30,39 @@ RULE = """
 
 ANCHOR = "#canvas {\n\tdisplay: block;\n}\n"
 
+TOY_MARK = "rcd-toy-sdk"
+TOY_BOOT = """<script id="rcd-toy-sdk">
+// The TOY SDK is not injected into this frame by the host page: it has to be
+// asked for from inside the page that wants it, and only there.
+(function () {
+	if (window.Toy) { return; }
+	if (location.hostname.indexOf("bilibilitoy.com") === -1) { return; }
+	var s = document.createElement("script");
+	s.src = "https://s1.hdslb.com/bfs/seed/toy/app/sdk/toy-sdk.js";
+	s.async = true;
+	document.head.appendChild(s);
+})();
+</script>
+"""
+TOY_ANCHOR = '<script src="index.js"></script>'
+
 
 def patch(path: Path) -> bool:
     text = path.read_text(encoding="utf-8")
-    if "touch-action: none;\n\t-webkit-user-select" in text:
-        return False
-    if ANCHOR not in text:
-        raise SystemExit(f"shell changed shape; no anchor in {path}")
-    text = text.replace(ANCHOR, ANCHOR + RULE.lstrip("\n"), 1)
-    path.write_text(text, encoding="utf-8")
-    return True
+    changed = False
+    if "touch-action: none;\n\t-webkit-user-select" not in text:
+        if ANCHOR not in text:
+            raise SystemExit(f"shell changed shape; no canvas anchor in {path}")
+        text = text.replace(ANCHOR, ANCHOR + RULE.lstrip("\n"), 1)
+        changed = True
+    if TOY_MARK not in text:
+        if TOY_ANCHOR not in text:
+            raise SystemExit(f"shell changed shape; no index.js tag in {path}")
+        text = text.replace(TOY_ANCHOR, TOY_BOOT + TOY_ANCHOR, 1)
+        changed = True
+    if changed:
+        path.write_text(text, encoding="utf-8")
+    return changed
 
 
 def main() -> int:

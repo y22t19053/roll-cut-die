@@ -38,6 +38,7 @@ const MODULES := [
 	["relay_death", preload("res://tests/test_relay_death.gd")],
 	["relay_walk", preload("res://tests/test_relay_walk.gd")],
 	["touch_pad", preload("res://tests/test_touch_pad.gd")],
+	["toy_score", preload("res://tests/test_toy_score.gd")],
 ]
 
 var _finished := false

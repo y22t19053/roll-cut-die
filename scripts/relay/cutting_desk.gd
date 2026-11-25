@@ -84,6 +84,14 @@ func hide_draw() -> void:
 	_cards.clear(); _hover=-1; _refresh()
 
 
+## The board answers after the page is already on the table: the sheet takes the
+## new line instead of the run waiting for a network it does not control.
+func append_sheet_lines(more:Array) -> void:
+	if more.is_empty(): return
+	_sheet_lines.append_array(more)
+	_refresh()
+
+
 ## The call sheet belongs to a finished run. Once the next set is on, it is gone:
 ## a page from the last run lying over the next one reads as a bug, not a memory.
 func clear_sheet() -> void:
