@@ -30,6 +30,7 @@ const MODULES := {
 	"score_layers": preload("res://tests/test_score_layers.gd"),
 	"gantry_room": preload("res://tests/test_gantry_room.gd"),
 	"run_length": preload("res://tests/test_run_length.gd"),
+	"phrasebook": preload("res://tests/test_phrasebook.gd"),
 	"sprint7_guard": preload("res://tests/test_sprint7_guard.gd"),
 }
 
