@@ -20,6 +20,8 @@ var headline := ""
 var subline := ""
 var corner := ""
 var take_no := 0
+var scene_no := 0
+var field_labels: Array[String] = ["SCENE", "TAKE", "ROLL"]
 var accent := Color(1.0, 0.96, 0.88)
 ## Chalk on slate. The board is the one object in the game that must look like a
 ## physical thing a crew writes on, so it keeps its own two inks and its own type.
@@ -104,19 +106,18 @@ func _draw() -> void:
 	var fx := origin.x + bw - pad - fw
 	var fy := origin.y + band_h + bh * 0.10
 	var fh := bh * 0.115
-	var labels := ["SCENE", "TAKE", "ROLL"]
-	var values := ["—", "%02d" % take_no if take_no > 0 else "—", "01"]
+	var values := ["%02d" % scene_no if scene_no > 0 else "—", "%02d" % take_no if take_no > 0 else "—", "01"]
 	for i in 3:
 		var ry := fy + fh * (1.45 * float(i))
 		draw_line(Vector2(fx, ry + fh), Vector2(fx + fw, ry + fh), Color(chalk.r, chalk.g, chalk.b, alpha * 0.35), bh * 0.004)
-		draw_string(_mono, Vector2(fx, ry + fh * 0.78), labels[i],
+		draw_string(_mono, Vector2(fx, ry + fh * 0.78), field_labels[i],
 			HORIZONTAL_ALIGNMENT_LEFT, -1, int(bh * 0.085), Color(chalk.r, chalk.g, chalk.b, alpha * 0.45))
 		draw_string(_mono, Vector2(fx + fw * 0.52, ry + fh * 0.78), values[i],
 			HORIZONTAL_ALIGNMENT_LEFT, -1, int(bh * 0.11), Color(chalk.r, chalk.g, chalk.b, alpha * 0.92))
 	# The take number belongs to the field block now; the old corner text only
 	# survives when a caller sets one.
 	var left_w := bw - pad * 2.0
-	if take_no > 0:
+	if take_no > 0 or scene_no > 0:
 		left_w = bw - fw - pad * 2.0
 	if headline != "":
 		draw_string(font, Vector2(origin.x + pad, y), headline,
