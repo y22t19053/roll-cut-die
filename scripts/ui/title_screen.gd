@@ -360,7 +360,19 @@ func _build_ledger(zh: bool) -> void:
 	var ledger := _column(4)
 	ledger.name = "Record"
 	_body.add_child(ledger)
-	ledger.add_child(_print("片场台账" if zh else "CAREER LEDGER", 12, PAPER))
+	var rank := Rules.archive_rank(stats["marks_total"])
+	var heading := _row(8)
+	ledger.add_child(heading)
+	var archive := _print(("档案 · 第 %d 级 %s" if zh else "ARCHIVE LV %d %s") % [
+		rank, Rules.archive_name(rank)], 11, PAPER)
+	archive.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_child(archive)
+	var verdicts := "%s %d / %s %d / %s %d" % [
+		Loc.ui("final_cut.truth"), stats["truth"],
+		Loc.ui("final_cut.cover_up"), stats["coverup"],
+		Loc.ui("final_cut.frame_up"), stats["frameup"],
+	]
+	heading.add_child(_print(verdicts, 10, ink))
 	ledger.add_child(_rule(UiKit.RULE, 1))
 	var fields := _row(0)
 	ledger.add_child(fields)
