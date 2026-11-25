@@ -63,11 +63,11 @@ Sprint 5 门禁：`tools/verify_all.py` 为唯一验收，1,267 条 Godot 断言
 | 编号 | 目标 | 归属 | 验收要点 |
 |---|---|---|---|
 | 1 | OUT OF FRAME 出画与 `CUT BACK` 脱困 | 已合入 `master`（Codex E `8afa423`） | 台口不再是一撞即停的空气墙：可以走出取景框站在背光的台口，也能自己走回来；同一 leg 第三次 NG 前有 2.5 秒双语前摇，过线或 CUT 可化解（沿用 §2 红线：先有清晰前摇，再有惩罚）；脱景时按 CUT 必回最近 MARK（消耗一次），无 CUT 只能步行返回，任何路径都不产生软锁。实机截图 `visual/preview/sprint6_live_{warn,out,return}.png`。 |
-| 2 | 双层灯架成为 Relay 房间类型 | Codex B（`codex-b/sprint6-gantry`） | `h_gantry.gd` 的几何升级为 `relay_rooms.gd` 的房间族之一（新 kind），斜梯可走上桥面，桥上留下可重放的 Ghost 轨迹；原有五族房间的判定与外观不回归。 |
-| 3 | 独立验收与档案同步 | Codex C（`codex-c/sprint6-guard`） | 已合入 C 交付分支（`d79e8e6`）。十二棚接缝与棚外移动已过门禁，共 1,428 条断言。出画恢复用例待集成 E 后运行；gantry 房间接入由 B 提供回归。 |
-| 4 | 局内配乐分层 | Codex D（`codex-d/sprint6-score`） | 只动 `scripts/relay/relay_sound.gd`：按 act / 危险度 / 收工三段推动配乐，让「推进」「危险」「冲线」听得出差别；不新增资源文件、不改 `relay_run.gd` 的调用面。 |
+| 2 | 双层灯架成为 Relay 房间类型 | 已合入 `master`（Codex B `ef0b447`，本主控补布景 `9aa79ad` 之后） | `h_gantry.gd` 的几何升级为 `relay_rooms.gd` 的房间族之一（`gantry_room.gd` + `kind = "gantry"`，26 m 甲板，固定在第 7 个门位），斜梯可走上 2.5 m 桥面，桥上留下可重放 Ghost 轨迹、读档恢复高度；进棚即切重力行走（`player.vertical_walk`），原五族房间的判定与外观不回归。实机截图 `visual/preview/sprint6_live_gantry_{approach,bridge}.png`。 |
+| 3 | 独立验收与档案同步 | 已合入 `master`（Codex C `d79e8e6`） | `tools/verify_branch.py` 可在任意支上复现门禁；十二棚接缝、棚外移动与出画恢复都进套件（`tests/test_no_softlock.gd` 把「回到甲板高度」当不变量——Relay 钉高度不跑重力，`is_on_floor()` 恒假，见 D-078）。修完共 1,745 条断言。 |
+| 4 | 局内配乐分层 | 已合入 `master`（Codex D + 本主控合并裁决） | 只动 `scripts/relay/relay_sound.gd`：混音决策抽成纯函数 `_mix_targets(act, danger, final_sprint, ducked, ending, still_seconds, reduce_motion, cue_duck_db, out_of_frame)`，五态（起步/推进/危险/冲线/收工）各有可测的 dB 目标；不新增资源文件、不改 `relay_run.gd` 调用面。合并时把 E 的出画鸭子改写成 `out_of_frame` 参数（整体 −18 dB、片场人声抬到 −26 dB）。 |
 
-Sprint 6 门禁：`tools/verify_all.py --baseline 1267` 全过，噪声不超过预算 1；每个交付端附实机截图。
+Sprint 6 门禁：`tools/verify_all.py` 全过，**1,745 条 Godot 断言 + 31 项 Python**，`mesh_get_surface_count` 噪声预算 1，每个交付端附实机截图。
 
 
 真人盲测、真窗口焦点、移动浏览器和外部线上包仍按工程状态表 UNV-01 至 UNV-04 跟踪。赛事和平台更新另行取得创作者授权。

@@ -83,3 +83,11 @@
 - **代价与恢复**。预警和脱景本身不改光量、MARK、CUT 或死亡计数；代价是本 leg 继续计时、额外回程距离，或主动支付一次 CUT。OUT 期间不执行棚内危险判定、不能把暗区钉成 MARK。无 CUT 不瞬移，显示 NO CUT LEFT — WALK BACK。回到当前棚合法范围后恢复原相机和声音，继续当前 leg。
 - **回程几何与声音**。棚局部后墙 z=-2.94、x=1.0…2.2 开 1.2 米缺口，暗区落点固定为 (1.6, 0.05, -5.2)，增设暗色地板、门楣与地面标记；随棚旋转，六种棚型和两个朝向均以真实玩家碰撞体扫掠验证。OUT 使用独立固定镜头，保留棚轮廓与缺口，不跟随玩家平移。复用 relay_sound 合成播放链，将配乐退远并引入剧组环境声；按本棚历史 Take 的 0.65 米步距抽取节奏，在缺口位置循环播放脚步。没有移动历史时用剧组双拍指路，不伪造历史记录。
 - **验证与接缝**。独立 out_of_frame.gd 暴露 advance/state/debug_state/note_ng/resolve/cut_back。relay_run.gd 仅加 23 行接线；relay_rooms.gd 增 17、删 2 行。无头测试通过 1,354 条断言（本模块 87 条）、Python 31 项、stderr_noise=1；窗口预览生成 WARN/OUT 两张实景图。听感和主控实机手感仍需合并端验收。
+
+## 7. 2026-11-25 · Sprint 6 收尾（灯架进正篇、配乐分层、验收口径）
+
+- **D-078 · 灯架是房间族，不是新游戏模式**。`scripts/relay/gantry_room.gd` 把 `h_gantry.gd` 的几何包成 `kind = "gantry"` 的房间（26 m 甲板、2.5 m 桥面、双侧斜梯），由 `relay_rooms.plan()` 固定排在第 7 个门位；`relay_rooms.room_at()` 从「`x / 9` 取整」改成按 `_starts` 起点表倒查，因为这一族比其它族长 17 m。灯架棚内 `player.vertical_walk = true`（换棚即切），甲板有真实碰撞、桥面留下可重放 Ghost 轨迹、读档带回 `y`；棚内不做整体转棚（`_rotate_stage` 跳过），因为高架路线与地面门是固定朝向。原五族房间的判定、外观和 9 m 接缝全部不变。
+- **D-079 · 灯架棚的布景在 26 m 尺度上重写，不套用 `_dress()`**。`_dress()` 的所有坐标按 9 m 棚写死（涂装带、场记纸、道具位置），直接套到 26 m 会把东西全堆在西端。新增 `_dress_gantry()` 按棚长布置：两条灯架、箱堆、胶片罐、盘好的电缆、过门旁的场记纸、一条 7.4 m 的涂装带，全部落在 `|z| > 4.4` 或首尾 4 m 之外，绝不进桥面与斜梯的行走范围。灯架族颜色单独取 `GANTRY_INK`，**不进 `SET_INKS`**——那个字典是随机门池的房间来源，混进去会被当成普通 9 m 棚发出来（`tests/test_room_families.gd` 也因此仍然成立）。
+- **D-080 · `is_on_floor()` 不是 Relay 的落地不变量**。Relay 在普通棚里每帧把 `player.global_position.y` 向 `floor_height + 0.05` 插值（`vertical_walk = false` 时不跑重力），所以静止玩家的 `is_on_floor()` 恒为 `false`；只有灯架棚（`vertical_walk = true`）才真的站在碰撞体上。Codex C 的 `tests/test_no_softlock.gd` 曾断言「回到地面」，它在 C 分支上从未执行过（`out_of_frame.gd` 不存在时整段跳过），合并 E 后第一次跑就红。裁决：把断言换成真实不变量——回到本棚甲板高度（±0.30）、在棚接缝内、控制权归还、脱景期间 hit 计数为 0。
+- **D-081 · 配乐分层走纯函数 + 单一消费点**。`relay_sound._mix_targets(act, danger, final_sprint, ducked, ending, still_seconds, reduce_motion, cue_duck_db, out_of_frame)` 只算 dB 目标和心跳倍率，`_update_mix(delta)` 是唯一消费者；五态（起步/推进/危险/冲线/收工）各有可断言的数值。合并 E 时把出画的鸭子从旧 `_process` 手写混音搬进 `_mix_targets` 的 `out_of_frame` 参数（整体 −18 dB、片场人声抬到 −26 dB），保留「出画时听觉接管」的原意。**D 端没有真机试听**，听感仍待创作者实测。
+- **Sprint 6 收尾口径**。`tools/verify_all.py` 全过：1,745 条 Godot 断言 + 31 项 Python，噪声预算 1；实机复核（真窗口 `scenes/relay/run.tscn`，2558×1598）覆盖出画三态、CUT BACK、灯架棚重力行走与两层空间。

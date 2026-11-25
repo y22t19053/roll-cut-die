@@ -8,6 +8,7 @@ const FLAT := Color("847362")
 const WHITE := Color("f3dfad")
 const IRON := Color("333139")
 const SET_INKS := {"straight":Color("bd5743"),"tee":Color("4f9187"),"cross":Color("bb914d"),"zig":Color("8075a3")}
+const GANTRY_INK := Color("5a7080")
 const LETTER_INKS := {"s": Color("b96452"), "h": Color("579888"), "u": Color("c59c59"), "l": Color("8776a8"), "n": Color("6288ae"), "x": Color("a57b58"), "i": Color("7d8a96"), "o": Color("a8874f")}
 ## Plan view, north to south. Dots are walkable lanes; # becomes solid scenery.
 ## The outer columns are mouths, not decoration: the S must double back twice.
@@ -379,6 +380,7 @@ func _append_gantry(room: Node3D, variant: int, mod: String, final: bool, event:
 	_cap = _buffer(room, length, 1)
 	_line(room, 0.0)
 	_line(room, length, final)
+	_dress_gantry(room)
 	_dollies.append([])
 	var room_plan := GantryRoom.plan()
 	_plans[_count] = room_plan
@@ -389,6 +391,32 @@ func _append_gantry(room: Node3D, variant: int, mod: String, final: bool, event:
 	return {"start":start,"end":end,"stops":stops,"target":end,"floor":room.global_position.y,
 		"kind":GantryRoom.KIND,"variant":variant,"mod":mod,"final":final,"event":event,
 		"deck_top":GantryRoom.DECK_TOP,"stations":stations}
+
+
+## The gantry is a working stage, not a dressing room: light stands left standing,
+## a crate stack the crew never took away, one can of stock, and a call note on the
+## deck. All of it sits outside the bridge footprint (|z| > 4.4 or the first and
+## last four metres) so the ramps the route climbs stay clean.
+func _dress_gantry(room: Node3D) -> void:
+	var ink: Color = GANTRY_INK
+	# A paint lane down one side, the way the other families colour their deck.
+	_box(room, Vector3(GantryRoom.LENGTH * 0.5, .011, 7.4), Vector3(GantryRoom.LENGTH - 3.0, .02, .34), ink.darkened(0.35))
+	# Lighting stands along the long walls, caps up.
+	for pair: Array in [[3.4, 4.6], [22.6, -4.6]]:
+		_box(room, Vector3(pair[0], 1.05, pair[1]), Vector3(.09, 2.1, .09), IRON)
+		_box(room, Vector3(pair[0], 2.12, pair[1]), Vector3(.34, .10, .34), Color("ffde79"))
+	# Crate stack and a coil of cable nobody rewound.
+	_box(room, Vector3(10.2, .30, -5.6), Vector3(.92, .58, .92), FLAT)
+	_box(room, Vector3(10.3, .78, -5.55), Vector3(.72, .44, .72), FLAT.darkened(0.12))
+	_box(room, Vector3(11.2, .22, -5.75), Vector3(1.10, .42, .70), WHITE.darkened(0.55))
+	_box(room, Vector3(19.6, .16, 5.4), Vector3(.44, .10, .44), IRON)
+	_box(room, Vector3(19.6, .26, 5.4), Vector3(.30, .10, .30), IRON)
+	# One can of stock, lid down.
+	_box(room, Vector3(6.2, .12, 5.6), Vector3(.36, .24, .36), Color("2f2b28"))
+	_box(room, Vector3(6.2, .27, 5.6), Vector3(.20, .06, .20), Color("d8c58a"))
+	# The paperwork the crew left on the deck, near the outbound door.
+	_box(room, Vector3(23.6, .014, 2.24), Vector3(.42, .02, .30), Color("e9dfc4"))
+	_notes[_count] = Vector3(23.6, .05, 2.24)
 
 ## Every family gets its own furniture and its own floor inlay, so the five sets
 ## are five places rather than five wall layouts. Nothing here is solid: dressing
