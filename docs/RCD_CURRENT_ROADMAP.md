@@ -56,4 +56,18 @@
 
 Sprint 5 门禁：`tools/verify_all.py` 为唯一验收，1,267 条 Godot 断言 + 31 项 Python 全过，`mesh_get_surface_count` 噪声预算 1。
 
+### Sprint 6 · Active
+
+基线 `master@33f6031`，门禁断言 1,267。主题：**把摄影棚从「连起来的一条走廊」变成「可以走出画外的片场」**——越界不再是墙，双层空间进正篇，声音按放映阶段分层。
+
+| 编号 | 目标 | 归属 | 验收要点 |
+|---|---|---|---|
+| 1 | OUT OF FRAME 出画与 `CUT BACK` 脱困 | Codex A（`codex-a/sprint6-frame`） | 棚侧边不再是一撞即停的空气墙：可以走出取景框站在背光的台口，也能自己走回来；出画 0.9 秒后有双语前摇提示（沿用 §2 红线：先有清晰前摇，再有惩罚）；出画状态下按 CUT 必定回到最近的合法位（`CUT BACK`，消耗一次 CUT），任何路径都不产生软锁。 |
+| 2 | 双层灯架成为 Relay 房间类型 | Codex B（`codex-b/sprint6-gantry`） | `h_gantry.gd` 的几何升级为 `relay_rooms.gd` 的房间族之一（新 kind），斜梯可走上桥面，桥上留下可重放的 Ghost 轨迹；原有五族房间的判定与外观不回归。 |
+| 3 | 独立验收与档案同步 | Codex C（`codex-c/sprint6-guard`） | 新机制都有 headless 断言（出画判定、CUT BACK 回位、gantry 房间可走、桥上轨迹重放）；`tools/verify_all.py` 仍为唯一门禁；档案按实际改动同步。 |
+| 4 | 局内配乐分层 | Codex D（`codex-d/sprint6-score`） | 只动 `scripts/relay/relay_sound.gd`：按 act / 危险度 / 收工三段推动配乐，让「推进」「危险」「冲线」听得出差别；不新增资源文件、不改 `relay_run.gd` 的调用面。 |
+
+Sprint 6 门禁：`tools/verify_all.py --baseline 1267` 全过，噪声不超过预算 1；每个交付端附实机截图。
+
+
 真人盲测、真窗口焦点、移动浏览器和外部线上包仍按工程状态表 UNV-01 至 UNV-04 跟踪。赛事和平台更新另行取得创作者授权。
