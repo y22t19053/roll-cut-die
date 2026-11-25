@@ -47,11 +47,7 @@ static func run(h, tree = null) -> void:
 	h.eq("three contacts inside one card are one death", int(inst.get("deaths")), 1)
 	h.ok("the guard holds while the card is up", bool(inst.get("_dying")))
 
-	var frames := 0
-	while frames < BOARD_FRAMES and bool(inst.get("_dying")):
-		await tree.process_frame
-		frames += 1
-
+	await _wait_for_card(inst, tree)
 	h.ok("the card finishes instead of looping", not bool(inst.get("_dying")))
 	var player = inst.get_node_or_null("Player")
 	h.ok("the player node survives the death", player != null)
@@ -65,7 +61,17 @@ static func run(h, tree = null) -> void:
 	var before: int = int(inst.get("deaths"))
 	inst.call("_hit", 0)
 	h.eq("the next card may bill again", int(inst.get("deaths")), before + 1)
+	await _wait_for_card(inst, tree)
+	h.ok("the second card finishes before teardown", not bool(inst.get("_dying")))
 
 	Save.clear()
 	inst.queue_free()
 	await tree.process_frame
+	await tree.process_frame
+
+
+static func _wait_for_card(inst: Node, tree: SceneTree) -> void:
+	for frame in BOARD_FRAMES:
+		if not bool(inst.get("_dying")):
+			return
+		await tree.process_frame

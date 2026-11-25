@@ -13,15 +13,48 @@ def digest(p):
 
 def isolated_config(original, condition, token):
     import re
-    old = 'run/main_scene="res://scenes/main/main.tscn"'
-    forbidden = ('McpInteractionServer', 'config/use_custom_user_dir', 'config/custom_user_dir_name')
-    if (condition not in ('A', 'B') or not re.fullmatch('[0-9a-f]{32}', token)
-            or original.splitlines().count(old) != 1 or original.count(old) != 1
-            or any(k in original for k in forbidden)):
-        raise ValueError('Unexpected project configuration; trial not prepared.')
-    replacement = (f'run/main_scene="res://tools/corner_evidence_{condition.lower()}.tscn"\n'
-                   f'config/use_custom_user_dir=true\nconfig/custom_user_dir_name="RCD-Research/isolated/{token}"')
-    return original.replace(old, replacement)
+    refused = 'Unexpected project configuration; trial not prepared.'
+    if condition not in ('A', 'B') or not re.fullmatch('[0-9a-f]{32}', token):
+        raise ValueError(refused)
+
+    scenes = {'"res://scenes/front/title.tscn"', '"res://scenes/main/main.tscn"'}
+    section = ''
+    found_scene = False
+    output = []
+    for line in original.splitlines(keepends=True):
+        entry = line.strip()
+        if not entry or entry.startswith(';'):
+            output.append(line)
+            continue
+        if re.fullmatch(r'\[[\w/]+\]', entry):
+            section = entry[1:-1]
+        else:
+            key, equals, value = entry.partition('=')
+            key = key.strip()
+            if not equals or not re.fullmatch(r'[\w/]+', key):
+                raise ValueError(refused)
+            value = value.strip()
+            setting = f'{section}/{key}' if section else key
+            if (key in ('config/use_custom_user_dir', 'config/custom_user_dir_name')
+                    or setting in ('application/config/use_custom_user_dir',
+                                   'application/config/custom_user_dir_name')):
+                raise ValueError(refused)
+            if key == 'McpInteractionServer':
+                continue
+            if key == 'run/main_scene' or setting == 'application/run/main_scene':
+                if section != 'application' or key != 'run/main_scene' or found_scene or value not in scenes:
+                    raise ValueError(refused)
+                found_scene = True
+                line = (f'run/main_scene="res://tools/corner_evidence_{condition.lower()}.tscn"\n'
+                        f'config/use_custom_user_dir=true\n'
+                        f'config/custom_user_dir_name="RCD-Research/isolated/{token}"\n')
+            if setting.startswith('autoload/') and (setting, value) != (
+                    'autoload/GameSession', '"*res://scripts/core/game_session.gd"'):
+                raise ValueError(refused)
+        output.append(line)
+    if not found_scene:
+        raise ValueError(refused)
+    return ''.join(output)
 
 
 def main():
