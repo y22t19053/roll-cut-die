@@ -90,3 +90,9 @@ G 负责把主局扩为四幕十六棚，每幕最后一棚为 26 m 灯架棚。
 本轮唯一验收入口为 `tools/verify_all.py --baseline 1745`。Python 套件和 Godot 套件均须通过，Godot 断言下限为 1,745 条，Dummy 渲染器的 `mesh_get_surface_count` 噪声预算为 1。`tools/verify_branch.py --baseline 1745` 将同一基线传给当前工作树的门禁。集成时检查 `sprint7_guard` 的输出，确认对应分支到位后，规模、灯架棚位、成片质量和档案等级用例都已执行。
 
 C 工作树实测：Python 31 项通过，Godot 1,798 条断言通过，噪声 1 次。新增守卫执行 53 条，覆盖幕数乘棚数、序棚至第十六个主棚的地面与接缝，以及两项门禁参数。当前规模为 12/3，`GANTRY_SLOTS`、`craft.gd` 与 `archive_rank` 均未到位，相应用例在日志中记为 `skipped`。
+
+## Sprint 8 验收基线
+
+在目标工作树运行 `C:\Users\11ee11\miniconda3\python.exe tools\verify_all.py --baseline 2107`。C 支加入守卫前通过 2,107 条 Godot 断言；H/F/D 合并前通过 2,109 条，新增的两条分别检查 16 个主棚与灯架棚位 `[3, 7, 11, 15]`。Python 31 项通过，`stderr_noise` 为 1，预算上限为 1。
+
+守卫在运行时用 `ResourceLoader.exists` 检查教学与下一把模块，用 `has_method` 检查档案进阶接口。模块或方法缺失时记录跳过原因，因此任意并行支均可运行同一套门禁。对应实现到位后，守卫会检查教学记录与双语文案、结算提示与档案边界，并核对两套新测试在全量入口中的注册。
