@@ -129,3 +129,12 @@ Sprint 8 验收工具：`tests/test_sprint8_guard.gd` + `tools/verify_branch.py`
 | 4 | 线上冒烟门禁 | 主控 | 新增 `tools/verify_web.py`：本地 `http.server` 起 `builds/web/`，用 Tabbit 打开、等 canvas 起、点 `NEW SHOOT`、抓 console error 与首帧截图，接进 `tools/verify_all.py --web`。 |
 
 Sprint 9 门禁：`tools/verify_all.py` 全过，断言数只增不减，`mesh_get_surface_count` 噪声预算 1，每个交付端附实机或浏览器截图。
+
+Sprint 9 验收工具：`tests/test_difficulty.gd` · `tests/test_focus_pause.gd` · `tests/test_touch_layout.gd` · `tools/verify_web.py`
+
+**收尾结果（2026-11-25 深夜）**：四条全部合入 `master`，门禁 **2,420 条 Godot 断言 + 31 项 Python**、噪声 1、`exit 0`。
+- #1 已合入 `086318f` / merge `df2e196`：`Rules.pace` 与 `Rules.warning_scale` 接进 `hurry_for` 与机关/出画前摇，`tests/test_difficulty.gd` 44 条断言钉住严格单调。主控补修 `7b2ed69`：读档重建房间时没传 `hurry`，续玩的 EXPERT 局会悄悄回落到 NOVICE 节奏 —— 现在 `_apply_run` 按 `hurry_for(bay, MODULES) / Rules.pace(difficulty)` 逐棚重建，`tests/test_resume_pace.gd` 用同一份存档在两档各建一次房间、比对机关周期（EXPERT 必须 ≤ NOVICE 的 95%）。
+- #2 已合入 `d6db611` / merge（K 自查 Godot 4.3 源码后指出：浏览器切标签页只发 canvas blur → `NOTIFICATION_WM_WINDOW_FOCUS_OUT`，应用级那一对在 Web 上根本不来）。主控补修 `7e83708`：`scripts/core/game_session.gd::_wire_focus()` 把 `get_window().focus_exited/focus_entered` 接到同一对信号，顺手把 `window_set_vsync_mode` 用 `if DisplayServer.get_name() != "web"` 包住（Web 显示服务器不支持，原先每次应用设置都往 itch 玩家控制台打一条 `USER WARNING`）。实机截图 `visual/preview/sprint9_live_focus_pause.png`（真窗口 `focus_exited` → `paused=true`、`get_tree().paused=true`，恢复焦点不自动继续）。
+- #3 已合入 `4e366c3` / merge `dd90d27`：`TouchPad.layout()` 成为绘制与命中测试共用的唯一坐标系，四档视口 136 条断言；640×360 下摇杆命中区 120.04 px、最小按钮槽 55.49 px。实机复核 `visual/preview/sprint9_live_touch_844.png` 与 `sprint9_live_touch_640.png`（真窗口改尺寸后强制显示触屏层，摇杆与 M/C/暂停都在取景框内、不压 HUD）；桌面上触屏层依旧按 `DisplayServer.is_touchscreen_available()` 自动隐藏（`touch_pad.gd:189`）。
+- #4 已合入（`tools/verify_web.py` + `tools/verify_all.py --web`）：本地 `http.server` 起 `builds/web/`，Tabbit 打开、等 canvas、两次截图比对确认在画、抓 console error；无包或无浏览器时跳过（`web_ok: null`），失败才算门禁红。首跑 `{"canvas":"2188x1395","title":"roll cut die","engine":true,"tab_visible":true,"frames_compared_moved":true,"console_errors":0,"console_warnings":2,"ok":true}`，截图 `visual/preview/sprint9_web_smoke.png`。
+

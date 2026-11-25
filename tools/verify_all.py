@@ -27,6 +27,27 @@ def run(command, timeout):
     return code == 0, stdout.decode("utf-8", "replace"), stderr.decode("utf-8", "replace")
 
 
+def run_web(timeout):
+    """Boot the exported web build in Tabbit. None means there was nothing to boot."""
+    script = ROOT / "tools/verify_web.py"
+    if not script.is_file():
+        return None, ""
+    try:
+        result = subprocess.run([sys.executable, str(script), "--json"], cwd=ROOT,
+                                capture_output=True, timeout=max(timeout, 120))
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return False, {"error": str(exc)}
+    out = result.stdout.decode("utf-8", "replace")
+    err = result.stderr.decode("utf-8", "replace")
+    if result.returncode == 2:
+        return None, {"skipped": out.strip()[:200]}
+    try:
+        detail = json.loads(out.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return False, {"error": (out.strip() or err.strip())[:400]}
+    return result.returncode == 0 and bool(detail.get("ok")), detail
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
@@ -34,6 +55,8 @@ def main():
     parser.add_argument("--noise-budget", type=int, default=1,
                         help="allowed dummy-renderer mesh lines; see NOISE note below")
     parser.add_argument("--timeout", type=int, default=130, help="seconds per subprocess")
+    parser.add_argument("--web", action="store_true",
+                        help="also boot the exported web build in a real browser")
     args = parser.parse_args()
     if args.timeout <= 0 or args.baseline < 0:
         parser.error("timeout must be positive and baseline nonnegative")
@@ -102,12 +125,24 @@ def main():
 
     report = dict(python_ok=python_ok, python_tests=python_tests, godot_ok=godot_ok,
                   assertions=assertions, stderr_noise=noise, seconds=round(time.monotonic() - start, 2))
+
+    # The suites say the code is right; only a browser says the thing the judges open
+    # actually boots. Skipped (None) when there is no exported build to look at.
+    if args.web:
+        web_ok, detail = run_web(args.timeout)
+        report["web_ok"] = web_ok
+        if detail:
+            report["web"] = detail
+        if web_ok is False:
+            print("web smoke failed; see tools/verify_web.py --json", file=sys.stderr)
+
+    report["seconds"] = round(time.monotonic() - start, 2)
     if args.json:
         print(json.dumps(report))
     else:
         for key, value in report.items():
             print(f"{key}: {json.dumps(value)}")
-    return 0 if python_ok and godot_ok else 1
+    return 0 if python_ok and godot_ok and report.get("web_ok") is not False else 1
 
 
 if __name__ == "__main__":

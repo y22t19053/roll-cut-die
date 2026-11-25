@@ -56,8 +56,8 @@ C 分支注册 `inrun_ui_deai`，覆盖镜头与碰撞半径、双语设置与�
 | 编号 | 状态 | 验证范围 | 待办 |
 |---|---|---|---|
 | **UNV-01** | `UNVERIFIED` | **外部真人盲测样本为 `0`**：复杂多 Ghost 走位、180° 翻景后的空间方向理解尚未经过真人独立试玩验证 | 需安排真人试玩与遥测回放 |
-| **UNV-02** | `UNVERIFIED` | **真实窗口 Alt+Tab 焦点丢失配对测试**：按键粘连与音频挂起恢复尚未完成桌面真窗口配对验证 | 待交互模式实测 |
-| **UNV-03** | `UNVERIFIED` | **移动真机浏览器触控实测**：`DisplayServer.is_touchscreen_available()` 在 Android Chrome / iOS Safari 的实际返回值与 520px 小屏字号可读性尚未真机核验（见 `D-070`） | `UNVERIFIED` |
+| **UNV-02** | `CLOSED (desktop)` | **失焦暂停**：真窗口 `focus_exited` 实测暂停（`paused=true`、`get_tree().paused=true`，恢复焦点不自动继续），`_physics_process` 单步钳 50 ms；Web 端由 `tools/verify_web.py` 冒烟覆盖（见 D-089/D-090） | 桌面已验；移动端真机切后台仍并入 UNV-03 |
+| **UNV-03** | `PARTIAL` | **移动真机浏览器触控**：`TouchPad.layout()` 已在 640×360 / 844×390 / 1280×720 / 1920×1080 四档断言（136 条），真窗口改尺寸实拍复核；Android Chrome / iOS Safari 的 `is_touchscreen_available()` 返回值与 520px 字号可读性仍未经真机核验（见 `D-070`、D-092） | 待真机核验 |
 | **UNV-04** | `UNVERIFIED` | **B 站 TOY 线上包是否已更新为剥离 `McpInteractionServer` 后的最新包**（见 `D-072` 末尾记录） | `UNVERIFIED`（未获创作者授权前不擅自 `toy update`） |
 
 ## 7. Sprint 5 · Active
@@ -100,3 +100,8 @@ C 工作树实测：Python 31 项通过，Godot 1,798 条断言通过，噪声 1
 ## Sprint 9 · 触屏与窄屏验收
 
 按窗口像素检查 640×360、844×390、1280×720 和 1920×1080 四档。摇杆命中区短边至少 96 px，四个按钮槽各至少 44 px；所有区域互不相交，完整位于顶部 64 px 与底部 96 px 两条预留带之间。同一尺寸重复布局须得到相同矩形。两张小窗口实拍使用剪辑台阶段显示全部四键。C 支门禁基线为 2,215 条，新增布局断言 136 条，允许的 Dummy 渲染器噪声上限为 1。
+
+Sprint 9 合并后的验收基线为 **2,420 条 Godot 断言 + 31 项 Python**、噪声 1、`exit 0`。除布局外，本季还钉住三条线上行为：难度倍率的严格单调（`tests/test_difficulty.gd`）、读档重建房间时的节奏保持（`tests/test_resume_pace.gd`）、失焦暂停与步长钳制（`tests/test_focus_pause.gd`，含窗口级 `focus_exited` 路径）。
+
+Web 侧门禁：`C:\Users\11ee11\miniconda3\python.exe tools\verify_all.py --baseline 2420 --web`。`--web` 会用 `tools/verify_web.py` 在本地 `http.server` 上把 `builds/web/index.html` 真跑到浏览器里，确认 canvas 起来、两帧画面不同、`console.error` 为 0；没有导出包或没有浏览器时该段跳过（报告里 `web_ok: null`），不会把「没包」算成失败。
+
