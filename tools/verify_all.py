@@ -92,7 +92,9 @@ def main():
     # remainder is the dummy renderer's own teardown order, not a missing reference.
     # The budget fails the gate the moment a second scene or a new module starts
     # spraying again, which is the regression this number exists to catch.
-    godot_ok = (ok and summary is not None and assertions >= args.baseline
+    # A GDScript runtime error can abort just one module and still leave an
+    # ALL PASS summary from the remaining modules.
+    godot_ok = (ok and "SCRIPT ERROR:" not in err and summary is not None and assertions >= args.baseline
                 and noise <= args.noise_budget)
     if not godot_ok:
         print(out, file=sys.stderr)
