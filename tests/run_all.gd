@@ -35,6 +35,8 @@ const MODULES := [
 	["final_cut", preload("res://tests/test_final_cut.gd")],
 	["mark", preload("res://tests/test_mark.gd")],
 	["relay", preload("res://tests/test_relay.gd")],
+	["room_families", preload("res://tests/test_room_families.gd")],
+	["no_softlock", preload("res://tests/test_no_softlock.gd")],
 	["set_props", preload("res://tests/test_set_props.gd")],
 	["save", preload("res://tests/test_save.gd")],
 	["routes", preload("res://tests/test_routes.gd")],

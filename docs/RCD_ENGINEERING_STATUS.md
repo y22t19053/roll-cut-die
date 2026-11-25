@@ -69,3 +69,16 @@ C 分支注册 `inrun_ui_deai`，覆盖镜头与碰撞半径、双语设置与�
 | 统一验收脚本 | 已验证 | `tools/verify_all.py --json` 汇总 Python 31 项与 Godot 815 条断言，支持基线、超时和 CI 退出码。 |
 | Dummy 空网格噪声 | 已验证 | 完整套件的 `mesh_get_surface_count` 从 2,412 次降至 0 次。测试入口在节点释放期间短暂持有网格引用。 |
 | 活动档案同步 | 已完成 | 工程状态、路线图和多端协作规范已登记 Sprint 5 基线、工作树与验收方式。 |
+
+## 8. Sprint 6 · C 工作树验收
+
+从 `3fc36db` 的 1,267 条 Godot 断言增至 **1,428 条**。`room_families` 实跑 124 条，覆盖十二棚的规划、重建和十一处接缝；`no_softlock` 实跑 37 条，覆盖真实接力场景中六个棚外坐标的移动、生存与命中调用。Python 31 项通过。Godot 4.3 Dummy 的 `mesh_get_surface_count` 实测 1 次，预算仍为 1。GDScript 运行错误会使门禁失败。
+
+在 C 工作树执行下列命令。第一条接受断言增长；第二条从调用方定位目标工作树，核对该次交付的精确条数，并将子门禁诊断转发至 stderr。
+
+```powershell
+& C:\Users\11ee11\miniconda3\python.exe tools\verify_all.py --baseline 1267
+& C:\Users\11ee11\miniconda3\python.exe tools\verify_branch.py ..\codex-c-sprint6-guard --baseline 1428
+```
+
+C 树尚缺 `out_of_frame.gd`。步行回棚、空 CUT 提示、付费 CUT BACK、恢复控制与着地的条件用例均待集成，不计入 1,428 条。主控合并每个机制前需审阅对应的 headless 用例，并在含该机制的候选树核对精确条数与退出码。
