@@ -70,4 +70,18 @@ Sprint 5 门禁：`tools/verify_all.py` 为唯一验收，1,267 条 Godot 断言
 Sprint 6 门禁：`tools/verify_all.py` 全过，**1,745 条 Godot 断言 + 31 项 Python**，`mesh_get_surface_count` 噪声预算 1，每个交付端附实机截图。
 
 
+### Sprint 7 · Active
+
+基线 `master@2b0b7c5`，门禁断言 1,745。主题：**让一局更长、让捡到的东西有去处**——创作者试玩的原话是「地图太小、流程太短且容易」「不明白为什么收集物品，归档缺少意义」。这一轮把 12 棚推到 16 棚并给每幕一个收尾长棚；把剩下的标记/喊卡折算成成片质量；把跨局档案从四个数字变成有等级的档案柜。
+
+| 编号 | 目标 | 归属 | 验收要点 |
+|---|---|---|---|
+| 1 | 16 棚与每幕收尾长棚 | Codex G | `const MODULES := 16`、`const SETS_PER_ACT := 4`；每幕最后一棚（`main_index` 3/7/11/15）固定为 26 m 灯架棚（`GANTRY_SLOTS`），一局走过 4 个长棚；HUD `SET n/16`、结算与存档长度字段随之正确；旧 12 棚存档能读、不崩。 |
+| 2 | 收集物折算成片质量 | Codex F | 新增纯函数模块 `scripts/relay/craft.gd`：`shoot(marks_left, cuts_left, deaths) -> Dictionary`（`bonus` / `tier` / 双语一行）；`_show_sheet` 的通告单上多一行「省下的标记与喊卡」，并计入 `score_info`；第一次捡到标记给一次「标记＝一条命」的提示。不新增按键、不改 `Rules` 预算。 |
+| 3 | 归档有等级、结局有分布 | Codex D | `RelayRules` meta 升到 v2（向后兼容 v1）：累计 `marks_total` / `cuts_total` 与三结局计数 `truth` / `coverup` / `frameup`；新增纯函数 `archive_rank(total) -> int` 与 `merge_meta(raw) -> Dictionary`；标题页 CAREER 区显示档案等级与结局分布。 |
+| 4 | 独立验收与档案同步 | Codex C | `tools/verify_branch.py` 覆盖新支；`tests/test_sprint7_guard.gd` 用防御式断言（模块缺失即跳过）钉住：16 棚、4 个灯架棚位、`craft.shoot` 与 `archive_rank` 的纯函数行为、长局不产生软锁；四份 living 文档同步。 |
+
+Sprint 7 门禁：`tools/verify_all.py` 全过，断言数只增不减，`mesh_get_surface_count` 噪声预算 1，每个交付端附实机截图。
+
+
 真人盲测、真窗口焦点、移动浏览器和外部线上包仍按工程状态表 UNV-01 至 UNV-04 跟踪。赛事和平台更新另行取得创作者授权。
