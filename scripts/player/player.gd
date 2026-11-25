@@ -34,6 +34,9 @@ signal facing_changed(facing: float)
 
 ## Radians. 0 == world -Z. The camera chases this.
 var facing := 0.0
+## Off by default: every flat set gets the cheap zero-gravity walk. Sets with a
+## second deck (the H gantry) turn this on so the body can fall and hold a slope.
+var vertical_walk := false
 var frozen := false
 ## Horizontal velocity the floor adds under you (belts). Set by the arena each frame.
 var push := Vector3.ZERO
@@ -169,7 +172,7 @@ func _physics_process(dt: float) -> void:
 	# walk, so holding against it still gets you out at SPEED - BELT.
 	velocity.x = move_toward(velocity.x, target_v.x, rate * dt) + push.x
 	velocity.z = move_toward(velocity.z, target_v.z, rate * dt) + push.z
-	velocity.y = 0.0
+	velocity.y = maxf(velocity.y - 19.6 * dt, -24.0) if vertical_walk else 0.0
 	move_and_slide()
 
 	if dir.length_squared() > 0.0001:

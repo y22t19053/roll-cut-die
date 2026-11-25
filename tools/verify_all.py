@@ -79,9 +79,11 @@ def main():
     # encodings on the way here, so match any run of non-digits instead of the glyph.
     summary = re.search(r"RCD TESTS: ALL PASS[^\d]*(\d+) assertions", out)
     assertions = int(summary[1]) if summary else 0
-    failed = re.search(r"RCD TESTS:[^\d]*FAIL[^\d]*(\d+) assertions", out)
+    # A failing suite prints "FAILED — <modules>" and then "N passed, M failed", so
+    # the count lives on a different line than it does for a pass.
+    failed = re.search(r"RCD TESTS: FAILED[^\n]*\nRCD TESTS: (\d+) passed, (\d+) failed", out)
     if summary is None and failed:
-        assertions = int(failed[1])
+        assertions = int(failed[1]) + int(failed[2])
     noise = err.count("mesh_get_surface_count")
     # NOISE BUDGET: run_all.gd keeps every Mesh that leaves the tree, which turns the
     # hundreds of lines a module teardown used to spray into a single one per whole
