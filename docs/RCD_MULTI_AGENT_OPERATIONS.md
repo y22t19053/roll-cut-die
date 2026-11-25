@@ -75,3 +75,16 @@ python tools/verify_all.py --json
 ```
 
 主控读取退出码与 JSON。基线回执为 Python 31 项通过、Godot 815 条断言、`stderr_noise` 为 0。其他引擎诊断可从 stderr 查看。
+
+## 6. Sprint 6 四路并行（B/D/E + 本端 C）
+
+以下按本地分支提交记录区分已提交文件与派单范围。C 的基点为 `3fc36db`。
+
+| 执行端 | 分支 | 文件与交付记录 |
+|---|---|---|
+| B | `codex-b/sprint6-gantry` | 负责 `scripts/relay/relay_rooms.gd` 中的 gantry 房间接入与对应回归。C 验收时分支引用仍在基点。 |
+| D | `codex-d/sprint6-score` | 负责 `scripts/relay/relay_sound.gd` 的分层配乐。C 验收时分支引用仍在基点。 |
+| E | `codex-e/sprint6-frame` | 提交 `7fe4820` 包含 `out_of_frame.gd`、`relay_run.gd`、`relay_rooms.gd`、`relay_sound.gd`、`loc.gd`，另有出画回归、测试注册、预览场景与截图、路线图及设计记录。 |
+| C | `codex-c/sprint6-guard` | `tests/test_room_families.gd`、`tests/test_no_softlock.gd`、`tests/softlock_hit_probe.gd`、`tests/run_all.gd`、`tests/only.gd`、`tools/verify_branch.py`、`tools/verify_all.py`，以及路线图、工程状态与本档案。 |
+
+集成裁决：主控按功能合并 B 的房间构建与 E 的门洞，保留 D 的分层配乐与 E 的出画音效。对 `tests/run_all.gd` 取各端新增模块的并集，路线图按编号保留各端回执。C 仅写第 3 行；本次未执行跨分支合并。集成后在候选树重跑完整门禁，核对条件用例已执行。
