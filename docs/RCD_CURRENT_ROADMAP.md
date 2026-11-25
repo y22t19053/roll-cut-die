@@ -112,3 +112,20 @@ Sprint 8 验收工具：`tests/test_sprint8_guard.gd` + `tools/verify_branch.py`
 - #2 已合入 `939a51d` / merge `95de596`：`scripts/relay/next_move.gd`，结算单末行给「差 M 棚 / 下一档已解锁 / 比上一把更干净」。
 - #3 已合入 `f426bb8`：标题页难度区显示解锁条件与本人最远进度，档案区显示「下一级还差 N 枚」；截图 `visual/preview/sprint8_title_board.png`。
 - #4 已合入 `788307c` / merge `c94438a`：`tests/test_sprint8_guard.gd` 防御式断言 + `tools/verify_branch.py` 覆盖新支。
+
+### Sprint 9 · Active
+
+基线 `master@895f5f7`，门禁断言 2,215。主题：**线上第一分钟**。游戏已经挂在 itch（`https://y22t19053.itch.io/roll-cut-die`）与 GitHub 上，四个 Jam 的评审会直接点 Web 版；线上玩家会碰到、而我们从没验过的有三件事：
+
+1. **EXPERT 档和 NOVICE 档的规则一模一样**（`relay_rules.gd:35-36` `_MARK [6,6,3]` / `_CUT [3,3,2]`），两档只差排行榜分区。玩家通关 NOVICE 解锁 EXPERT，发现「没变难」，是明确的失信。
+2. **浏览器里切走标签页再回来**：全仓没有 `NOTIFICATION_APPLICATION_FOCUS_OUT`、没有 delta 上限。切回来那一帧的 `delta` 可能是 1–2 秒，机关、秋千、Ghost 全部按大 `delta` 推进一次。
+3. **触屏与窄窗口**：`scripts/relay/touch_pad.gd` 只有 53 条断言覆盖行为，没有一条断言覆盖「在 640×360 的 iframe 里，两块拇指区不压到通告单、不压到 HUD」。
+
+| 编号 | 目标 | 归属 | 验收要点 |
+|---|---|---|---|
+| 1 | EXPERT / MASTER 真的更难 | Codex J | `scripts/relay/relay_rules.gd` 新增纯函数 `pace(mode) -> float`（1.0 / 0.92 / 0.84）与 `warning_scale(mode) -> float`（1.0 / 0.85 / 0.7）；`relay_run` 把它们接进 `hurry_for(...)` 与机关/出画前摇；新增 `tests/test_difficulty.gd` 断言严格单调：`pace(0) > pace(1) > pace(2)`、`warning_scale(0) > warning_scale(1) > warning_scale(2)`、且 EXPERT 与 NOVICE 至少两条规则不同（不许只差预算）。预算仍为 6/3、6/3、3/2，不改。 |
+| 2 | 失焦与时间步 | Codex K | 全局失焦要被感知：`scripts/core/game_session.gd` 加 `signal focus_lost` / `signal focus_gained` + `_notification(what)` 映射 `NOTIFICATION_APPLICATION_FOCUS_OUT` / `IN`；`relay_run` 接到 `focus_lost` 且局内在 Play 时开暂停（复用 `_open_pause()`），不许自动继续；`_physics_process` 的游戏步长钳到 `minf(delta, 0.05)`。新增 `tests/test_focus_pause.gd`：纯函数映射 + 真实 `run.tscn` 里触发 `focus_lost` 后 `get_tree().paused == true`、`focus_gained` 不自动恢复。 |
+| 3 | 触屏与窄屏布局 | Codex C | `scripts/relay/touch_pad.gd` 抽出纯函数 `static func layout(viewport: Vector2, scale: float) -> Dictionary`（左/右拇指区 `Rect2`、HUD 顶部带、通告单底部带）；新增 `tests/test_touch_layout.gd` 对 640×360 / 844×390 / 1280×720 / 1920×1080 四档断言：两块拇指区都在视口内、互不重叠、单边 ≥96 px、不压 HUD 顶部 64 px 与通告单底部 96 px；两份截图 `visual/preview/sprint9_touch_640.png` / `sprint9_touch_844.png`；四份 living 文档同步。 |
+| 4 | 线上冒烟门禁 | 主控 | 新增 `tools/verify_web.py`：本地 `http.server` 起 `builds/web/`，用 Tabbit 打开、等 canvas 起、点 `NEW SHOOT`、抓 console error 与首帧截图，接进 `tools/verify_all.py --web`。 |
+
+Sprint 9 门禁：`tools/verify_all.py` 全过，断言数只增不减，`mesh_get_surface_count` 噪声预算 1，每个交付端附实机或浏览器截图。
