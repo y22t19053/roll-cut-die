@@ -228,6 +228,26 @@ static func _run_wrap(h: Harness, tree: SceneTree) -> void:
 		await tree.process_frame
 		h.ok("the wrap hands the run back to the call sheet", inst.get("_final_cut") == null)
 		h.ok("the call sheet still settles the run", not (inst.get("score_info") as Dictionary).is_empty())
+	var desk: Variant = inst.get("desk")
+	var next_line: String = desk._sheet_lines.back()
+	h.eq("the win records its next move", inst.get("score_info").get("next_move"), "unlock")
+	h.eq("the next move ends the win sheet", next_line,
+		"下一档已解锁。" if Loc.language == "zh" else "The next tier is open.")
+	inst.call("_on_score_sent", true, {"rank": 1}, "")
+	h.eq("ranking leaves the next move last", desk._sheet_lines.back(), next_line)
+	h.eq("ranking appears above the next move", desk._sheet_lines[-2],
+		"今日榜第 1 名。" if Loc.language == "zh" else "TODAY: number 1 on the board.")
+	var segments: Array = inst.get("segments")
+	var original_count := segments.size()
+	var original_prologue: int = inst.get("_prologue")
+	segments.resize(14) # Four prologue sets, nine completed sets, and the failed set.
+	inst.set("_prologue", 4)
+	inst.call("_settle_sheet", false)
+	h.eq("a loss records its next move", inst.get("score_info").get("next_move"), "short")
+	h.eq("only completed relay sets count toward the loss hint", desk._sheet_lines.back(),
+		"差 7 棚。这条路是通的。" if Loc.language == "zh" else "7 sets short. The route holds.")
+	segments.resize(original_count)
+	inst.set("_prologue", original_prologue)
 	inst.queue_free()
 	await tree.process_frame
 	await tree.process_frame

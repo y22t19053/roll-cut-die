@@ -8,6 +8,7 @@ const Orbit = preload("res://scripts/camera/roll_modes.gd").ORBIT
 const Track = preload("res://scripts/ghost/ghost_track.gd")
 const Ghost = preload("res://scripts/ghost/ghost_actor.gd")
 const Rules = preload("res://scripts/relay/relay_rules.gd")
+const NextMove = preload("res://scripts/relay/next_move.gd")
 const Craft = preload("res://scripts/relay/craft.gd")
 const Splice = preload("res://scripts/relay/safety_splice.gd")
 const Loc = preload("res://scripts/core/loc.gd")
@@ -153,6 +154,7 @@ var deaths := 0
 ## bought this set. Reset whenever the spare pays out.
 var _fast_legs := 0
 var difficulty := Rules.selected_mode
+var _highest_unlocked_before_clear := 0
 var forced_cut := false
 var splice := Splice.new()
 var active_clock := 0.0
@@ -922,6 +924,8 @@ func _finish_leg() -> void:
 		_freeze()
 		_show_target()
 		Save.clear() # A finished run is not a run to come back to.
+		# The sheet arrives after recording the clear and playing the wrap.
+		_highest_unlocked_before_clear = 2 if Rules.unlocked(2) else (1 if Rules.unlocked(1) else 0)
 		if Rules.unlocked(difficulty): Rules.record_clear(difficulty)
 		_finish_line()
 		return
@@ -1661,6 +1665,10 @@ func _settle_sheet(won: bool) -> void:
 		# A board needs one rule or it is just a list of numbers: the reels that
 		# ran out are the ones that count.
 		lines.insert(0, _w("没接通的一局不上榜。", "A reel that never ran out does not go on the board."))
+	# _sets() includes the set the player is currently standing in.
+	var sets_done := 0 if _in_prologue() else _sets() - int(not won)
+	lines.append(NextMove.line(sets_done, MODULES, won, difficulty, _highest_unlocked_before_clear, Loc.language == "zh"))
+	score_info["next_move"] = NextMove.key(sets_done, MODULES, won, difficulty, _highest_unlocked_before_clear)
 	if won:
 		desk.show_call_sheet(_w("全部接通","ANSWER PRINT"), lines, true, Loc.language == "zh")
 	else:
@@ -1698,13 +1706,13 @@ func _on_score_sent(ok: bool, mine: Dictionary, message: String) -> void:
 		# Silence is not an error the player should have to act on: the run is
 		# still over, the page still says what it was, and one line says why there
 		# is no rank on it.
-		desk.append_sheet_lines([_w("榜单没有回应（%s）。", "The board did not answer (%s).") % message])
+		desk.append_sheet_lines([_w("榜单没有回应（%s）。", "The board did not answer (%s).") % message], true)
 		return
 	var rank := int(mine.get("rank", 0))
 	if rank <= 0:
-		desk.append_sheet_lines([_w("今日榜：这次没排上。", "TODAY: not ranked yet.")])
+		desk.append_sheet_lines([_w("今日榜：这次没排上。", "TODAY: not ranked yet.")], true)
 	else:
-		desk.append_sheet_lines([_w("今日榜第 %d 名。", "TODAY: number %d on the board.") % rank])
+		desk.append_sheet_lines([_w("今日榜第 %d 名。", "TODAY: number %d on the board.") % rank], true)
 
 ## ESC is the only key that stops the clock. Everything else in this game is a
 ## decision about the take; this one is a decision about the person playing it.
