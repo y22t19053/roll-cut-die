@@ -57,9 +57,13 @@ def short_hash() -> str:
 
 
 def run(cmd: list[str], what: str) -> None:
+    """Godot prints Chinese in UTF-8; the Windows console codec is GBK, so never let
+    subprocess decode for us -- capture bytes and decode explicitly."""
     print(f"[release] {what}")
-    proc = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True)
-    tail = (proc.stdout + proc.stderr).strip().splitlines()[-6:]
+    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True)
+    out = (proc.stdout or b"").decode("utf-8", "replace")
+    err = (proc.stderr or b"").decode("utf-8", "replace")
+    tail = (out + err).strip().splitlines()[-6:]
     for line in tail:
         print("    " + line)
     if proc.returncode != 0:
