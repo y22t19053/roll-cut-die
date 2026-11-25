@@ -17,7 +17,7 @@
 
 **引擎锁 4.3，不升级。** 理由：本机只有 4.3 stable；导出模板也只装了 4.3.stable。装 4.4+ 会让导出模板、`project.godot` 特性串、全部已跑通的日志对照一起作废。
 
-## 1 · 唯一铁律：不要用 shell 跑 godot
+## 1 · 有文件沙箱的环境通过桥接运行 Godot
 
 本机的文件沙箱会拦截 Godot 启动时对 `user://`（即上面那个 AppData 目录）的写入。由 shell 派生的 Godot 进程会以 **signal 11 / 段错误** 终止，看起来像项目崩了，实际是启动通道不对。这不是可以绕过的权限问题，换写法也没用。
 
@@ -30,6 +30,18 @@
 - 要语法检查单个脚本 → `godot_validate_script`
 
 下面的命令行只作为**对照阅读**，解释这些工具在底下执行了什么；直接粘贴到 pwsh 里执行会撞上上面那条。若某次 `godot_*` 工具返回 `diagnosis:"sandbox-crash"`，结论是通道问题，重跑工具，不要去查项目 bug。
+
+### 1.1 · Sprint 5 工作树与 CI 验收
+
+在本机允许启动子进程的工作树根目录运行：
+
+```powershell
+python tools/verify_all.py --json --baseline 815 --timeout 130
+```
+
+脚本优先用本机 DSH Python 跑 unittest，然后用 Godot 4.3 无头执行 `res://tests/run_all.gd`。新工作树首次运行会先导入项目。其他机器可用 `GODOT_BIN` 指定引擎路径，未安装 DSH Python 时使用启动脚本的解释器。
+
+`--timeout` 按子进程计秒。省略 `--json` 可逐项阅读结果。CI 读取退出码：两套测试通过、断言数达到 `--baseline`（默认 815）且 Godot 测试 stderr 中 `mesh_get_surface_count` 计数为零时返回 0。JSON 写到 stdout，失败详情写到 stderr。
 
 ## 2 · 日常循环
 

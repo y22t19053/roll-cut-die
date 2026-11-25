@@ -11,7 +11,7 @@
 
 接管时的 WIP 快照 `b1eb404` 与 `free-blocking-sets@74faa23` 均保存了完整的 `scripts/relay/h_gantry.gd`。两个版本都是 8,564 字节，Git blob 同为 `84b8fc927bbdd7df5e9654dc390ec5bd02f015b5`。任务单所列 `archive/free-blocking-wip-20261125` 分支名在本地引用中未查到。
 
-## 2. 当前三个交付工作树
+## 2. Sprint 3 / 4 交付工作树
 
 | 执行端 | 分支 | 本轮职责 |
 |---|---|---|
@@ -43,13 +43,13 @@
 | BUG-04 | RESOLVED / VERIFIED（Sprint 1 验收） | Dummy 空 mesh 与退出时 ObjectDB 泄漏已修复；运行与测试拆卸见 `f2d28b2`、`51db451`。 |
 | DRIFT-01 | RESOLVED / VERIFIED | `relay_run.gd` 定义 `MODULES = 12`、`ACTS = 4`、`SETS_PER_ACT = 3`，标题进度从 `RunScript.MODULES` 取值。 |
 
-## 5. Sprint 3 / 4 交付中
+## 5. Sprint 3 / 4 交付记录
 
 Sprint 3 将标题的纸张、印章与排版延伸至局内 HUD、暂停、设置、道具盘及手工通告单。`Mode.CUT` 的 Steenbeck 放大镜显示选择的 MARK / Take 与回退代价，中央走位区域保持可见。
 
 Sprint 4 目标是 22,050 Hz D 小调推进型配乐、动作拟音与视觉反馈。`visual/DEAI_PLAN.md` #1–#6 分别覆盖场务回望、远端退场、纸面划改、道具偏摆、静置后淡入的 −34 dB 低语与后段灯闪。表现层沿用同一套可复现的碰撞、计时和资源规则。
 
-C 分支注册 `inrun_ui_deai`，覆盖镜头与碰撞半径、双语设置与暂停恢复、剪辑台模式、五族布景在相同时间的碰撞位置和 WAV 格式。预览接口存在时还会触发放大镜重绘与关闭。新增模块的 Godot 4.3 执行回执与退出日志待主控合并后通过 godot-bridge 核验。
+C 分支注册 `inrun_ui_deai`，覆盖镜头与碰撞半径、双语设置与暂停恢复、剪辑台模式、五族布景在相同时间的碰撞位置和 WAV 格式。预览接口存在时还会触发放大镜重绘与关闭。模块已合入，Godot 4.3 全套回归结果见 §7。
 
 ## 6. 尚待独立验证
 
@@ -59,3 +59,13 @@ C 分支注册 `inrun_ui_deai`，覆盖镜头与碰撞半径、双语设置与�
 | **UNV-02** | `UNVERIFIED` | **真实窗口 Alt+Tab 焦点丢失配对测试**：按键粘连与音频挂起恢复尚未完成桌面真窗口配对验证 | 待交互模式实测 |
 | **UNV-03** | `UNVERIFIED` | **移动真机浏览器触控实测**：`DisplayServer.is_touchscreen_available()` 在 Android Chrome / iOS Safari 的实际返回值与 520px 小屏字号可读性尚未真机核验（见 `D-070`） | `UNVERIFIED` |
 | **UNV-04** | `UNVERIFIED` | **B 站 TOY 线上包是否已更新为剥离 `McpInteractionServer` 后的最新包**（见 `D-072` 末尾记录） | `UNVERIFIED`（未获创作者授权前不擅自 `toy update`） |
+
+## 7. Sprint 5 · Active
+
+本轮从 `master@c46ca46` 派生，Godot 4.3 基线为 815 条断言。世界与路线由 `codex-a-sprint5-world` 跟进，机关道具由 `codex-b-sprint5-props` 跟进，验收与档案由 `codex-c-sprint5-guard` 负责。
+
+| C 工作树交付 | 状态 | 验收依据 |
+|---|---|---|
+| 统一验收脚本 | 已验证 | `tools/verify_all.py --json` 汇总 Python 31 项与 Godot 815 条断言，支持基线、超时和 CI 退出码。 |
+| Dummy 空网格噪声 | 已验证 | 完整套件的 `mesh_get_surface_count` 从 2,412 次降至 0 次。测试入口在节点释放期间短暂持有网格引用。 |
+| 活动档案同步 | 已完成 | 工程状态、路线图和多端协作规范已登记 Sprint 5 基线、工作树与验收方式。 |

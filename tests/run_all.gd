@@ -44,11 +44,23 @@ const MODULES := [
 ]
 
 var _current := "(startup)"
+var _retiring_meshes: Array[Mesh] = []
 
 
 func _init() -> void:
+	if DisplayServer.get_name() == "headless":
+		node_removed.connect(_hold_mesh_through_teardown)
 	# The tree does not exist yet inside _init, and the scene test needs it.
 	call_deferred("_main")
+
+
+func _hold_mesh_through_teardown(node: Node) -> void:
+	# Godot 4.3 Dummy queries the mesh RID while destroying the instance.
+	# Keep the resource alive through destruction, including parent.free().
+	if node is MeshInstance3D and node.mesh != null:
+		if _retiring_meshes.is_empty():
+			_retiring_meshes.clear.call_deferred()
+		_retiring_meshes.append(node.mesh)
 
 
 func _watchdog() -> void:
