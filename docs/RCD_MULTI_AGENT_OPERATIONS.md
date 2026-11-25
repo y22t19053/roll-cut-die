@@ -58,3 +58,20 @@ Sprint 1 出生点与测试卫生修复、Sprint 2 通告单与三重曝光标�
 | `codex-c/sprint3-4-qa-and-docs` | `tests/test_inrun_ui_and_deai.gd`、`tests/run_all.gd` 及工程状态、路线图、设计决策、协作规范、项目总览五份档案。 |
 
 同属 `scripts/relay/` 或 `scripts/ui/` 的任务仍按文件指定唯一写入方。C 使用预览方法存在性检查兼容合并顺序。Lead 集成后通过 godot-bridge 运行全套测试，检查退出日志，并以 Forward+ 实机核验视野及动效；试听与真人盲测另记回执。
+
+## 5. Sprint 5 · 分支与验收
+
+| 工作树 | 分支 | 交付方向 |
+|---|---|---|
+| `codex-a-sprint5-world` | `codex-a/sprint5-world` | 互联摄影棚与路线 |
+| `codex-b-sprint5-props` | `codex-b/sprint5-props` | 机关与片场道具 |
+| `codex-c-sprint5-guard` | `codex-c/sprint5-guard` | 验收脚本、Dummy 日志与活动档案 |
+| `codex-d-sprint5-finalcut` | `codex-d/sprint5-finalcut` | WRAP·Final Cut |
+
+分支基线为 `master@c46ca46`。Sprint 5 的本地回归与 CI 在纳入 C 脚本的工作树根目录执行：
+
+```powershell
+python tools/verify_all.py --json
+```
+
+主控读取退出码与 JSON。基线回执为 Python 31 项通过、Godot 815 条断言、`stderr_noise` 为 0。其他引擎诊断可从 stderr 查看。
