@@ -1,10 +1,25 @@
 extends RefCounted
 ## Relay progression is separate from campaign saves. Mode selection and all
 ## consumables are session-only; the highest unlocked difficulty is permanent.
+const Loc = preload("res://scripts/core/loc.gd")
 const _PATH := "user://rcd/relay_progress.cfg"
 const _META_PATH := "user://rcd/relay_meta.cfg"
 const _VERSION := 1
-const _META_VERSION := 1
+const _META_VERSION := 2
+const _META_DEFAULTS := {
+	"runs": 0, "best_set": 0, "deaths": 0, "wins": 0, "last_seed": 0,
+	"marks_total": 0, "cuts_total": 0, "truth": 0, "coverup": 0, "frameup": 0,
+}
+const _ARCHIVE_NAMES := [
+	{"en": "Empty Archive", "zh": "空档案"},
+	{"en": "Clapperboard", "zh": "场记板"},
+	{"en": "Second Assistant", "zh": "第二助理"},
+	{"en": "First Assistant", "zh": "第一助理"},
+	{"en": "Lead Controller", "zh": "主控"},
+]
+const _VERDICT_KEYS := {
+	"file_closed": "truth", "bury_registered": "coverup", "reframe_held": "frameup",
+}
 const _MARK := [6, 6, 3]
 const _CUT := [3, 3, 2]
 static var selected_mode: int = 0
@@ -51,27 +66,84 @@ static func _record_clear_at(mode: int, path: String) -> void:
 ## What the player has already done, kept between sessions. Nothing in here makes
 ## a run easier: it is a record, not a reward. Supplies stay per-run and per-mode.
 static func meta() -> Dictionary:
-	var out := {"runs": 0, "best_set": 0, "deaths": 0, "wins": 0, "last_seed": 0}
-	if not FileAccess.file_exists(_META_PATH): return out
-	var cfg := ConfigFile.new()
-	if cfg.load(_META_PATH) != OK: return out
-	if int(cfg.get_value("meta", "version", 0)) != _META_VERSION: return out
-	for key: String in out.keys():
-		out[key] = int(cfg.get_value("meta", key, 0))
+	return _meta_from_config(_load_meta_config())
+
+
+static func merge_meta(raw: Dictionary) -> Dictionary:
+	var out := _META_DEFAULTS.duplicate()
+	for key: String in out:
+		var value: Variant = raw.get(key, 0)
+		if typeof(value) == TYPE_INT:
+			out[key] = value
 	return out
 
 
+static func archive_rank(marks_total: int) -> int:
+	if marks_total >= 41: return 4
+	if marks_total >= 21: return 3
+	if marks_total >= 9: return 2
+	if marks_total >= 3: return 1
+	return 0
+
+
+static func archive_name(rank: int) -> String:
+	return Loc.t(_ARCHIVE_NAMES[clampi(rank, 0, _ARCHIVE_NAMES.size() - 1)])
+
+
+static func _load_meta_config() -> ConfigFile:
+	var cfg := ConfigFile.new()
+	if FileAccess.file_exists(_META_PATH) and cfg.load(_META_PATH) != OK:
+		cfg.clear()
+	return cfg
+
+
+static func _meta_from_config(cfg: ConfigFile) -> Dictionary:
+	var version: Variant = cfg.get_value("meta", "version", 0)
+	if typeof(version) != TYPE_INT or (version != 1 and version != _META_VERSION):
+		return merge_meta({})
+	var raw := {}
+	for key: String in cfg.get_section_keys("meta"):
+		raw[key] = cfg.get_value("meta", key)
+	return merge_meta(raw)
+
+
 static func record_run(sets: int, deaths: int, won: bool, seed: int) -> Dictionary:
-	var m := meta()
+	return record_run_full(sets, deaths, won, seed, 0, 0, "")
+
+
+static func record_run_full(sets: int, deaths: int, won: bool, seed: int, marks: int, cuts: int, verdict: String) -> Dictionary:
+	var cfg := _load_meta_config()
+	var m := _meta_from_config(cfg)
 	m["runs"] = int(m["runs"]) + 1
 	m["best_set"] = maxi(int(m["best_set"]), sets)
 	m["deaths"] = int(m["deaths"]) + deaths
 	m["wins"] = int(m["wins"]) + (1 if won else 0)
 	m["last_seed"] = seed
+	m["marks_total"] += marks
+	m["cuts_total"] += cuts
+	_add_verdict(m, verdict)
+	return _write_meta(cfg, m)
+
+
+static func record_verdict(verdict: String) -> Dictionary:
+	var cfg := _load_meta_config()
+	var m := _meta_from_config(cfg)
+	if _add_verdict(m, verdict):
+		return _write_meta(cfg, m)
+	return m
+
+
+static func _add_verdict(m: Dictionary, verdict: String) -> bool:
+	var key: String = _VERDICT_KEYS.get(verdict, "")
+	if key.is_empty():
+		return false
+	m[key] += 1
+	return true
+
+
+static func _write_meta(cfg: ConfigFile, m: Dictionary) -> Dictionary:
 	# Read before writing: this file also carries the daily best, and a records
 	# write that starts from a blank ConfigFile would quietly delete it.
-	var cfg := ConfigFile.new()
-	if FileAccess.file_exists(_META_PATH): cfg.load(_META_PATH)
 	cfg.set_value("meta", "version", _META_VERSION)
 	for key: String in m.keys():
 		cfg.set_value("meta", key, m[key])

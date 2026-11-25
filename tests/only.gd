@@ -18,6 +18,7 @@ const MODULES := {
 	"take": preload("res://tests/test_take.gd"),
 	"mark": preload("res://tests/test_mark.gd"),
 	"craft": preload("res://tests/test_craft.gd"),
+	"archive": preload("res://tests/test_archive.gd"),
 	"save": preload("res://tests/test_save.gd"),
 	"routes": preload("res://tests/test_routes.gd"),
 	"scene": preload("res://tests/test_scene.gd"),

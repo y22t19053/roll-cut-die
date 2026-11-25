@@ -36,6 +36,7 @@ const MODULES := [
 	["mark", preload("res://tests/test_mark.gd")],
 	["craft", preload("res://tests/test_craft.gd")],
 	["relay", preload("res://tests/test_relay.gd")],
+	["archive", preload("res://tests/test_archive.gd")],
 	["room_families", preload("res://tests/test_room_families.gd")],
 	["no_softlock", preload("res://tests/test_no_softlock.gd")],
 	["set_props", preload("res://tests/test_set_props.gd")],
