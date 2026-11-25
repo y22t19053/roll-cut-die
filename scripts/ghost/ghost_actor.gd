@@ -66,12 +66,15 @@ func setup(t: Variant, id: int) -> void:
 	_armed = false
 	_alpha = 0.0
 	_mercy_bodies.clear()
-	var initial: Dictionary = track.sample_at(0.0)
-	_spawn_pos = initial["position"]
-	if is_inside_tree():
-		global_position = _spawn_pos
+	if track != null:
+		var initial: Dictionary = track.sample_at(0.0)
+		_spawn_pos = initial["position"]
+		if is_inside_tree():
+			global_position = _spawn_pos
+		else:
+			position = _spawn_pos
 	else:
-		position = _spawn_pos
+		_spawn_pos = global_position if is_inside_tree() else position
 	if _danger != null:
 		_danger.monitoring = false
 	if _label != null:

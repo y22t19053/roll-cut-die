@@ -5,6 +5,7 @@ extends RefCounted
 
 const GhostTrack = preload("res://scripts/ghost/ghost_track.gd")
 const GhostRecorderScript = preload("res://scripts/ghost/ghost_recorder.gd")
+const GhostActorScript = preload("res://scripts/ghost/ghost_actor.gd")
 
 
 static func run(h, tree = null) -> void:
@@ -150,6 +151,37 @@ static func run(h, tree = null) -> void:
 	h.note("60s track stored as %d bytes (%.1f B/s) after JSON"
 		% [_json_bytes(src), _json_bytes(src) / 60.0])
 
+	# --- spawn mercy & null-track safety -----------------------------------
+	var actor = GhostActorScript.new()
+	actor.setup(null, 1)
+	h.eq("null-track setup keeps take_id without error", actor.take_id, 1)
+	if tree != null:
+		var mtrack = GhostTrack.new()
+		mtrack.take_id = 1
+		mtrack.add_sample(0.0, Vector3.ZERO, 0.0, 0.0, 0.0)
+		mtrack.add_sample(5.0, Vector3.ZERO, 0.0, 0.0, 0.0)
+		var dummy_player := _DummyPlayer.new()
+		tree.root.add_child(dummy_player)
+		tree.root.add_child(actor)
+		dummy_player.global_position = Vector3.ZERO
+		actor.warmup_seconds = 0.05
+		actor.setup(mtrack, 1)
+		actor.arm_spawn_mercy(dummy_player)
+		var caught_count := [0]
+		actor.caught_player.connect(func(_id: int) -> void: caught_count[0] += 1)
+		actor._physics_process(0.1)
+		actor._on_body_entered(dummy_player)
+		h.eq("co-located spawn mercy suppresses initial catch", caught_count[0], 0)
+		dummy_player.global_position = Vector3(2.0, 0.0, 0.0)
+		actor._physics_process(0.1)
+		dummy_player.global_position = Vector3.ZERO
+		actor._on_body_entered(dummy_player)
+		h.eq("re-entry after separation catches player", caught_count[0], 1)
+		tree.root.remove_child(dummy_player)
+		dummy_player.free()
+		tree.root.remove_child(actor)
+	actor.free()
+
 
 static func _json_bytes(track) -> int:
 	return JSON.stringify(track.to_dict()).length()
@@ -157,4 +189,8 @@ static func _json_bytes(track) -> int:
 
 class _Subject extends Node3D:
 	var facing := 0.0
+	var frozen := false
+
+
+class _DummyPlayer extends CharacterBody3D:
 	var frozen := false
