@@ -91,3 +91,16 @@ Sprint 7 门禁：`tools/verify_all.py` 全过，断言数只增不减，`mesh_g
 
 
 真人盲测、真窗口焦点、移动浏览器和外部线上包仍按工程状态表 UNV-01 至 UNV-04 跟踪。赛事和平台更新另行取得创作者授权。
+
+### Sprint 8 · Active
+
+基线 `master@34306c9`，门禁断言 2,107。主题：**把新动作教出去，把下一把的理由写出来**——序章只教了七种基本棚型，Sprint 5–7 加进来的四件事（片场机关、双层灯架、出画前摇、终局剪辑）玩家是冷启动撞上的；而输掉一局之后，结算单只说这一局值多少分，不说下一局该改什么。
+
+| 编号 | 目标 | 归属 | 验收要点 |
+|---|---|---|---|
+| 1 | 四个新动作各教一次 | Codex H | 新增 `scripts/relay/phrasebook.gd`：四类一次性教学（首次遇到机关 / 首次进灯架棚 / 首次触发出画前摇 / 首次播完终局剪辑），每类只在该玩家档案里出现一次，跨局记忆存 `user://rcd/relay_lessons.cfg`；纯函数 `seen(kind, path)` / `mark(kind, path) -> bool` / `line(kind, zh) -> String` 供断言；不得与既有 `_hint` 键重复播报、不得叠两条通知。 |
+| 2 | 结算单给「下一把」 | Codex F | 新增纯函数模块 `scripts/relay/next_move.gd`：`line(sets_done, modules, won, tier, highest_unlocked, zh) -> String`——输在第 N 棚说「差 M 棚」、赢下当前档说「下一档已解锁」、已在最高档说「比上一把更干净」；`_settle_sheet` 追加一行，`score_info` 加 `next_move` 键。 |
+| 3 | 标题页把进度说清 | Codex D | 标题页难度区显示解锁条件与本人最远进度（「EXPERT 解锁：通关 NOVICE（你最远 N/16）」），档案区显示下一级还差多少枚标记（`archive_next_gap(marks_total) -> int`）；纯函数可断言，v1/v2 存档都能读。 |
+| 4 | 独立验收与档案同步 | Codex C | `tools/verify_branch.py` 覆盖新支；`tests/test_sprint8_guard.gd` 防御式断言（模块缺失即跳过）钉住：一次性教学只播一次、`next_move.line` 的分支、`archive_next_gap` 的边界；四份 living 文档同步。 |
+
+Sprint 8 门禁：`tools/verify_all.py` 全过，断言数只增不减，`mesh_get_surface_count` 噪声预算 1，每个交付端附实机截图。
