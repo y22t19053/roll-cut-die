@@ -11,7 +11,10 @@ const RunScript = preload("res://scripts/relay/relay_run.gd")
 const Rules = preload("res://scripts/relay/relay_rules.gd")
 const Save = preload("res://scripts/relay/relay_save.gd")
 const ToyBridge = preload("res://scripts/relay/toy_bridge.gd")
-const PRINT_FONT = preload("res://assets/fonts/RCD-Noto.otf")
+const PRINT_FONT_PATH := "res://assets/fonts/RCD-Noto.otf"
+
+static var _print_font: Font
+static var _print_font_probed := false
 
 const RUN_SCENE := "res://scenes/relay/run.tscn"
 const STUDIO_SLUG := "MACGUFFIN WORKS  //  SOUNDSTAGE NO. 04  ·  ORBIT 30°/S"
@@ -154,11 +157,13 @@ func _build_header(zh: bool) -> void:
 	clapper.draw.connect(_draw_clapper.bind(clapper))
 	_head.add_child(clapper)
 
-	var tracked := FontVariation.new()
-	tracked.base_font = PRINT_FONT
-	tracked.spacing_glyph = 1
 	var slug := _print(STUDIO_SLUG, 13, PAPER)
-	slug.add_theme_font_override("font", tracked)
+	var base_font := _get_print_font()
+	if base_font != null:
+		var tracked := FontVariation.new()
+		tracked.base_font = base_font
+		tracked.spacing_glyph = 1
+		slug.add_theme_font_override("font", tracked)
 	_head.add_child(slug)
 
 	_tools = _row(6)
@@ -184,14 +189,24 @@ func _draw_clapper(bar: Control) -> void:
 	bar.draw_rect(Rect2(58.0, 3.0, maxf(0.0, bar.size.x - 58.0), 1.0), UiKit.RULE)
 
 
+func _get_print_font() -> Font:
+	if not _print_font_probed:
+		_print_font_probed = true
+		if ResourceLoader.exists(PRINT_FONT_PATH):
+			_print_font = load(PRINT_FONT_PATH) as Font
+	return _print_font
+
+
 func _build_call_sheet(zh: bool) -> void:
 	var masthead := _print("ROLL\nCUT DIE", 72, UiKit.INK)
 	masthead.name = "Masthead"
-	var heavy := FontVariation.new()
-	heavy.base_font = PRINT_FONT
-	heavy.variation_embolden = 0.65
-	heavy.spacing_glyph = -2
-	masthead.add_theme_font_override("font", heavy)
+	var base_font := _get_print_font()
+	if base_font != null:
+		var heavy := FontVariation.new()
+		heavy.base_font = base_font
+		heavy.variation_embolden = 0.65
+		heavy.spacing_glyph = -2
+		masthead.add_theme_font_override("font", heavy)
 	masthead.add_theme_constant_override("line_spacing", -22)
 	_body.add_child(masthead)
 	var accent := _rule(UiKit.ACCENT, 3)

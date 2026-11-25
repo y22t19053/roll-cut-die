@@ -1,10 +1,12 @@
 extends Node3D
 ## Title-only set. All animation is sampled from one clock, including the tails.
 
-const DECK = preload("res://assets/textures/deck.png")
-const FLAT = preload("res://assets/textures/flat.png")
-const METAL = preload("res://assets/textures/metal.png")
-const WALL = preload("res://assets/textures/wall.png")
+const DECK_PATH := "res://assets/textures/deck.png"
+const FLAT_PATH := "res://assets/textures/flat.png"
+const METAL_PATH := "res://assets/textures/metal.png"
+const WALL_PATH := "res://assets/textures/wall.png"
+
+static var _tex_cache: Dictionary = {}
 
 const TAKE_INKS: Array[Color] = [Color("f3af64"), Color("89e3df"), Color("ed8aa9")]
 const TUNGSTEN := Color("f4c483")
@@ -102,10 +104,10 @@ func _build_environment() -> void:
 
 
 func _build_deck() -> void:
-	var concrete := _stock(Color("53504a"), DECK, Vector3(7.0, 7.0, 7.0))
-	var timber := _stock(Color("9e8871"), DECK, Vector3(4.0, 3.0, 1.0))
-	var cyc := _stock(Color("123e25"), WALL, Vector3(3.0, 2.0, 1.0))
-	var wall := _stock(Color("3b3731"), WALL, Vector3(2.0, 2.0, 1.0))
+	var concrete := _stock(Color("53504a"), DECK_PATH, Vector3(7.0, 7.0, 7.0))
+	var timber := _stock(Color("9e8871"), DECK_PATH, Vector3(4.0, 3.0, 1.0))
+	var cyc := _stock(Color("123e25"), WALL_PATH, Vector3(3.0, 2.0, 1.0))
+	var wall := _stock(Color("3b3731"), WALL_PATH, Vector3(2.0, 2.0, 1.0))
 	var tape := _ink(Color("f4dfaa"))
 	_box(self, Vector3(38.0, 0.28, 28.0), Vector3(0.0, -0.33, 0.0), concrete)
 	_box(self, Vector3(11.8, 0.20, 6.4), Vector3(6.05, -0.10, 0.0), timber)
@@ -155,8 +157,8 @@ func _crate(at: Vector3, dimensions: Vector3, cant: float) -> void:
 	crate.position = at
 	crate.rotation_degrees.y = cant
 	add_child(crate)
-	var shell := _stock(Color("5c4e3e"), FLAT)
-	var metal := _stock(Color("777471"), METAL)
+	var shell := _stock(Color("5c4e3e"), FLAT_PATH)
+	var metal := _stock(Color("777471"), METAL_PATH)
 	var stamp := _stock(Color("b6a482"))
 	var center := dimensions.y * 0.5
 	_box(crate, dimensions, Vector3(0.0, center, 0.0), shell)
@@ -171,8 +173,8 @@ func _crate(at: Vector3, dimensions: Vector3, cant: float) -> void:
 
 
 func _build_door() -> void:
-	var frame := _stock(Color("4e4940"), METAL)
-	var leaf := _stock(Color("51463b"), FLAT)
+	var frame := _stock(Color("4e4940"), METAL_PATH)
+	var leaf := _stock(Color("51463b"), FLAT_PATH)
 	var dark := _ink(Color("181614"))
 	for x: float in [9.12, 11.0]:
 		_box(self, Vector3(0.15, 2.91, 0.27), Vector3(x, 1.27, DOOR_Z + 0.03), frame)
@@ -237,7 +239,7 @@ func _build_door_spill() -> void:
 
 
 func _build_lamp() -> void:
-	var steel := _stock(Color("494644"), METAL)
+	var steel := _stock(Color("494644"), METAL_PATH)
 	var pipe := CylinderMesh.new()
 	pipe.top_radius = 0.077
 	pipe.bottom_radius = 0.077
@@ -267,7 +269,7 @@ func _build_lamp() -> void:
 
 
 func _build_dolly() -> void:
-	var steel := _stock(Color("74716d"), METAL, Vector3(5.0, 1.0, 1.0))
+	var steel := _stock(Color("74716d"), METAL_PATH, Vector3(5.0, 1.0, 1.0))
 	steel.metallic = 0.48
 	var rubber := _stock(Color("373532"))
 	for z: float in [3.39, 4.07]:
@@ -406,13 +408,20 @@ func _take_at(take: int, t: float) -> Vector3:
 			return Vector3(5.8 + along * 4.28, 0.0, 1.63 - 2.25 * along * along)
 
 
-func _stock(color: Color, tex: Texture2D = null, tiling: Vector3 = Vector3.ONE) -> StandardMaterial3D:
+func _stock(color: Color, tex_path: String = "", tiling: Vector3 = Vector3.ONE) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
-	mat.albedo_texture = tex
+	if not tex_path.is_empty():
+		mat.albedo_texture = _load_tex(tex_path)
 	mat.uv1_scale = tiling
 	mat.roughness = 0.86
 	return mat
+
+
+static func _load_tex(path: String) -> Texture2D:
+	if not _tex_cache.has(path):
+		_tex_cache[path] = (load(path) as Texture2D) if ResourceLoader.exists(path) else null
+	return _tex_cache[path] as Texture2D
 
 
 func _ink(color: Color) -> StandardMaterial3D:
