@@ -82,3 +82,11 @@ C 分支注册 `inrun_ui_deai`，覆盖镜头与碰撞半径、双语设置与�
 ```
 
 C 树尚缺 `out_of_frame.gd`。步行回棚、空 CUT 提示、付费 CUT BACK、恢复控制与着地的条件用例均待集成，不计入 1,428 条。主控合并每个机制前需审阅对应的 headless 用例，并在含该机制的候选树核对精确条数与退出码。
+
+## 9. Sprint 7 进行中
+
+G 负责把主局扩为四幕十六棚，每幕最后一棚为 26 m 灯架棚。F 负责收集物折算与结算页，D 负责 v2 生涯档案与标题页，C 负责独立守卫、分支验收入口与交接档案。
+
+本轮唯一验收入口为 `tools/verify_all.py --baseline 1745`。Python 套件和 Godot 套件均须通过，Godot 断言下限为 1,745 条，Dummy 渲染器的 `mesh_get_surface_count` 噪声预算为 1。`tools/verify_branch.py --baseline 1745` 将同一基线传给当前工作树的门禁。集成时检查 `sprint7_guard` 的输出，确认对应分支到位后，规模、灯架棚位、成片质量和档案等级用例都已执行。
+
+C 工作树实测：Python 31 项通过，Godot 1,798 条断言通过，噪声 1 次。新增守卫执行 53 条，覆盖幕数乘棚数、序棚至第十六个主棚的地面与接缝，以及两项门禁参数。当前规模为 12/3，`GANTRY_SLOTS`、`craft.gd` 与 `archive_rank` 均未到位，相应用例在日志中记为 `skipped`。

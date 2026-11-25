@@ -50,6 +50,7 @@ const MODULES := [
 	["score_layers", preload("res://tests/test_score_layers.gd")],
 	["gantry", preload("res://tests/test_gantry.gd")],
 	["gantry_room", preload("res://tests/test_gantry_room.gd")],
+	["sprint7_guard", preload("res://tests/test_sprint7_guard.gd")],
 ]
 
 var _current := "(startup)"
