@@ -44,7 +44,10 @@ static func shoot(marks_left: int, cuts_left: int, deaths: int) -> Dictionary:
 	return {"bonus": bonus, "tier": tier, "zh": zh, "en": en}
 
 
-static func score_line(marks_left: int, cuts_left: int, deaths: int) -> String:
+## One language, like every other line on the call sheet: the sheet is read, not
+## deciphered, and printing both at once made the widest line the hardest one.
+static func score_line(marks_left: int, cuts_left: int, deaths: int, zh: bool) -> String:
 	var print_info := shoot(marks_left, cuts_left, deaths)
-	return "成片质量 +%d　%s / Craft +%d  %s" % [
-		print_info.bonus, print_info.zh, print_info.bonus, print_info.en]
+	if zh:
+		return "成片质量 +%d　%s" % [print_info.bonus, print_info.zh]
+	return "CRAFT +%d  %s" % [print_info.bonus, print_info.en]

@@ -92,6 +92,9 @@ var _bridge: Node = null
 ## Cuts that actually cost a supply. The free first splice is a lesson, not a
 ## decision, so it is not on the bill.
 var cuts_used := 0
+## Marks picked up across the whole run, spent or not. The call sheet prices what
+## is left over; the archive counts what was ever in the actor's hands.
+var marks_earned := 0
 ## Takes crossed once the prologue was over: what the score is made of.
 var run_legs := 0
 var _seen_hints := {}
@@ -507,6 +510,7 @@ func _serialize_run() -> Dictionary:
 		"room_track_start": room_track_start, "act": act, "act_mod": act_mod, "act_grace": act_grace,
 		"tutorial": _tutorial, "tut_next": _tut_next, "prologue": _prologue,
 		"prop_film_room": _prop_film_room, "verdict": verdict,
+		"marks_earned": marks_earned, "cuts_used": cuts_used,
 		"final_outtakes": _final_outtakes}
 
 
@@ -526,6 +530,8 @@ func _apply_run(d: Dictionary) -> void:
 	required_passes = int(d.get("required_passes", PASSES))
 	mark_stock = int(d.get("mark_stock", mark_stock))
 	cut_stock = int(d.get("cut_stock", cut_stock))
+	marks_earned = int(d.get("marks_earned", marks_earned))
+	cuts_used = int(d.get("cuts_used", cuts_used))
 	free_cut = int(d.get("free_cut", free_cut))
 	deaths = int(d.get("deaths", 0))
 	act = int(d.get("act", 0))
@@ -885,6 +891,7 @@ func _finish_leg() -> void:
 	if _won_light(_fast_legs, required_passes):
 		_fast_legs = 0
 		mark_stock += 1
+		marks_earned += 1
 		score.cue("light_bonus")
 		fx.flash(Color("9ceccb"), 0.14, 0.02, 0.24)
 		fx.edge_pulse(Color("ffde79"))
@@ -977,6 +984,7 @@ func _apply_contract(id: String) -> void:
 			cut_stock += 1
 		"blackout":
 			mark_stock += 2
+			marks_earned += 2
 			_mark_hint_pending = true
 			splice = Splice.new()
 			act_grace = 0.30
@@ -1187,6 +1195,7 @@ func _pick_card(i: int) -> void:
 			0: splice.offer()
 			1:
 				mark_stock += 1
+				marks_earned += 1
 				_mark_hint_pending = true
 			2: cut_stock += 1
 		score.cue("pickup")
@@ -1217,6 +1226,7 @@ func _pick_card(i: int) -> void:
 	match str(c.get("reward","")):
 		"mark":
 			mark_stock += 1
+			marks_earned += 1
 			_mark_hint_pending = true
 		"cut": cut_stock += 1
 		"splice": splice.offer()
@@ -1292,6 +1302,7 @@ func _step_set_props() -> void:
 			"pickup":
 				_prop_film_room = segments.size() - 1
 				mark_stock += 1
+				marks_earned += 1
 				fx.edge_pulse(SetProps.FILM, 0.80, 0.32)
 				_show_notice(Loc.ui("props.pickup"), 2.2)
 				_mark_hint_pending = true
@@ -1603,20 +1614,29 @@ func _settle_sheet(won: bool) -> void:
 	# The run is over, so the board gets out of the way instead of printing the
 	# DIE. card over the page that explains what the run was.
 	if slate.is_running(): slate.hide_slate()
-	var prev_best: int = int(Rules.meta().get("best_set", 0))
+	var prev_meta := Rules.meta()
+	var prev_best: int = int(prev_meta.get("best_set", 0))
 	var daily := _is_daily()
 	# One number, decided once, from the run's own record: how far, how clean,
 	# what it cost. Time is free until the clock is out.
 	score_info = Rules.run_score(run_legs, act, deaths, cuts_used, active_clock, deaths == 0)
 	score_info["craft_bonus"] = Craft.shoot(mark_stock, cut_stock, deaths)["bonus"]
 	var best: int = Rules.record_daily(int(score_info["total"])) if daily else 0
+	# The archive is the only thing that survives a run, so it has to be told the
+	# whole run: marks picked up, cuts spent, and which of the three endings this
+	# reel turned out to be. A lost run has no ending to tally.
+	var rank_line := ""
 	if not _recorded:
 		_recorded = true
-		Rules.record_run(segments.size(), deaths, won, run_seed)
+		Rules.record_run_full(segments.size(), deaths, won, run_seed, marks_earned, cuts_used,
+			verdict if won else "")
+		var rank_now := Rules.archive_rank(int(Rules.meta().get("marks_total", 0)))
+		if rank_now > Rules.archive_rank(int(prev_meta.get("marks_total", 0))):
+			rank_line = _w("档案等级：%s", "ARCHIVE: %s") % Rules.archive_name(rank_now)
 	var lines: Array = [
 		_w("走完 %d / %d 棚　　废条 %d　　死亡 %d", "SETS %d / %d   WASTED %d   DEATHS %d") % [segments.size(),MODULES,maxi(tracks.size()-segments.size(),0),deaths],
 		_w("手上还剩　标记 %d　剪 %d", "LEFT   MARKS %d   CUTS %d") % [mark_stock,cut_stock],
-		Craft.score_line(mark_stock, cut_stock, deaths),
+		Craft.score_line(mark_stock, cut_stock, deaths, Loc.language == "zh"),
 	]
 	if daily:
 		lines.append(_w("今日 %s　得分 %d　自己最好 %d", "DAY %s   SCORE %d   YOUR BEST %d")
@@ -1631,6 +1651,8 @@ func _settle_sheet(won: bool) -> void:
 		% [int(score_info["legs"]), Rules.SCORE_LEG, int(score_info["acts"]), Rules.SCORE_ACT,
 			int(score_info["deaths"]) * -Rules.SCORE_DEATH, int(score_info["cuts"]) * -Rules.SCORE_CUT])
 	lines.append(_w("种子 %06X", "SEED %06X") % run_seed)
+	if not rank_line.is_empty():
+		lines.insert(0, rank_line)
 	# The only thing this game keeps between runs is how far you got. Saying it out
 	# loud is the whole progression: there is no tree, no currency, no unlocks.
 	if segments.size() > prev_best:

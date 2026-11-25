@@ -83,5 +83,11 @@ Sprint 6 门禁：`tools/verify_all.py` 全过，**1,745 条 Godot 断言 + 31 �
 
 Sprint 7 门禁：`tools/verify_all.py` 全过，断言数只增不减，`mesh_get_surface_count` 噪声预算 1，每个交付端附实机截图。
 
+**收尾结果（2026-11-25 晚）**：四条全部合入 `master`，门禁 **2,107 条 Godot 断言 + 31 项 Python**、噪声 1、`exit 0`。
+- #1 已合入 `3d05797` / merge `0c6568e`：`MODULES := 16`、`SETS_PER_ACT := 4`、`GANTRY_SLOTS := [3,7,11,15]`；实测总长 **212.0 m**（12×9 + 4×26），四个灯架棚双门与末端封口由 `tests/test_run_length.gd` 钉住。
+- #2 已合入 `430d209`：`scripts/relay/craft.gd`；`Craft.shoot(3,2,0).bonus == 80`。主控补修：通告单那行原本中英同排，现在是单语言（`score_line(..., zh: bool)`），实测截图 `visual/preview/sprint7_live_answer_print.png`。
+- #3 已合入 `e7ab2c1` / merge `092d872`：meta v2；主控补上真正的接线——`_settle_sheet` 调 `Rules.record_run_full(..., marks_earned, cuts_used, verdict)`，`marks_earned` 在五处拾取点累加并随存档存取；档案升级时通告单多一行「档案等级：X」。实机：`verdict=bury_registered`、meta `runs 48→49 / marks_total 0→5 / cuts_total 0→1 / coverup 0→1`；标题页显示「档案 · 第 1 级 场记板」「真相 0 / 掩盖 1 / 栽赃 2」。
+- #4 已合入 `5e2576d` / merge `415a5ef`：`tests/test_sprint7_guard.gd` 53 条防御式断言（G/F/D 未合入时自动跳过）。
+
 
 真人盲测、真窗口焦点、移动浏览器和外部线上包仍按工程状态表 UNV-01 至 UNV-04 跟踪。赛事和平台更新另行取得创作者授权。

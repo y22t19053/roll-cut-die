@@ -56,6 +56,9 @@ func _watchdog() -> void:
 
 
 func _main() -> void:
+	# Same reason as run_all.gd: a module that plays a run to the end must not
+	# write the player's archive.
+	preload("res://scripts/relay/relay_rules.gd").set_recording(false)
 	var wanted := FileAccess.get_file_as_string("res://tests/only_module.txt").strip_edges()
 	_module = wanted
 	if not MODULES.has(wanted):

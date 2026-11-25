@@ -10,6 +10,16 @@ const _META_DEFAULTS := {
 	"runs": 0, "best_set": 0, "deaths": 0, "wins": 0, "last_seed": 0,
 	"marks_total": 0, "cuts_total": 0, "truth": 0, "coverup": 0, "frameup": 0,
 }
+## The suite drives real scenes, and a real scene ends a real run: without this
+## gate the archive would count test runs as the player's career. Tests that need
+## the write path flip it back on with their own user directory. Set through a
+## function because a static var cannot be assigned through a preloaded script.
+static var recording_enabled := true
+
+
+static func set_recording(on: bool) -> bool:
+	recording_enabled = on
+	return recording_enabled
 const _ARCHIVE_NAMES := [
 	{"en": "Empty Archive", "zh": "空档案"},
 	{"en": "Clapperboard", "zh": "场记板"},
@@ -112,6 +122,7 @@ static func record_run(sets: int, deaths: int, won: bool, seed: int) -> Dictiona
 
 
 static func record_run_full(sets: int, deaths: int, won: bool, seed: int, marks: int, cuts: int, verdict: String) -> Dictionary:
+	if not recording_enabled: return meta()
 	var cfg := _load_meta_config()
 	var m := _meta_from_config(cfg)
 	m["runs"] = int(m["runs"]) + 1
@@ -126,6 +137,7 @@ static func record_run_full(sets: int, deaths: int, won: bool, seed: int, marks:
 
 
 static func record_verdict(verdict: String) -> Dictionary:
+	if not recording_enabled: return meta()
 	var cfg := _load_meta_config()
 	var m := _meta_from_config(cfg)
 	if _add_verdict(m, verdict):
@@ -225,6 +237,7 @@ static func record_daily(score: int) -> int:
 	if str(cfg.get_value("daily", "key", "")) == key:
 		best = int(cfg.get_value("daily", "best", 0))
 	best = maxi(best, score)
+	if not recording_enabled: return best
 	cfg.set_value("daily", "key", key)
 	cfg.set_value("daily", "best", best)
 	var err := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_META_PATH.get_base_dir()))
