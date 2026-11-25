@@ -2,7 +2,7 @@
 
 > 建立日期：2026-11-25  
 > 研发主控：Gemini 4 Carbon（DSH 统一调度 + 三路 Codex 执行端）  
-> 仓库基准：`C:\Users\11ee11\Documents\deepseek-harness\default-workspace\roll-cut-die`（`master` @ `04aa58563bd23638c652f743cfb010dc1730f9e2`）  
+> 仓库基准：`C:\Users\11ee11\Documents\deepseek-harness\default-workspace\roll-cut-die`（`master` @ `4f0f1ea`）
 > 关联宪章与圣经：`docs/RCD_CONSTITUTION.md` · `docs/RCD_GAME_DESIGN_BIBLE.md` · `docs/RCD_MISSION_BRIEF.md` · `docs/RCD_DECISION_LOG.md`
 
 ---
@@ -19,7 +19,7 @@
 1. **前传冻结期（2026-11-19 前）**：早期 Unreal Engine 原型冻结归档（见 `docs/RCD_GAME_DESIGN_BIBLE.md` §18），仅提炼五条空间与镜头经验，代码与美术资产零迁移。
 2. **Godot 基线与案件原型期（`c3de553`，2026-11-19 起）**：建立 Godot 4.3 工程基线，实现 `ROLL / CUT / DIE` 核心闭环、`ORBIT 30°/s` 镜头耦合（`6bab995`）、移动 MARK 速度恢复（`7844510`），以及包含 2 名 NPC、4 件物证、3 种结局裁决的早期案件线（`scenes/main/main.tscn` + `docs/CASE_AND_ENDINGS.md`）。
 3. **片场与外景探索期（`studiolot` / `backlot`）**：探索绿幕棚（`scenes/studiolot/world.tscn`）与外景回环/传送门（`scenes/backlot/backlot.tscn`），验证空间拼接与片场氛围。
-4. **当前可玩主线 `relay` 与 `free-blocking` 实验期（2026-11-22 至今，`04aa585` / `28a8e6b`）**：聚焦高密度短局重拍循环（`scenes/relay/run.tscn`），完成 itch.io 公开上架与四大独立游戏 Jam 投稿（2026-11-22）及 Bilibili TOY 提交；同时在 `free-blocking-sets` 分支（`28a8e6b`）探索手搭摄影棚与自由机位选择（`scenes/relay/blocking.tscn`）。
+4. **当前可玩主线 `relay` 与 `free-blocking` 实验期（2026-11-22 起）**：聚焦高密度短局重拍循环（`scenes/relay/run.tscn`），完成 itch.io 公开上架与四大独立游戏 Jam 投稿（2026-11-22）及 Bilibili TOY 提交；同时在 `free-blocking-sets` 分支（`74faa23`）探索手搭摄影棚与自由机位选择（`scenes/relay/blocking.tscn`）。
 
 ---
 
@@ -62,7 +62,7 @@ Ghost 是 RCD 区别于普通动作游戏与传统 Roguelike 的灵魂机制（�
 4. **必须持续守卫的架构问题**：
    - Ghost 的世界坐标 vs 局部布景坐标基准（尤其在地图拼接、180° 翻景 Redress 后的坐标变换规则，当前部分场景仍属 `UNVERIFIED` 设计边界）。
    - Ghost 动画速度、碰撞体位置与危险时间窗口必须共用**唯一确定性时间轴**，严禁只改动画播放倍速而脱离物理步进。
-   - **机器测试 ≠ 真人理解**：646 条自动化断言只能证明数学与状态机无误，不能替代真人对多 Ghost 路线的可读性验证（当前外部真人独立试玩样本仍标记为 `0 / UNVERIFIED`）。
+   - **机器测试 ≠ 真人理解**：历史 646 条断言记录覆盖已测试的数学与状态机路径，不能替代真人对多 Ghost 路线的可读性验证（当前外部真人独立试玩样本仍标记为 `0 / UNVERIFIED`）。
 
 ---
 
@@ -95,3 +95,11 @@ Ghost 是 RCD 区别于普通动作游戏与传统 Roguelike 的灵魂机制（�
    - **主控自主裁决**：日常工程架构、任务拆解、三路 Codex 调度、分支隔离、自动化测试、UI 方案探索与原型迭代。
    - **必须创作者批准**：公开发布/更新线上包、正式报名或修改比赛投稿、付费订阅、账号安全变更、删除唯一备份、覆盖重要历史构建、改变核心玩法方向与重大品牌决策。
    - **创意分级漏斗**：`IDEA`（记录归档）→ `RESEARCH`（可行性调查）→ `EXPERIMENT`（独立分支灰盒原型）→ `APPROVE`（正式合入主线），严禁因随口新点子打断当前正式冲刺。
+
+## 6. 2026-11-25 · 当前交付基线
+
+`master@4f0f1ea` 已完成 Sprint 1、2。新游戏、续档与每日挑战共用 Relay 入口；标准卷为 4 幕 × 3 棚。玩家与历史 Ghost 同位出生时获得局部豁免，分离后的路线交叉仍有危险。标题采用 Brutalist Call Sheet 与 NightStage3D 三重曝光夜棚。
+
+Sprint 3 将纸本排版贯穿局内 HUD、暂停、手工通告单，并以 Steenbeck 放大镜显示 CUT 回退信息，保持中央赛道可见。Sprint 4 正在制作 22,050 Hz D 小调配乐、动作 Foley / FX 与 −34 dB 静置低语。`visual/DEAI_PLAN.md` #1–#6 的表现层改动须保持历史轨迹与碰撞可复现。
+
+A、B、C 分别在独立工作树交付视听、局内 UI、回归与档案，由 Lead 集成。新增 `inrun_ui_deai` 的运行结果待 godot-bridge 回执；真人盲测与线上更新状态见工程档案 UNV-01–04。

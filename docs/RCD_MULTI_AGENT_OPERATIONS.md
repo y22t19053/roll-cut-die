@@ -46,3 +46,15 @@
 5. **失败重试与暂停恢复机制**：
    - 单端 API 超时或瞬时 5xx：保留原 Worktree 已落盘进度，最多自动重试 2 次；若某模型通道持续不可用，主控立即将该 Worktree 切换至可用备用模型（如 `gpt-6-astra` ↔ `gpt-6.2-astra`）并记录于运行日志，绝不伪造并行回执。
    - 合并门禁：① `git diff` 无越界文件与密钥残留 → ② Codex C 独立代码审查通过 → ③ 主控执行 `godot_run_headless(script="tests/run_all.gd")` 全绿（`≥ 646 assertions`）+ UI 改动必过实机截图视觉审查 → ④ 合入目标分支。
+
+## 4. 2026-11-25 · Sprint 3 / 4 文件分工
+
+Sprint 1 出生点与测试卫生修复、Sprint 2 通告单与三重曝光标题已进入 `master@4f0f1ea`。本轮三个工作树均从该提交派生，具体文件归属优先于 §1 的默认目录分工。
+
+| 工作树分支 | 独占交付 |
+|---|---|
+| `codex-a/sprint4-audio-and-deai` | 22,050 Hz 配乐、动作 Foley / FX、−34 dB 静置低语及片场环境表现；维持 Ghost 与房间判定。 |
+| `codex-b/sprint3-inrun-ui` | 局内设置、暂停、HUD、手工通告单与 Steenbeck CUT 预览。 |
+| `codex-c/sprint3-4-qa-and-docs` | `tests/test_inrun_ui_and_deai.gd`、`tests/run_all.gd` 及工程状态、路线图、设计决策、协作规范、项目总览五份档案。 |
+
+同属 `scripts/relay/` 或 `scripts/ui/` 的任务仍按文件指定唯一写入方。C 使用预览方法存在性检查兼容合并顺序。Lead 集成后通过 godot-bridge 运行全套测试，检查退出日志，并以 Forward+ 实机核验视野及动效；试听与真人盲测另记回执。

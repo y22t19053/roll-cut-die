@@ -8,7 +8,7 @@
 ## 1. 当前所处阶段定位
 
 - **已完成**：**阶段 A（项目完整审计）· 阶段 B（本地生产能力审计）· 阶段 C（项目历史与成果恢复）· 阶段 D（三路 Codex 并发隔离验证）· 八大核心项目档案建档**。
-- **当前即将启动**：**冲刺 1（主工作区脏改动无损拆分 + P0 入口修复）** 与 **冲刺 2 / 阶段 E（RCD 独立游戏级主菜单视觉身份重构与 Godot 实机可交互落地）**。
+- **当前主线**：Sprint 1、2 已完成，基线为 `master@4f0f1ea`。Sprint 3、4 在独立工作树交付中，下一轮为 Sprint 5。
 
 ---
 
@@ -19,7 +19,7 @@
 | 日期（Asia/Shanghai） | 外部事件 / 里程碑 | 研发约束与动作策略 |
 |---|---|---|
 | **2026-11-29** | **Tiny Loop Jam 2026** 截止/评审 | 最近到期赛事；线上 itch Windows/Web 包保持零破坏冻结 |
-| **2026-12-01 / 12-02** | **GitHub Game Off 2026**（主题 `SHIFT`）截止 | 保持 `github.com/y22t19053/roll-cut-die` 公开可读，不在未清理脏树前向 `master` 盲推半成品 |
+| **2026-12-01 / 12-02** | **GitHub Game Off 2026**（主题 `SHIFT`）截止 | 保持 `github.com/y22t19053/roll-cut-die` 公开可读，公开构建更新须由创作者批准 |
 | **2026-12-03** | **Places That Shouldn't Exist** 截止 | 保持 itch Windows 可执行 zip 稳定可用 |
 | **2026-12-14** | **Mauspi Lab Jam #2 · ONE MORE TRY!** 截止 | 已获主办方长评背书与 `Mauspi.com` 入驻邀请；评审期后可评估合并 UI 大改版做公开大版本更新 |
 | **待创作者确认** | **Bilibili TOY（`58061569920000`）版本更新** | 本地已完成 `toy_bridge.gd` 每日排行榜与 `strip_dev_autoload.py` 剥离工具，待收口验收并获批准后决定是否 `toy update` |
@@ -28,39 +28,28 @@
 
 ## 3. 滚动冲刺计划（Rolling Sprints）
 
-### Sprint 1 — 工程基线收口、脏树无损归档与核心卫生修复（最高优先阻断清理）
-1. **无损拆分主工作区脏改动**：
-   - 将流 B（`scenes/relay/blocking.tscn`、`blocking_*.gd`、`h_gantry.gd`、`player.gd` 的 `vertical_walk`）完整保全至 `free-blocking` 实验分支/worktree，绝不丢失 `h_gantry.gd`（`8,564 B`）等唯一增量代码。
-   - 将流 A（`toy_bridge.gd`、`test_toy_score.gd`、每日积分与 Web Shell 补丁）整理至独立洁净特性分支并通过全量回归。
-2. **修复 `BUG-01`（P0 主菜单入口分叉）**：恢复主线 `_on_new_game()` 指向正式 `res://scenes/relay/run.tscn`，若需保留 `free-blocking` 开发入口则显式隔离至实验模式或分支，消除「新游戏进 Blocking、续档/日挑进 Relay」的割裂。
-3. **修复 `BUG-03` & `BUG-04`（测试与引擎卫生）**：修复 `tests/test_west_trial_prepare.py` 过时配置断言（`28/30` → `30/30`），定位并消除 Headless `mesh_get_surface_count` 空网格报错与退出时 `ObjectDB instances leaked` 告警。
-4. **修复 `BUG-02`（P1 静止 Ghost 出生点秒杀循环）**：实装出生点安全宽限或极短零位移废片过滤，并补齐回归测试断言。
+### Sprint 1 · Completed
 
-### Sprint 2（阶段 E 第一交付）— 主菜单独立游戏级 UI 艺术指导重构
-1. **视觉研究与三套差异化方案验证**：
-   - 方案 I：**《夜棚场记单 / Brutalist Call Sheet》**（受 *Control* 大字号几何无衬线权威排版 + *Papers, Please / Obra Dinn* 纸本印章档案启发，左印务通告单 + 右实时 3D 绿幕夜棚与三次曝光 Ghost 折返实景）。
-   - 方案 II：**《剪辑台看片机 / Steenbeck Lightbox》**（受 *Inscryption / Signalis* 器物化界面启发，暗房看片台灯箱、胶片齿孔时间码标尺、物理拨杆切换难度与语言）。
-   - 方案 III：**《高反差片场剪影 / Stark Soundstage Stencil》**（受 *Killer7 / INSIDE* 强构图剪影与极简戏剧张力启发，巨幅斜切字形投影与聚光灯舞台动线）。
-2. **主控内部审查裁决与 Godot 实机可交互实现**：
-   - 100% 保留并升级九大核心交互功能：继续这一卷（最近进度）、新游戏、难度选择（淘汰原生简陋 `OptionButton`，改为片场档位选择器）、生涯跑卷统计、每日挑战（含种子与排行榜名次）、减弱动态效果开关与设置、制作名单、退出、中英双语即时切换（F2 + 界面开关），完整支持纯键盘/手柄焦点链与鼠标操作。
-   - 接入真实 3D 摄影棚景深舞台或高精度分层片场视差（含 `reduce_motion` 静态构图帧降级保障），彻底告别原型级平面几何色块。
-   - 通过 `godot_run_project` + `godot_screenshot` 截取中英双语、有存档/无存档、减弱动效开/关等多状态实机画面验收。
+新游戏、日挑与续档统一进入 Relay；同位出生豁免保护重拍，中途 Ghost 碰撞保持有效。west-trial 夹具与 Dummy / ObjectDB 清理已合入。主线固定四幕十二棚，Free-Blocking 增量已独立保全。
 
-### Sprint 3 — 全流程片场 UI 视觉语言贯通
-将主菜单确立的视觉母题（字体层级、纸张/场记板材质、印章/胶带微偏角去 AI 味规范）逐步延伸至：
-1. **暂停菜单（`pause_menu.gd`）与设置面板（`settings_panel.gd`）**
-2. **拍摄中 HUD（`hud.gd`）与物理场记板（`slate_board.gd` / `cut_panel.gd`）**
-3. **剪辑台 / 放饭（`cutting_desk.gd` / Meal Break）与转场（Company Move）**
-4. **拍摄事故反馈（NG / TAKE FAILED）与收工结算单（`relay_score.gd` / WRAP）**
+### Sprint 2 · Completed
 
-### Sprint 4 — 去 AI 味片场活人感（`visual/DEAI_PLAN.md`）与可理解性验证
-- 落地 `DEAI_PLAN.md` 中高性价比表现层细节（场务 2.5m 转头注视、远端下班背影、通告单微倾角与手写划改线、静置远景低语层），不触碰已平衡的物理碰撞判定。
-- 建立可复现的实机镜头巡检与新玩家首局可读性验证包。
+`89b6451` 合入 Brutalist Call Sheet 标题与 NightStage3D 三重曝光舞台。`4f0f1ea` 修正双语数组类型，并收录中英文标题、设置和制作名单的实机截图。
 
----
+### Sprint 3 · Active / Delivering
 
-## 4. 当前阻断与核心风险（Blockers & Guards）
+在暂停、设置、HUD、抽卡、放饭和结算间统一通告单排版。在 CUT 中以 Steenbeck 放大镜呈现回退点、Take 与预算，保留中央赛道视野。验收覆盖中英切换、焦点、手工通告单追加名次及关闭面板后的输入恢复。
 
-- **阻断 1（即将于 Sprint 1 解除）**：主工作区 `master` 含 9 处修改 + 7 处未跟踪混杂文件，且 `title_screen.gd:437` 存在入口分叉 Bug；在完成分支剥离前禁止直接在主工作树叠加 UI 大改代码（UI 开发一律先走独立 `codex-b` Worktree）。
-- **阻断 2（口径对齐）**：`6 棚（3 Acts × 2 Sets）` 与旧文档 `12 棚（4 Acts × 3 Sets）` 需在文档与 UI 文案中统一以当前 `relay` 实装常量（`RunScript.MODULES`）动态读取，杜绝硬编码数字失真。
-- **合规护栏**：严禁未经批准触发外部平台发布、比赛提交、付费 API 消费或删除 `builds/` 下的唯一历史版本。
+### Sprint 4 · Active / Delivering
+
+制作 22,050 Hz D 小调推进型配乐与动作 Foley / FX。按 `visual/DEAI_PLAN.md` #1–#6 实装场务注视、远端退场、纸面划改、道具偏摆、静置低语与后段灯闪。用五族房间回归验证重放和判定，再用实机试听与截图核验表现。
+
+### Sprint 5 · Next Immediate Rolling Sprint
+
+1. **互联摄影棚扩展**。在现有棚族间设计连通出口与回程，检查玩家能否读出下一棚入口及过去 Take 的穿越路线。
+2. **新机关与片场道具**。原型化镜头设备、剧组道具与布景联动，为每种机关给出可辨认的预警和可重复的判定。
+3. **OUT OF FRAME 与 CUT 脱困**。降低隐形墙依赖，以声源或脚步引导玩家回棚，并验证越界后用 CUT 回到合法位置。
+4. **选择性整合 Free-Blocking**。以已保全的 `h_gantry.gd` 为首个候选，核验垂直行走、历史轨迹及原有 Relay 入口。
+5. **WRAP / Final Cut 高潮**。在最终剪辑中串联本局真实历史轨迹，让玩家认出各次 Take 对最终成片的贡献。
+
+真人盲测、真窗口焦点、移动浏览器和外部线上包仍按工程状态表 UNV-01 至 UNV-04 跟踪。赛事和平台更新另行取得创作者授权。
