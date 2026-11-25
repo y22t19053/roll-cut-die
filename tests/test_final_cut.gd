@@ -125,6 +125,24 @@ static func _check_relay_source(h, tree: SceneTree, data: Dictionary) -> void:
 	ledger.state = ledger.State.FINISHED
 	h.eq("a committed report supplies the verdict", Reel.from_run("", session, [], [])["verdict"], "file_closed")
 	h.eq("campaign reel is the actual take ledger", Reel.from_run("", session, [], [])["takes"], ledger.history)
+	# The relay has no case report at all: its wrap has to read the run's ledger,
+	# or the final cut would never play in the mode the game actually ships.
+	h.eq("clean relay run files itself", Reel.relay_verdict(0, 0), "file_closed")
+	h.eq("clean relay run files itself even with spare cuts", Reel.relay_verdict(0, 3), "file_closed")
+	h.eq("a spliced death is buried", Reel.relay_verdict(1, 1), "bury_registered")
+	h.eq("a death left in the cut is framed", Reel.relay_verdict(2, 0), "reframe_held")
+	var framed := Reel.from_relay(Reel.relay_verdict(2, 0), [completed], [abandoned])
+	h.eq("relay reel carries the derived verdict", framed["verdict"], "reframe_held")
+	h.eq("relay reel becomes the FRAME-UP ending", Reel.edit(framed)["ending"], "FRAME-UP")
+	h.eq("relay reel still cuts twelve pieces", Reel.edit(framed)["pieces"].size(), 12)
+	h.eq("relay reel keeps the death in the edit", Reel.edit(framed)["included"], [1, 2])
+	h.eq("nonterminal verdict never starts a relay cut", Reel.from_relay("file_rejected", [completed], []), {})
+	h.eq("relay reel matches the case reel shape",
+		Reel.from_run("bury_registered", session, [completed], [abandoned])["takes"],
+		Reel.from_relay("bury_registered", [completed], [abandoned])["takes"])
+	var buried := Reel.edit(Reel.from_relay("bury_registered", [completed], [abandoned]))
+	h.ok("a buried relay death is dropped from the edit", not buried["included"].has(1))
+	h.ok("a buried relay death still leaves a hole", buried["holes"].size() >= 1)
 	ledger.history = previous_history
 	ledger.state = previous_state
 

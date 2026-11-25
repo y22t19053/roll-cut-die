@@ -70,3 +70,9 @@
 - **Sprint 3 局内界面**。抽卡与结算沿用手工通告单。Steenbeck 放大镜在 `Mode.CUT` 标注回退点与耗费，给中央轨迹留出视野。
 - **Sprint 4 视听**。22,050 Hz D 小调配乐推动行动节奏，动作由 Foley / FX 标识。静止超过两秒时淡入 −34 dB 剧组低语；DEAI #1–#6 限于表现层，碰撞、计时、库存与抽卡概率沿用主线。
 - **交付边界**。三个工作树按文件分工；主控负责合并、Godot 回归和实机视听验收。
+
+## 5. 2026-11-25 · Sprint 5 裁决
+
+- **D-076 · Relay 终局由本局账本自裁**。案件报告只存在于 `scenes/main/main.tscn`，而当前可玩主线是 `scenes/relay/run.tscn`，它从不提交报告，因此 `verdict` 恒为空、`FinalReel.from_run()` 直接返回空字典、12.60 秒的最终剪辑在线上版本里永远播不出来。裁决：外部没给判词时由本局记录自裁——零死亡 `file_closed`（TRUTH），有死亡且用掉过至少一次 `CUT` `bury_registered`（COVER-UP），有死亡但一条没剪 `reframe_held`（FRAME-UP）。动画本身仍不重新判理，只认 `docs/FINAL_CUT_DESIGN.md` §5 的三种结局；`relay` 走独立的 `FinalReel.from_relay()`，不读案件台账，避免上一次案件会话残留的 `FINISHED` 状态改写本局成片。
+- **验收口径**。`tools/verify_all.py` 是唯一门禁（Godot 断言 1,267 / Python 31 / 噪声预算 1）；`tests/test_inrun_ui_and_deai.gd::_run_wrap` 在真实 `run.tscn` 上验证「胜利 → 过场起播 → 12.60 秒后交还通告单」的接缝。
+- **并行交付**。互联摄影棚（A）、片场机关（B）、H 灯架候选（`6fae059`）、最终剪辑（D）四路各自提交后由主控合并；冲突只落在 `relay_run.gd` 的 `_restart_actors()`、`run_all.gd` 的 mesh 保留钩子与常量/存档字典三处，全部按「A 的每棚区间 + B 的曝光开关 + D 的三键合一」裁决。

@@ -14,6 +14,18 @@ const STACK_COUNT := 3
 const STANCES := {"file": "final_cut.file", "bury": "final_cut.bury", "reframe": "final_cut.reframe"}
 
 
+## A relay run never files a case report, so the wrap reads the run's own ledger:
+## a clean run files itself, a death that was spliced out gets buried, and a death
+## left in the cut is the take the reel frames. The animation still does not judge
+## anything — the three endings stay the ones the design already names.
+static func relay_verdict(deaths: int, cuts: int) -> String:
+	if deaths <= 0:
+		return "file_closed"
+	if cuts >= 1:
+		return "bury_registered"
+	return "reframe_held"
+
+
 static func from_run(verdict: String, session: Node, tracks: Array, relay_outtakes: Array) -> Dictionary:
 	var ledger: Variant = session.takes
 	var latest: Dictionary = ledger.history.back() if not ledger.history.is_empty() else {}
@@ -25,6 +37,15 @@ static func from_run(verdict: String, session: Node, tracks: Array, relay_outtak
 	if ledger.state == ledger.State.FINISHED and filed == verdict:
 		return {"verdict": verdict, "takes": ledger.history, "outtakes": ledger.outtakes,
 			"tracks": session.ghosts, "case_state": session.case_state}
+	return from_relay(verdict, tracks, relay_outtakes)
+
+
+## The relay's own reel: the tracks this run recorded and the deaths and splices
+## it paid for. The case ledger is deliberately not read here, so a case session
+## left finished in the same boot cannot change the edit.
+static func from_relay(verdict: String, tracks: Array, relay_outtakes: Array) -> Dictionary:
+	if not ENDINGS.has(verdict):
+		return {}
 	var takes: Array = []
 	for track in tracks:
 		takes.append({"take": track.take_id, "kind": "complete", "at": track.duration(), "track": track})

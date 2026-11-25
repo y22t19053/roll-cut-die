@@ -46,6 +46,7 @@ static func run(h: Harness, tree: SceneTree = null) -> void:
 		session.persist_prefs = persist
 		await _desk(h, tree)
 		await _run_cut_sync(h, tree)
+		await _run_wrap(h, tree)
 		_rooms(h, tree)
 		await tree.process_frame
 	h.finish()
@@ -191,6 +192,42 @@ static func _run_cut_sync(h: Harness, tree: SceneTree) -> void:
 	h.eq("CUT loupe total matches anchors", int(desk._cut_preview.get("total", 0)), (inst.get("anchors") as Array).size())
 	inst.call("_press", KEY_ESCAPE)
 	h.ok("leaving CUT clears loupe preview", desk._cut_preview.is_empty())
+	inst.queue_free()
+	await tree.process_frame
+	await tree.process_frame
+
+
+static func _run_wrap(h: Harness, tree: SceneTree) -> void:
+	## The wrap is the last thing a run does, and only for a win. A plain relay
+	## run never files a case report, so if the wrap only listened to a filed
+	## verdict it would never play in the mode the game ships.
+	var packed: PackedScene = load("res://scenes/relay/run.tscn") as PackedScene
+	h.ok("relay run scene loads for the wrap", packed != null)
+	if packed == null:
+		return
+	var inst: Node = packed.instantiate()
+	tree.root.add_child(inst)
+	await tree.process_frame
+	await tree.process_frame
+	var slate: Node = inst.get("slate") as Node
+	if slate != null and slate.call("is_running"):
+		slate.call("_process", 1.0)
+	inst.set("deaths", 2)
+	inst.set("cuts_used", 0)
+	inst.call("_show_sheet", true)
+	var cut: Variant = inst.get("_final_cut")
+	h.ok("a relay win starts the final cut", cut != null)
+	h.eq("the run's own ledger picks the ending", str(inst.get("verdict")), "reframe_held")
+	h.eq("the wrap is marked played", bool(inst.get("_final_cut_played")), true)
+	inst.call("_show_sheet", true)
+	h.eq("the wrap cannot start twice", inst.get("_final_cut"), cut)
+	if cut != null:
+		cut.call("advance", 12.61)
+		h.near("the wrap runs the full 12.60 s", float(cut.call("debug_state").get("elapsed", 0.0)), 12.6, 0.05)
+		await tree.process_frame
+		await tree.process_frame
+		h.ok("the wrap hands the run back to the call sheet", inst.get("_final_cut") == null)
+		h.ok("the call sheet still settles the run", not (inst.get("score_info") as Dictionary).is_empty())
 	inst.queue_free()
 	await tree.process_frame
 	await tree.process_frame

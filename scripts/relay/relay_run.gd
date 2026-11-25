@@ -1514,7 +1514,12 @@ func _show_sheet(won: bool) -> void:
 	if not is_inside_tree(): return
 	if _final_cut != null: return
 	if won and not _final_cut_played:
-		var reel := FinalReel.from_run(verdict, GameSession, tracks, _final_outtakes)
+		var cut_verdict := verdict
+		if cut_verdict.is_empty():
+			# A relay run ends at a cutting desk, not a case report: the wrap has to
+			# read this run's own ledger or it would never play at all.
+			cut_verdict = FinalReel.relay_verdict(deaths, cuts_used)
+		var reel := FinalReel.from_relay(cut_verdict, tracks, _final_outtakes)
 		if not reel.is_empty():
 			verdict = reel["verdict"]
 			_final_cut_played = true
