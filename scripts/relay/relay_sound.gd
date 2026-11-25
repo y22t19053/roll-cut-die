@@ -179,8 +179,47 @@ func _process(delta: float) -> void:
 ## A strip room is bare and ticking; crates knock wood; the ring rings metal; the
 ## rigging thuds and chains; the vents hiss. All five are two-second loops.
 static var _dress_streams := {}
+static var _prop_streams := {}
 var _dress := AudioStreamPlayer.new()
 var _dress_fx := AudioStreamPlayer.new()
+
+
+static func prop_cue(kind: String, outcome: String) -> AudioStreamWAV:
+	var key := kind + "/" + outcome
+	if _prop_streams.has(key):
+		return _prop_streams[key]
+	var buf := PackedFloat32Array()
+	buf.resize(roundi(0.64 * RATE))
+	match outcome:
+		"warn":
+			for at: float in [0.0, 0.19, 0.38]:
+				_add_tone(buf, at, 730.0, 0.11, 0.38)
+		"fire":
+			match kind:
+				"crane":
+					_add_tone(buf, 0.0, 231.0, 0.35, 0.62)
+				"clap":
+					_add_tick(buf, 0.0)
+					_add_pulse(buf, 0.0, 430.0)
+				"dolly":
+					for at: float in [0.0, 0.09, 0.20]:
+						_add_pulse(buf, at, 126.0)
+				"rack":
+					for at: float in [0.0, 0.05, 0.14]:
+						_add_pulse(buf, at, 80.0 + 400.0 * at)
+						_add_tick(buf, at)
+		"clear":
+			_add_tone(buf, 0.0, 620.0, 0.19, 0.45)
+			_add_tone(buf, 0.09, 930.0, 0.28, 0.42)
+		"hit":
+			_add_tone(buf, 0.0, 175.0, 0.16, 0.53)
+			_add_tone(buf, 0.13, 98.0, 0.37, 0.52)
+		"pickup":
+			for note: Array in [[0.0, 785.0], [0.07, 990.0], [0.14, 1318.0]]:
+				_add_tone(buf, note[0], note[1], 0.34, 0.38)
+	var wav := _wav(buf, false)
+	_prop_streams[key] = wav
+	return wav
 
 func set_family(kind: String) -> void:
 	if not is_node_ready():

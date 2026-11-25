@@ -22,6 +22,22 @@ const LANGUAGE_NAMES := {
 }
 
 const STRINGS := {
+	"props.crane": {"en": "Camera crane", "zh": "摇臂摄影机"},
+	"props.crane.action": {"en": "Sweep", "zh": "横扫"},
+	"props.clap": {"en": "Clap flash", "zh": "打板闪光"},
+	"props.clap.action": {"en": "Expose frame", "zh": "曝光留影"},
+	"props.dolly": {"en": "Gear dolly", "zh": "器材推车"},
+	"props.dolly.action": {"en": "Cart rolls", "zh": "推车往返"},
+	"props.rack": {"en": "Prop rack", "zh": "道具架"},
+	"props.rack.action": {"en": "Drop crates", "zh": "箱子坠落"},
+	"props.film": {"en": "Spare film", "zh": "备用胶卷"},
+	"props.film.action": {"en": "Load for +1 MARK", "zh": "装卷可得 1 枚 MARK"},
+	"props.countdown": {"en": "%s  %.1fs", "zh": "%s  %.1f 秒"},
+	"props.fired": {"en": "%s!", "zh": "%s！"},
+	"props.clear": {"en": "Clear", "zh": "已躲过"},
+	"props.hit": {"en": "Slowed", "zh": "走位受阻"},
+	"props.exposed": {"en": "On ghost tape · Slowed", "zh": "已留影 · 走位受阻"},
+	"props.pickup": {"en": "Film loaded · +1 MARK", "zh": "胶卷已装 · MARK +1"},
 	# --- HUD -------------------------------------------------------------
 	"hud.take_one": {"en": "TAKE %02d   ·   %d GHOST   ·   %s", "zh": "第 %02d 条   ·   %d 个残影   ·   %s"},
 	"hud.take_many": {"en": "TAKE %02d   ·   %d GHOSTS   ·   %s", "zh": "第 %02d 条   ·   %d 个残影   ·   %s"},

@@ -17,6 +17,7 @@ const FrameFX = preload("res://scripts/relay/frame_fx.gd")
 const Save = preload("res://scripts/relay/relay_save.gd")
 const TouchPad = preload("res://scripts/relay/touch_pad.gd")
 const ToyBridge = preload("res://scripts/relay/toy_bridge.gd")
+const SetProps = preload("res://scripts/relay/set_props.gd")
 const MODULES := 12
 ## The shapes the run draws from. I, L and O come first because they are the three
 ## honest answers to "what happens when the crew rebuilds it the other way round?":
@@ -168,6 +169,8 @@ var _notice_left := 0.0
 var _killer_mark: Node3D = null
 var _cut_velocity := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
+var _props := SetProps.new()
+var _prop_film_room := -1
 
 ## The first four sets are a prologue, not part of the run: one thing per set, no
 ## doors, no events the player has not been told about. They are counted in
@@ -401,6 +404,10 @@ func _start_leg(back: bool) -> void:
 	live.take_id = tracks.size()+1
 	elapsed = 0.0
 	_next_sample = 0.1
+	if _props.room != room_node:
+		var prop_spec: Dictionary = {} if _in_prologue() else segments.back()
+		_props.build(room_node, prop_spec, run_seed, ri)
+	_props.reset_take(_prop_film_room == ri)
 	_sample()
 	_restart_actors()
 	_arm_mercy()
@@ -462,7 +469,8 @@ func _serialize_run() -> Dictionary:
 		"room_pass": room_pass, "segments": plan, "mark_stock": mark_stock, "cut_stock": cut_stock,
 		"free_cut": free_cut, "splice": splice.has_splice(), "deaths": deaths, "tracks": rec,
 		"room_track_start": room_track_start, "act": act, "act_mod": act_mod, "act_grace": act_grace,
-		"tutorial": _tutorial, "tut_next": _tut_next, "prologue": _prologue}
+		"tutorial": _tutorial, "tut_next": _tut_next, "prologue": _prologue,
+		"prop_film_room": _prop_film_room}
 
 
 ## Written between takes, never mid-take: a leg only counts once it is in the can.
@@ -487,6 +495,7 @@ func _apply_run(d: Dictionary) -> void:
 	_tutorial = int(d.get("tutorial", -1))
 	_tut_next = int(d.get("tut_next", 0))
 	_prologue = int(d.get("prologue", 0))
+	_prop_film_room = int(d.get("prop_film_room", -1))
 	if bool(d.get("splice", false)): splice.offer()
 	tracks = []
 	for raw in d.get("tracks", []):
@@ -530,6 +539,7 @@ func _restart_actors() -> void:
 			var g := Ghost.new()
 			g.set_meta("room", bay)
 			g.loop_strip = true
+			g.show_exposures = true
 			g.warmup_seconds = GRACE
 			g.setup(tr,tr.take_id)
 			add_child(g)
@@ -538,14 +548,15 @@ func _restart_actors() -> void:
 			g.global_position = tr.sample_at(g.playhead).position
 			_actors.append(g)
 
-func _sample() -> void:
-	live.add_sample(elapsed,player.global_position,player.facing,rig.yaw,rig.roll)
+func _sample(flags: int = Track.FLAG_ALIVE) -> void:
+	live.add_sample(elapsed,player.global_position,player.facing,rig.yaw,rig.roll,flags)
 
 func _checkpoint(manual: bool) -> void:
 	_sample()
 	var p := {"leg":live.take_id,"pos":player.global_position,"facing":player.facing,
 		"cursor":cursor,"time":elapsed,"pass":room_pass,"cam_motion":rig.mark_motion(),"cam_yaw":rig.yaw,
 		"cam_roll":rig.roll,"prefix":live.head_until(elapsed),"manual":manual}
+	p["set_props"] = _props.snapshot()
 	var frames := {}
 	for ghost in _actors:
 		frames[ghost.take_id] = ghost.still_frame()
@@ -655,6 +666,8 @@ func _restore(i: int) -> void:
 	else:
 		_sample() # No old room, objective, inventory or success is rolled back.
 		elapsed += 0.011 # Preserve a jump instead of interpolating a long false walk.
+	var prop_state: Array = p.get("set_props", []) if p.leg == live.take_id else []
+	_props.restore_take(prop_state, _prop_film_room == segments.size() - 1, elapsed)
 	player.teleport(_clear_spot(p.pos), p.facing)
 	rig.setup(player)
 	rig.restore_mark_motion(p)
@@ -1217,6 +1230,28 @@ func _reset_audio_tracking() -> void:
 	score.set_stillness(0.0)
 
 
+func _step_set_props() -> void:
+	var pos := _props.room.to_local(player.global_position)
+	if _riding:
+		pos.y = 2.0
+	for event in _props.tick(elapsed, pos):
+		match str(event.status):
+			"pickup":
+				_prop_film_room = segments.size() - 1
+				mark_stock += 1
+				fx.edge_pulse(SetProps.FILM, 0.80, 0.32)
+				_show_notice(Loc.ui("props.pickup"), 2.2)
+			"hit":
+				fx.edge_pulse(SetProps.HIT, 0.7, 0.24)
+				if event.kind == "clap":
+					_sample(Track.FLAG_ALIVE | Track.FLAG_INTERACT)
+					_next_sample = elapsed + 0.10
+					fx.flash(Color("e3d7ff"), 0.32, 0.05, 0.20)
+	var speed := _props.speed_scale()
+	if speed < 1.0 and not _riding:
+		player.velocity = player.velocity.limit_length(Player.SPEED * speed)
+
+
 func _physics_process(dt: float) -> void:
 	var here := _room_at()
 	if here != _visited_room:
@@ -1245,6 +1280,8 @@ func _physics_process(dt: float) -> void:
 	grace = maxf(grace-dt,0)
 	_top_up_grace()
 	_notice_left -= dt
+	if not _in_prologue() and not slate.is_running() and is_instance_valid(_props.room):
+		_step_set_props()
 	if elapsed >= _next_sample:
 		_sample()
 		_next_sample = elapsed + 0.10

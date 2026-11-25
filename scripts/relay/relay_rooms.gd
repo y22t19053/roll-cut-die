@@ -493,6 +493,10 @@ func note_at(world_pos: Vector3, room_index: int) -> bool:
 	var p: Vector3 = room.to_local(world_pos)
 	return p.y < 0.6 and Vector2(p.x, p.z).distance_to(Vector2(float(_notes[room_index].x), float(_notes[room_index].z))) < 0.55
 
+static func lane_center(column: int, row: int, hand: float) -> Vector3:
+	return Vector3(2.12 + (column + 0.5) * 0.68, 0.0, (row - 2) * 1.12 * hand)
+
+
 func _letter_lanes(room: Node3D, rows: Array, hand: int, ink: Color) -> void:
 	# Consolidate horizontal wall runs; leave open vestibules to turn at either seam.
 	for row in rows.size():

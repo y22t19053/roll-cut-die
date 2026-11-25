@@ -42,6 +42,9 @@ var playhead := 0.0
 ## Relay never retires a successful strip until the room is cut.
 var loop_strip := false
 var strip_age := 0.0
+## Relay uses the existing interaction flag for frames caught by the clapper.
+var show_exposures := false
+var _exposure_left := 0.0
 
 var _danger: Area3D
 var _visual: Node3D
@@ -61,6 +64,7 @@ func setup(t: Variant, id: int) -> void:
 	take_id = id
 	playhead = 0.0
 	strip_age = 0.0
+	_exposure_left = 0.0
 	playing = true
 	spent = false
 	_armed = false
@@ -279,6 +283,11 @@ func _physics_process(dt: float) -> void:
 			_set_alpha(ARMED_ALPHA)
 		else:
 			_set_alpha(WARMUP_ALPHA * clampf(playhead / maxf(warmup_seconds,0.001), 0.0, 1.0))
+	if show_exposures and _ring_mat != null:
+		_exposure_left = 0.32 if s.interact else maxf(0.0, _exposure_left - dt)
+		var ink := _hue().lerp(Color("f2dcff"), _exposure_left / 0.32)
+		_label.modulate = ink
+		_ring_mat.albedo_color = Color(ink, minf(_alpha * 1.4 + _exposure_left, 1.0))
 	if not loop_strip and track.duration() > 0.0 and playhead > track.duration():
 		_finish()
 
