@@ -64,7 +64,7 @@
 ## 3.1 平台状态变更（2026-11-25 夜间主控接管）
 
 - **GitHub 公开镜像**：master 已从 `04aa585` 推进到 `c91e5ce`（31 个提交），含 Sprint 5 四路交付与 Final Cut 接通。
-- **Bilibili TOY**：旧 `58061569920000` 已不可解析 —— `toy stats` 与 `toy update` 都返回 `307000 请求参数错误`，通知里有「大包体上传申请未通过」，判定旧 Toy 已被平台移除。已用 slim 包新建 `59100293499904`（slug `roll-cut-die`，public，GAME，`status=auditing`）。
+- **Bilibili TOY**：旧 `58061569920000` 已不可解析 —— `toy stats` 与 `toy update` 都返回 `307000 请求参数错误`，通知里有「大包体上传申请未通过」，判定旧 Toy 已被平台移除。新建 `59100293499904`（slug `roll-cut-die`，public，GAME）提交后处于 `status=auditing`；**创作者随后要求 B 站 TOY 暂停，不再维护也不发布新包**，后续所有发版只走 itch 与 GitHub。
 - **itch `5420775`**：butler 未登录（`butler -v status` 直接要求 OAuth），通道阻塞，需创作者在浏览器点一次授权；`broth.itch.ovh` 与 `itch.ovh` 为 NXDOMAIN 属误判，实际上传域名是 `broth.itch.zone`。
 - **发布脚本**：`tools/make_release.py` 现在会在打包前 prune 掉停产的 `*.wasm` 兄弟文件（Godot 不会自动删旧产物，曾导致 39.7 MB 的 `index.side.wasm` 混进 zip 与 TOY 包）。
 
