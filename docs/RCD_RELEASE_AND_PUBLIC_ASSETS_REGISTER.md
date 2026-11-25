@@ -12,8 +12,8 @@
 
 | 名称 | 类型 | 本地对应位置 / 物料 | 对应提交锚点 | 是否公开 | 外部链接 | 当前状态（实时核验） | 是否需更新 | 原版本保留策略 |
 |---|---|---|---|---|---|---|---|---|
-| **GitHub 公开镜像仓** | Git 源码仓库 | `default-workspace\roll-cut-die` | `04aa585`（`origin/master`） | **已公开** | <https://github.com/y22t19053/roll-cut-die> | **LIVE（HTTP 200）**；`Releases` 列表为空（`0` 个 GitHub Release） | 脏树未清理前禁止盲推 | 保留全部提交历史，严禁 `force push` |
-| **itch.io 项目主页**（ID `5420775`） | 独立游戏商店页 + Web/Win 双包 | `docs/ITCH_PAGE.md` · `builds/roll-cut-die-windows.zip` · `builds/roll-cut-die-web.zip` · `visual/cover_titled_630.png` | `1caec83`–`04aa585` 导出周期 | **已公开发布（非 Draft）** | <https://y22t19053.itch.io/roll-cut-die> | **LIVE PUBLIC（HTTP 200，标题 `roll cut die by Y22T19053`）**；英文面向用户，免费，已含本地 SDXL AI 披露，未虚假宣传 Final Cut | 四大 Jam 评审期内保持线上稳定，未经批准不覆盖 | 保留对应上传 zip 原包 |
+| **GitHub 公开镜像仓** | Git 源码仓库 | `default-workspace\roll-cut-die` | `514f149`（`origin/master`，2026-11-25 20:20 推送） | **已公开** | <https://github.com/y22t19053/roll-cut-die> | **LIVE（HTTP 200）**；`Releases` 列表为空（`0` 个 GitHub Release） | 脏树未清理前禁止盲推 | 保留全部提交历史，严禁 `force push` |
+| **itch.io 项目主页**（ID `5420775`） | 独立游戏商店页 + Web/Win 双包 | `builds/RCD-s6-514f149-windows.zip` · `builds/RCD-s6-514f149-web.zip` · `visual/cover_titled_630.png` | `514f149` 导出（upload `20815047` / `20815050`） | **已公开发布（非 Draft）** | <https://y22t19053.itch.io/roll-cut-die> | **LIVE PUBLIC**；2026-11-25 20:24 已把两个包换成 Sprint 6 构建，Web embed 直连实测可启动（canvas `2188x1395`） | 四大 Jam 评审期内保持线上稳定，未经批准不覆盖 | 旧 `roll-cut-die-*` 仍在 `builds/` 与 git 历史中保留 |
 | **Mauspi Lab Jam #2 · ONE MORE TRY!** | 赛事投稿 | `docs/JAM_SUBMISSIONS.md` · itch `5420775` | `2026-11-22` 投稿快照 | **已公开参赛** | <https://itch.io/jam/mauspi-lab-jam-2/rate/5420775> | **LIVE（HTTP 200）**；截止 `2026-12-14`；规则明确欢迎既有原型与披露后的 AI 辅助 | 否（评审期求稳） | 锁定参赛关联包 |
 | **Places That Shouldn't Exist** | 赛事投稿（Liminal × Non-Euclidean） | `builds/roll-cut-die-windows.zip` | `2026-11-22` 投稿快照 | **已公开参赛** | <https://itch.io/jam/places-that-shouldnt-exist/rate/5420775> | **LIVE（HTTP 200）**；截止 `2026-12-03`；严格遵守规则 03 上传 Windows 可执行压缩包 | 否（评审期求稳） | 保留 Windows zip |
 | **Tiny Loop Jam 2026** | 赛事投稿 | itch `5420775` | `2026-11-22` 投稿快照 | **已公开参赛** | <https://itch.io/jam/tiny-loop-jam-2026/rate/5420775> | **LIVE（HTTP 200）**；截止 `2026-11-29`（最近到期赛事） | 否（严禁在截止前改动破坏包体） | 锁定参赛关联包 |
@@ -59,14 +59,17 @@
 | `RCD-s5-015e467.exe` | **Sprint 5 定版 Windows 包** | `105,542,320` | `9d76f90b3d28d3b7...` | 提交 `015e467`（互联摄影棚 + 片场机关 + H 灯架 + 本局账本自裁的 Final Cut，1,267 条断言全过） | 待上传（itch 通道阻塞中） | 新版本，保留 |
 | `RCD-s5-015e467-windows.zip` | Sprint 5 定版 Windows 压缩包 | `50,648,056` | `cd44837c30186281...` | 同上，内含单个自包含 exe | 待上传 | 保留 |
 | `RCD-s5-015e467-web.zip` | Sprint 5 Web 包（旧口径） | `30,115,126` | `dcfbafe3fe6dda42...` | 提交 `015e467`，`extensions_support=true` 时导出（源目录 65.9 MB） | 未发布 | 保留作对照 |
-| `RCD-s5d-c91e5ce-web.zip` | **当前 TOY 源包（slim）** | `28,595,949` | `ef12c7586e45c207...` | 提交 `c91e5ce`，关闭 extensions support，源目录 57.2 MB | **是（TOY `59100293499904`）** | 当前线上包 |
+| `RCD-s5d-c91e5ce-web.zip` | Sprint 5 Web 包（slim 口径） | `28,595,949` | `ef12c7586e45c207...` | 提交 `c91e5ce`，关闭 extensions support，源目录 57.2 MB | 未公开发布（TOY 线暂停） | 保留作对照 |
+| `RCD-s6-514f149.exe` | **Sprint 6 定版 Windows 包** | `105,559,280` | `35703f9b7ed2eb7b...` | 提交 `514f149`（OUT OF FRAME + CUT BACK、灯架房间族、配乐分层，1,745 条断言全过） | 随 windows zip 分发 | 当前定版，保留 |
+| `RCD-s6-514f149-windows.zip` | **Sprint 6 定版 Windows 压缩包** | `50,664,276` | `0ee7483e31af0299...` | 同上，内含单个自包含 exe | **是（itch upload `20815047`）** | 当前线上包，保留 |
+| `RCD-s6-514f149-web.zip` | **Sprint 6 定版 Web 包** | `28,612,133` | `f0522a9b14763106...` | 同上，关闭 extensions support 后导出 | **是（itch upload `20815050`，embed 勾选）** | 当前线上可玩包，保留 |
 
 ## 3.1 平台状态变更（2026-11-25 夜间主控接管）
 
-- **GitHub 公开镜像**：master 已从 `04aa585` 推进到 `c91e5ce`（31 个提交），含 Sprint 5 四路交付与 Final Cut 接通。
+- **GitHub 公开镜像**：master 已从 `04aa585` 推进到 `514f149`（47 个提交），含 Sprint 5 四路交付、Final Cut 接通与 Sprint 6（OUT OF FRAME / 灯架房间族 / 配乐分层）。
 - **Bilibili TOY**：旧 `58061569920000` 已不可解析 —— `toy stats` 与 `toy update` 都返回 `307000 请求参数错误`，通知里有「大包体上传申请未通过」，判定旧 Toy 已被平台移除。新建 `59100293499904`（slug `roll-cut-die`，public，GAME）提交后处于 `status=auditing`；**创作者随后要求 B 站 TOY 暂停，不再维护也不发布新包**，后续所有发版只走 itch 与 GitHub。
-- **itch `5420775`**：butler 未登录（`butler -v status` 直接要求 OAuth），通道阻塞，需创作者在浏览器点一次授权；`broth.itch.ovh` 与 `itch.ovh` 为 NXDOMAIN 属误判，实际上传域名是 `broth.itch.zone`。
-- **发布脚本**：`tools/make_release.py` 现在会在打包前 prune 掉停产的 `*.wasm` 兄弟文件（Godot 不会自动删旧产物，曾导致 39.7 MB 的 `index.side.wasm` 混进 zip 与 TOY 包）。
+- **itch `5420775`（2026-11-25 20:24 完成换包）**：butler OAuth 已由创作者授权（凭据 `C:\Users\11ee11\.config\itch\butler_creds`），但 `GET https://api.itch.io/wharf/channels?target=y22t19053/roll-cut-die` 返回 `{"channels": {}}` —— 该项目从未建立 butler 通道，旧包是网页上传的普通文件，因此改走 itch 后台网页换包：新上传 `RCD-s6-514f149-windows.zip`（upload `20815047`）与 `RCD-s6-514f149-web.zip`（upload `20815050`，`embed` 勾选），删除旧 `roll-cut-die-windows.zip`（`20741185`）与 `roll-cut-die-web.zip`（`20741186`），保存后公开页 PUBLISHED，embed iframe = `https://html-classic.itch.zone/html/20815050/index.html`，直连该 URL 实测 `title="roll cut die"`、canvas `2188x1395`、引擎就绪 —— itch 托管 Web 版确认可启动。
+- **发布脚本**：`tools/make_release.py` 现在会在打包前 prune 掉停产的 `*.wasm` 兄弟文件（Godot 不会自动删旧产物，曾导致 39.7 MB 的 `index.side.wasm` 混进 zip 与 TOY 包）。Sprint 6 起 `--tag s6` 一条命令产出 exe + windows zip + web zip，并打印字节数与 SHA256。
 
 ---
 
