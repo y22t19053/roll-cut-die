@@ -89,11 +89,18 @@ static func _recover(h, tree, relay, use_cut: bool) -> void:
 		await tree.physics_frame
 		if frame.state() == "IN":
 			body.input_override = Vector2.ZERO
-			if not body.frozen and body.is_on_floor():
+			if not body.frozen:
 				break
+	for settle in 24:
+		await tree.physics_frame
+		if not body.frozen and absf(body.global_position.y - relay.segments[relay.leg_room].start.y) < 0.30:
+			break
 	var segment: Dictionary = relay.segments[relay.leg_room]
 	h.eq("recovered within deadline (CUT=%s)" % use_cut, frame.state(), "IN")
-	h.ok("back on floor", body.is_on_floor())
+	# The relay pins the player's height instead of running gravity, so
+	# is_on_floor() is false for a resting player even in normal play. The
+	# invariant that matters is "back on the deck at deck height".
+	h.ok("back on the deck", absf(body.global_position.y - segment.start.y) < 0.30)
 	h.ok("within room seams", body.position.x >= segment.start.x and body.position.x <= segment.end.x)
 	h.ok("within deck width", absf(body.position.z - segment.start.z) <= 3.0)
 	h.ok("control returned", not body.frozen and relay.phase == relay.Mode.PLAY)
