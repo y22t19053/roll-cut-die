@@ -185,8 +185,9 @@ func _set_state(value: String) -> void:
 	_render()
 
 func _both(key: String) -> String:
-	var words: Dictionary = Loc.STRINGS[key]
-	return str(words.en) + " / " + str(words.zh)
+	# One language at a time: the HUD already runs in the player's locale, and
+	# printing both halves on screen read as a bug rather than as a warning.
+	return Loc.ui(key)
 
 func _render() -> void:
 	if _overlay == null: return
