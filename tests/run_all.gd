@@ -57,6 +57,7 @@ const MODULES := [
 	["run_length", preload("res://tests/test_run_length.gd")],
 	["phrasebook", preload("res://tests/test_phrasebook.gd")],
 	["sprint7_guard", preload("res://tests/test_sprint7_guard.gd")],
+	["sprint8_guard", preload("res://tests/test_sprint8_guard.gd")],
 ]
 
 var _current := "(startup)"

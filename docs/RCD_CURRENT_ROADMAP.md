@@ -104,3 +104,5 @@ Sprint 7 门禁：`tools/verify_all.py` 全过，断言数只增不减，`mesh_g
 | 4 | 独立验收与档案同步 | Codex C | `tools/verify_branch.py` 覆盖新支；`tests/test_sprint8_guard.gd` 防御式断言（模块缺失即跳过）钉住：一次性教学只播一次、`next_move.line` 的分支、`archive_next_gap` 的边界；四份 living 文档同步。 |
 
 Sprint 8 门禁：`tools/verify_all.py` 全过，断言数只增不减，`mesh_get_surface_count` 噪声预算 1，每个交付端附实机截图。
+
+Sprint 8 验收工具：`tests/test_sprint8_guard.gd` + `tools/verify_branch.py`

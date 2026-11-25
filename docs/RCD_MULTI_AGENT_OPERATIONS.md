@@ -99,3 +99,5 @@ python tools/verify_all.py --json
 | `codex-c/sprint7-guard` | 仅 `tests/`、`tools/`、`docs/` 中的独立验收与交接档案 |
 
 G 与 F 共用 `relay_run.gd`。主控集成时按常量区和结算区分别核对改动，并保留各支在测试入口注册的用例。
+
+并行支的验收顺序：先在本支运行 `tools/verify_all.py --baseline 2107`，通过后运行 `tools/verify_branch.py --baseline 2107` 核对报告里的工作树路径，最后由主控在合并后的工作树再跑一次全量门禁。
