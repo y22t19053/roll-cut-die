@@ -25,6 +25,14 @@ LINE = re.compile(r'^McpInteractionServer\s*=')
 BACKUP = ROOT / "tools" / ".dev_autoload.bak"
 
 
+def write_text(path: pathlib.Path, text: str) -> None:
+    # newline="" keeps the file byte-identical in shape: the same \r\n (or \n)
+    # that was read comes back out, instead of every \n being translated again
+    # on top of the line endings the file already carries.
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        fh.write(text)
+
+
 def read_lines():
     # Kept unannotated on purpose: this box has both a Python 2.7 `python` on PATH
     # and a 3.12 alongside DSH, and the tools here must run under the latter.
@@ -37,8 +45,8 @@ def strip() -> int:
     if len(kept) == len(lines):
         print("absent (nothing to strip)")
         return 0
-    BACKUP.write_text("".join(ln for ln in lines if LINE.match(ln)), encoding="utf-8")
-    PROJECT.write_text("".join(kept), encoding="utf-8")
+    write_text(BACKUP, "".join(ln for ln in lines if LINE.match(ln)))
+    write_text(PROJECT, "".join(kept))
     print("stripped 1 line")
     return 0
 
@@ -70,7 +78,7 @@ def restore() -> int:
             break
     else:
         lines.append("\n[autoload]\n" + saved.strip() + "\n")
-    PROJECT.write_text("".join(lines), encoding="utf-8")
+    write_text(PROJECT, "".join(lines))
     print("restored 1 line")
     return 0
 

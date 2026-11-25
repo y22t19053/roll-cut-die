@@ -48,19 +48,38 @@ def main():
 
     engine = os.environ.get("GODOT_BIN") or (GODOT if GODOT.is_file() else "godot")
     command = [engine, "--headless", "--path", str(ROOT)]
-    ready = True
-    if not (ROOT / ".godot/global_script_class_cache.cfg").is_file():
-        ready, out, err = run(command + ["--import"], args.timeout)
-        if not ready:
-            print(out + err, file=sys.stderr)
+    # The godot-bridge autoload talks to a fixed local port and keeps Mesh resources
+    # alive for its own screenshot path; both distort a measured headless run (and a
+    # second copy of the suite then collides with a game already on 9090). Export
+    # strips it, so the suite is measured against the shape the release ships in.
+    stripped = run([python, str(ROOT / "tools/strip_dev_autoload.py"), "--strip"], args.timeout)[0]
+    try:
+        ready = True
+        if not (ROOT / ".godot/global_script_class_cache.cfg").is_file():
+            ready, out, err = run(command + ["--import"], args.timeout)
+            if not ready:
+                print(out + err, file=sys.stderr)
 
-    ok, out, err = False, "", ""
-    if ready:
-        ok, out, err = run(command + ["--script", "res://tests/run_all.gd"], args.timeout)
-    lines = out.rstrip().splitlines()
-    summary = re.fullmatch(r"RCD TESTS: ALL PASS — (\d+) assertions(?: in [\d.]+ s)?",
-                           lines[-1] if lines else "")
+        ok, out, err = False, "", ""
+        if ready:
+            ok, out, err = run(command + ["--script", "res://tests/run_all.gd"], args.timeout)
+    finally:
+        if stripped:
+            run([python, str(ROOT / "tools/strip_dev_autoload.py"), "--restore"], args.timeout)
+            # strip/restore rewrites project.godot; git drops the CRLF churn only when
+            # asked, and a dirty tree would block the next commit.
+            subprocess.run(["git", "checkout", "--", "project.godot"], cwd=ROOT,
+                           capture_output=True, text=True)
+
+    # Anything the engine prints after the summary (autoload shutdown, leak warnings)
+    # must not hide the verdict, so the summary is searched for, not required last.
+    # The separator between PASS and the count is an em dash that goes through several
+    # encodings on the way here, so match any run of non-digits instead of the glyph.
+    summary = re.search(r"RCD TESTS: ALL PASS[^\d]*(\d+) assertions", out)
     assertions = int(summary[1]) if summary else 0
+    failed = re.search(r"RCD TESTS:[^\d]*FAIL[^\d]*(\d+) assertions", out)
+    if summary is None and failed:
+        assertions = int(failed[1])
     noise = err.count("mesh_get_surface_count")
     godot_ok = ok and summary is not None and assertions >= args.baseline and noise == 0
     if not godot_ok:

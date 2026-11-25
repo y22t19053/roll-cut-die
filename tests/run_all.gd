@@ -56,11 +56,12 @@ func _init() -> void:
 
 
 func _hold_mesh_through_teardown(node: Node) -> void:
-	# Godot 4.3 Dummy queries the mesh RID while destroying the instance.
-	# Keep the resource alive through destruction, including parent.free().
+	# Godot 4.3 Dummy queries the mesh RID while destroying the instance, and it does
+	# that after the GDScript reference is gone. One frame of retention is not enough
+	# in a headless run — the deferred clear itself is what was dropping the resource
+	# mid-teardown — so every mesh removed during the suite is simply kept until the
+	# process exits. This lives in the test runner only and never ships.
 	if node is MeshInstance3D and node.mesh != null:
-		if _retiring_meshes.is_empty():
-			_retiring_meshes.clear.call_deferred()
 		_retiring_meshes.append(node.mesh)
 
 
