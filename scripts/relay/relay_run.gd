@@ -592,8 +592,11 @@ func _apply_run(d: Dictionary) -> void:
 		if tr != null: tracks.append(tr)
 	for s in d.get("segments", []):
 		var r: Dictionary = s
+		# A room keeps the pace the run had when it was joined, not today's default:
+		# without this a resumed run silently went easier on EXPERT.
+		var bay_hurry := hurry_for(segments.size(), MODULES) / Rules.pace(difficulty)
 		segments.append($Rooms.append_room(str(r.get("kind","straight")), int(r.get("variant",0)),
-			str(r.get("mod","")), bool(r.get("final", false)), str(r.get("event",""))))
+			str(r.get("mod","")), bool(r.get("final", false)), str(r.get("event","")), bay_hurry))
 	leg_event = str((segments.back() as Dictionary).get("event","")) if not segments.is_empty() else ""
 	room_pass = int(d.get("room_pass", 0))
 	# The ghosts this set already has: everything recorded since it was joined,

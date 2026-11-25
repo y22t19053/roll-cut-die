@@ -36,6 +36,7 @@ const MODULES := {
 	"sprint7_guard": preload("res://tests/test_sprint7_guard.gd"),
 	"sprint8_guard": preload("res://tests/test_sprint8_guard.gd"),
 	"focus_pause": preload("res://tests/test_focus_pause.gd"),
+	"resume_pace": preload("res://tests/test_resume_pace.gd"),
 	"difficulty": preload("res://tests/test_difficulty.gd"),
 }
 
