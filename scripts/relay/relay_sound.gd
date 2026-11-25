@@ -58,9 +58,22 @@ var _halt := AudioStreamPlayer.new()
 var _calm_db := -22.0
 var _tense_db := -60.0
 var _beds_muted := false
+var _out_of_frame := false
+var _frame_step := AudioStreamPlayer3D.new()
+var _frame_warning := AudioStreamPlayer.new()
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_frame_step)
+	add_child(_frame_warning)
+	_frame_step.stream = Foley.make_stream("belt")
+	_frame_step.pitch_scale = 1.35
+	_frame_step.volume_db = -12.0
+	_frame_step.max_distance = 30.0
+	var warning := PackedFloat32Array()
+	warning.resize(RATE)
+	_add_tone(warning, 0.0, 65.4, 0.9, 0.65)
+	_frame_warning.stream = _wav(warning, false)
 	_music.name = "Score"
 	_fx.name = "Edit"
 	for p: AudioStreamPlayer in [_music,_fx,_drive,_murmur]:
@@ -154,8 +167,8 @@ func set_stillness(still_seconds: float) -> void:
 
 func _process(delta: float) -> void:
 	# One owner per gain: no accumulating per-frame volume tweens.
-	var quiet: bool = _beds_muted or _ducked
-	var duck_db: float = -8.5 if _ducked else 0.0
+	var quiet: bool = _beds_muted or _ducked or _out_of_frame
+	var duck_db: float = -18.0 if _out_of_frame else (-8.5 if _ducked else 0.0)
 	var music_db: float = -60.0 if _beds_muted else -11.5 + duck_db
 	_music.volume_db = move_toward(_music.volume_db, music_db, delta * 100.0)
 	for pair: Array in [[_calm, _calm_db], [_tense, _tense_db], [_danger, _danger_target], [_dress, -26.0]]:
@@ -166,9 +179,10 @@ func _process(delta: float) -> void:
 	if _final_sprint: drive_db += 3.5
 	if _reduce_motion(): drive_db -= 12.0
 	if _ducked: drive_db -= 8.5
+	if _out_of_frame: drive_db -= 18.0
 	if _beds_muted: drive_db = -60.0
 	_drive.volume_db = move_toward(_drive.volume_db, drive_db, delta * 48.0)
-	var murmur_db: float = -34.0 if _still_seconds >= 2.0 and not quiet else -60.0
+	var murmur_db: float = -26.0 if _out_of_frame else (-34.0 if _still_seconds >= 2.0 and not quiet else -60.0)
 	_murmur.volume_db = move_toward(_murmur.volume_db, murmur_db, delta * (104.0 if quiet or _still_seconds < 0.2 else 26.0))
 	_music.pitch_scale = 1.0
 	_drive.pitch_scale = 1.0
@@ -654,3 +668,14 @@ func _reduce_motion() -> bool:
 	if session == null: return false
 	var settings: Dictionary = session.get("settings")
 	return bool(settings.get("reduce_motion", false))
+
+func frame_warning() -> void:
+	_frame_warning.play()
+
+func set_out_of_frame(active: bool) -> void:
+	_out_of_frame = active
+	if not active: _frame_step.stop()
+
+func frame_step(world_position: Vector3) -> void:
+	_frame_step.global_position = world_position
+	_frame_step.play()

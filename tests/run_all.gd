@@ -25,6 +25,7 @@ const RelaySave = preload("res://scripts/relay/relay_save.gd")
 const WATCHDOG_SECONDS := 100.0
 
 const MODULES := [
+	["out_of_frame", preload("res://tests/test_out_of_frame.gd")],
 	["camera", preload("res://tests/test_camera.gd")],
 	["ghost", preload("res://tests/test_ghost.gd")],
 	["npc", preload("res://tests/test_npc.gd")],

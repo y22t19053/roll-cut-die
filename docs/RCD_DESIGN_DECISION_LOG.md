@@ -76,3 +76,10 @@
 - **D-076 · Relay 终局由本局账本自裁**。案件报告只存在于 `scenes/main/main.tscn`，而当前可玩主线是 `scenes/relay/run.tscn`，它从不提交报告，因此 `verdict` 恒为空、`FinalReel.from_run()` 直接返回空字典、12.60 秒的最终剪辑在线上版本里永远播不出来。裁决：外部没给判词时由本局记录自裁——零死亡 `file_closed`（TRUTH），有死亡且用掉过至少一次 `CUT` `bury_registered`（COVER-UP），有死亡但一条没剪 `reframe_held`（FRAME-UP）。动画本身仍不重新判理，只认 `docs/FINAL_CUT_DESIGN.md` §5 的三种结局；`relay` 走独立的 `FinalReel.from_relay()`，不读案件台账，避免上一次案件会话残留的 `FINISHED` 状态改写本局成片。
 - **验收口径**。`tools/verify_all.py` 是唯一门禁（Godot 断言 1,267 / Python 31 / 噪声预算 1）；`tests/test_inrun_ui_and_deai.gd::_run_wrap` 在真实 `run.tscn` 上验证「胜利 → 过场起播 → 12.60 秒后交还通告单」的接缝。
 - **并行交付**。互联摄影棚（A）、片场机关（B）、H 灯架候选（`6fae059`）、最终剪辑（D）四路各自提交后由主控合并；冲突只落在 `relay_run.gd` 的 `_restart_actors()`、`run_all.gd` 的 mesh 保留钩子与常量/存档字典三处，全部按「A 的每棚区间 + B 的曝光开关 + D 的三键合一」裁决。
+
+## 6. 2026-11-25 · Sprint 6 OUT OF FRAME
+
+- **D-077 · 有预警、可化解的脱景与回剪**。按 IA-16 与 §2 红线，同一 leg 累计第 3 次 NG 后进入 WARN；每 leg 只触发一次，新 leg 重置。2.5 秒只计算正局可操作时间，教学、场记板、死亡冻结、强制剪辑台、暂停、吊索、选棚、通告单与 WRAP 不推进预警。红角脉冲、顶部同时显示中英文及一次性 65.4 Hz 低频声；过线立即取消，WARN 或 OUT 按 C 直接 CUT BACK 至最近 MARK，扣 1 CUT 并计入既有 CUT 账本，不能借用首次免费剪辑。
+- **代价与恢复**。预警和脱景本身不改光量、MARK、CUT 或死亡计数；代价是本 leg 继续计时、额外回程距离，或主动支付一次 CUT。OUT 期间不执行棚内危险判定、不能把暗区钉成 MARK。无 CUT 不瞬移，显示 NO CUT LEFT — WALK BACK。回到当前棚合法范围后恢复原相机和声音，继续当前 leg。
+- **回程几何与声音**。棚局部后墙 z=-2.94、x=1.0…2.2 开 1.2 米缺口，暗区落点固定为 (1.6, 0.05, -5.2)，增设暗色地板、门楣与地面标记；随棚旋转，六种棚型和两个朝向均以真实玩家碰撞体扫掠验证。OUT 使用独立固定镜头，保留棚轮廓与缺口，不跟随玩家平移。复用 relay_sound 合成播放链，将配乐退远并引入剧组环境声；按本棚历史 Take 的 0.65 米步距抽取节奏，在缺口位置循环播放脚步。没有移动历史时用剧组双拍指路，不伪造历史记录。
+- **验证与接缝**。独立 out_of_frame.gd 暴露 advance/state/debug_state/note_ng/resolve/cut_back。relay_run.gd 仅加 23 行接线；relay_rooms.gd 增 17、删 2 行。无头测试通过 1,354 条断言（本模块 87 条）、Python 31 项、stderr_noise=1；窗口预览生成 WARN/OUT 两张实景图。听感和主控实机手感仍需合并端验收。

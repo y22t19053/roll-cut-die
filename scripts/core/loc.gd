@@ -22,6 +22,11 @@ const LANGUAGE_NAMES := {
 }
 
 const STRINGS := {
+	"frame.warn": {"en": "OUT OF FRAME INCOMING", "zh": "摄影大叔要踢你出景"},
+	"frame.resolve": {"en": "C: CUT BACK TO MARK / CROSS THE LINE", "zh": "C：CUT BACK 回剪至 MARK / 过线化解"},
+	"frame.out": {"en": "WALK BACK TO THE SET", "zh": "循声走回布景"},
+	"frame.cut": {"en": "C: CUT BACK TO MARK — 1 CUT", "zh": "C：CUT BACK 回剪至 MARK — 消耗 1 CUT"},
+	"frame.empty": {"en": "NO CUT LEFT — WALK BACK", "zh": "没有 CUT 了，自己走回来"},
 	"props.crane": {"en": "Camera crane", "zh": "摇臂摄影机"},
 	"props.crane.action": {"en": "Sweep", "zh": "横扫"},
 	"props.clap": {"en": "Clap flash", "zh": "打板闪光"},
