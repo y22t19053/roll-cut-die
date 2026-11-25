@@ -304,9 +304,9 @@ func _update_modes() -> void:
 
 
 func _mode_caption(zh: bool, mode: int) -> String:
-	var notes: Array[String] = ["宽限重拍", "死亡翻景 180°", "严苛片场"] if zh else [
-		"GRACE RETAKES", "DEATH TURNS SET 180°", "STRICT SET"]
-	var note: String = notes[mode]
+	var notes: PackedStringArray = PackedStringArray(["宽限重拍", "死亡翻景 180°", "严苛片场"]) if zh else PackedStringArray([
+		"GRACE RETAKES", "DEATH TURNS SET 180°", "STRICT SET"])
+	var note: String = notes[clampi(mode, 0, notes.size() - 1)]
 	return "%d MARK · %d CUT · %s" % [Rules.mark_budget(mode), Rules.cut_budget(mode), note]
 
 
@@ -353,9 +353,9 @@ func _draw_tape(slip: Control) -> void:
 
 func _build_ledger(zh: bool) -> void:
 	var stats: Dictionary = Rules.meta()
-	var labels: Array[String] = ["拍过", "最远", "废片", "收工"] if zh else [
-		"RUNS", "BEST SET", "DEATHS", "WRAPS"]
-	var keys: Array[String] = ["runs", "best_set", "deaths", "wins"]
+	var labels: PackedStringArray = PackedStringArray(["拍过", "最远", "废片", "收工"]) if zh else PackedStringArray([
+		"RUNS", "BEST SET", "DEATHS", "WRAPS"])
+	var keys: PackedStringArray = PackedStringArray(["runs", "best_set", "deaths", "wins"])
 	var ink: Color = PAPER if int(stats.get("runs", 0)) > 0 else UiKit.DIM
 	var ledger := _column(4)
 	ledger.name = "Record"
