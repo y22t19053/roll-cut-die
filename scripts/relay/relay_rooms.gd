@@ -2,7 +2,7 @@ extends Node3D
 ## Connected soundstages. Each seam is one continuous finish line.
 const LENGTH := 9.0
 const GantryRoom = preload("res://scripts/relay/gantry_room.gd")
-const GANTRY_SLOT := 6
+const GANTRY_SLOTS := [3, 7, 11, 15]
 const DECK := Color("514f50")
 const FLAT := Color("847362")
 const WHITE := Color("f3dfad")
@@ -701,9 +701,9 @@ static func _grain() -> ImageTexture:
 	return _grain_tex
 
 
-## The seventh main-stage slot follows two acts and excludes the prologue.
+## Each act closes with a gantry; main-stage indices exclude the prologue.
 func plan(room_index: int, main_index := -1) -> Dictionary:
-	if room_index == _count and main_index == GANTRY_SLOT:
+	if room_index == _count and main_index in GANTRY_SLOTS:
 		return GantryRoom.plan()
 	return _plans.get(room_index, {})
 

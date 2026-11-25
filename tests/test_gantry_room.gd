@@ -8,11 +8,12 @@ const STEP := 1.0 / 60.0
 
 
 static func run(h, tree = null) -> void:
+	var RelayRun = load("res://scripts/relay/relay_run.gd")
 	h.begin("gantry_room")
 	var rooms := Rooms.new()
 	tree.root.add_child(rooms)
-	for i in 12:
-		h.eq("main slot %d planning" % i, rooms.plan(0, i).get("kind", ""), "gantry" if i == 6 else "")
+	for i in RelayRun.MODULES:
+		h.eq("main slot %d planning" % i, rooms.plan(0, i).get("kind", ""), "gantry" if i in Rooms.GANTRY_SLOTS else "")
 	var before := rooms.append_room("straight", 0, "clean")
 	var bay := rooms.append_room("gantry", 0)
 	var after := rooms.append_room("cross", 0, "clean")
@@ -54,7 +55,7 @@ static func run(h, tree = null) -> void:
 	relay.set_physics_process(false)
 	relay.player.set_physics_process(false)
 	var live_rooms: Node3D = relay.get_node("Rooms")
-	for i in 6:
+	for i in Rooms.GANTRY_SLOTS[0]:
 		relay.segments.append(live_rooms.append_room("straight", i, "clean"))
 	relay._prologue = 1
 	relay.leg_room = relay.segments.size() - 1
@@ -104,7 +105,7 @@ static func run(h, tree = null) -> void:
 			actor._physics_process(STEP)
 			h.near("Relay Ghost actor runs on the bridge", actor.global_position.y, 2.5, 0.02)
 
-	h.eq("completing the set opens the supply tray", relay.phase, Run.Mode.ITEM)
+	h.eq("completing the closing set opens the act contracts", relay.phase, Run.Mode.ACT)
 	h.ok("completing the set extinguishes the route lamp", not relay._lamp.visible)
 	var midpoint: Vector3 = relay.segments.back().stations[1]
 	relay.player.teleport(midpoint, 0.3)

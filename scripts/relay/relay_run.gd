@@ -20,7 +20,7 @@ const ToyBridge = preload("res://scripts/relay/toy_bridge.gd")
 const SetProps = preload("res://scripts/relay/set_props.gd")
 const FinalCut = preload("res://scripts/relay/final_cut.gd")
 const FinalReel = preload("res://scripts/relay/final_cut_reel.gd")
-const MODULES := 12
+const MODULES := 16
 ## The shapes the run draws from. I, L and O come first because they are the three
 ## honest answers to "what happens when the crew rebuilds it the other way round?":
 ## nothing, the corner moves, the other side of the ring. The rest wait in the wings.
@@ -28,12 +28,12 @@ const KINDS := ["l", "i", "o", "h", "s"]
 ## Everything the crew is allowed to do to a set. Acts 1–2 only ever see the
 ## first three; later acts draw from all of it and may stack two at once.
 const EVENT_POOL := ["relight", "extra", "guide", "belt", "runner", "goof", "key", "mezz", "double", "wire"]
-## A run is four acts of three sets: two quick sets and one long take. The long
+## A run is four acts of four sets: three quick sets and one long take. The long
 ## take is the only one allowed to hurt, and it is the one with the gate in it.
 ## Four acts, not three: the room count is what makes a run ten minutes long, and
 ## short sets never ask the player to walk the same floor five times.
 const ACTS := 4
-const SETS_PER_ACT := 3
+const SETS_PER_ACT := 4
 const SHORT_PASSES := 2
 const LONG_PASSES := 5
 const TOUCH := 0.77
@@ -42,7 +42,7 @@ const TOUCH := 0.77
 ## dodge.
 const GRACE := 1.2
 const PASSES := 4
-## A run is a seed and twelve sets in four acts: the seed is printed on the call
+## A run is a seed and sixteen sets in four acts: the seed is printed on the call
 ## sheet so two runs can be compared, replayed or argued about.
 static var next_seed := 0## A run that was written down between takes. The title screen decides whether
 ## New Game starts fresh or Continue picks this up.
