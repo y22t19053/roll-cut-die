@@ -156,6 +156,8 @@ var deaths := 0
 var _fast_legs := 0
 var difficulty := Rules.selected_mode
 var _highest_unlocked_before_clear := 0
+## Verbs waiting for a quiet notice slot; see `_queue_teach`.
+var _teach_queue: Array[String] = []
 var forced_cut := false
 var splice := Splice.new()
 var active_clock := 0.0
@@ -249,7 +251,7 @@ func _ready() -> void:
 	out_of_frame.bind(self)
 	add_child(out_of_frame)
 	out_of_frame.changed.connect(func(value: String) -> void:
-		if value == "WARN": _teach.call_deferred("frame"))
+		if value == "WARN": _queue_teach("frame"))
 	desk = load("res://scripts/relay/cutting_desk.gd").new()
 	add_child(desk)
 	desk.picked.connect(_pick_card)
@@ -440,7 +442,7 @@ func _start_leg(back: bool) -> void:
 	_arrival_locked = false
 	phase = Mode.PLAY
 	player.vertical_walk = $Rooms.is_gantry(_room_at())
-	if player.vertical_walk: _teach.call_deferred("gantry")
+	if player.vertical_walk: _queue_teach("gantry")
 	player.set_frozen(false)
 	rig.set_physics_process(true)
 	live = Track.new()
@@ -451,7 +453,7 @@ func _start_leg(back: bool) -> void:
 		var prop_spec: Dictionary = {} if _in_prologue() else segments.back()
 		_props.build(room_node, prop_spec, run_seed, ri)
 	if not _props.active_props().is_empty():
-		_teach.call_deferred("props")
+		_queue_teach("props")
 	_props.reset_take(_prop_film_room == ri)
 	_sample()
 	_restart_actors()
@@ -494,7 +496,14 @@ func _show_notice(text: String, seconds := 3.0) -> void:
 	_notice_left = seconds
 
 
-## Deferred event notices let the existing hints claim their slot first.
+## Deferred event notices let the existing hints claim their slot first. A verb
+## that only happens once per profile cannot be dropped just because the arrival
+## line was still on screen, so anything that finds the slot busy waits here.
+func _queue_teach(kind: String) -> void:
+	if not _teach_queue.has(kind):
+		_teach_queue.append(kind)
+
+
 func _teach(kind: String) -> bool:
 	if _notice_left > 0.0: return false
 	if not Phrasebook.mark(kind): return false
@@ -1339,6 +1348,8 @@ func _step_set_props() -> void:
 
 func _physics_process(dt: float) -> void:
 	_notice_left = maxf(0.0, _notice_left - dt)
+	if _notice_left <= 0.0 and not _teach_queue.is_empty():
+		_teach(_teach_queue.pop_front())
 	out_of_frame.advance(dt)
 	if out_of_frame.state() == "OUT":
 		if out_of_frame.playable():
