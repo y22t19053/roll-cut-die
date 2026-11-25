@@ -7,20 +7,22 @@ extends RefCounted
 ## the end of, which is also what the rule says a MARK may restore.
 const PATH := "user://rcd/relay_run.json"
 const VERSION := 1
+static var save_path := PATH
 ## Nothing here is trusted on load: a hand-edited file may only make a run
 ## stranger, never longer than its own seed.
 
 static func has_run() -> bool:
-	return FileAccess.file_exists(PATH)
+	return FileAccess.file_exists(save_path)
 
 static func clear() -> void:
-	if FileAccess.file_exists(PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(PATH))
+	if FileAccess.file_exists(save_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 
 static func save_run(state: Dictionary) -> bool:
-	var f := FileAccess.open(PATH, FileAccess.WRITE)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(save_path).get_base_dir())
+	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f == null:
-		push_warning("relay save failed: %s" % PATH)
+		push_warning("relay save failed: %s" % save_path)
 		return false
 	var body := state.duplicate(true)
 	body["version"] = VERSION
@@ -30,8 +32,8 @@ static func save_run(state: Dictionary) -> bool:
 	return true
 
 static func load_run() -> Dictionary:
-	if not FileAccess.file_exists(PATH): return {}
-	var f := FileAccess.open(PATH, FileAccess.READ)
+	if not FileAccess.file_exists(save_path): return {}
+	var f := FileAccess.open(save_path, FileAccess.READ)
 	if f == null: return {}
 	var text := f.get_as_text()
 	f.close()

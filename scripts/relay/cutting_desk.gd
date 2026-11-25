@@ -239,7 +239,7 @@ class Sheet extends Control:
 			rect(x, y, 384 * minf(d._age / 0.36, 1.0), 4, accent)
 			text(x + 22, y + 39, "35 MM  //  " + ("ANSWER PRINT" if d._result == 1 else "OUTTAKE"), 16, accent)
 			text(x + 22, y + 89, word("当天收工", "WRAPPED") if d._result == 1 else word("这卷到头了", "END OF REEL"), 30, CHALK)
-		if d._remaining > 0 and not d._message.is_empty():
+		elif d._remaining > 0 and not d._message.is_empty():
 			draw_notice(d._message)
 
 	func width(t: String, fs: int) -> float:
@@ -263,8 +263,9 @@ class Sheet extends Control:
 		text(left, y, set_text, fs, CHALK)
 		text(left + width(set_text, fs) + 12, y, pass_text, fs, AMBER)
 		for i in int(d._passes):
+			var done := i < int(d._pass)
 			draw_circle(Vector2(pip_x + i * 10.0 * hs, y - 5.0 * hs), 2.7 * hs,
-				AMBER if i < int(d._pass) else Color("a28e72"), i < int(d._pass), 1.0, true)
+				AMBER if done else Color("a28e72"), done, -1.0 if done else 1.0, true)
 		hairline(left - 6, y + 7, ledger_end + 4, AMBER.darkened(0.42))
 
 		var mark_text: String = "[M] MARK %d" % d._marks
@@ -297,11 +298,12 @@ class Sheet extends Control:
 			var px := start + i * spacing
 			var current := i == index
 			var pip := "%d" % (i + 1)
-			rect(px - spacing * 0.40, top * 0.5 - 13, spacing * 0.80, 25,
-				Color("3e2d23") if current else CARBON)
-			text(px - width(pip, 13) * 0.5, top * 0.5 + 4, pip, 13, AMBER if current else UiKit.DIM)
+			var tile := Rect2(px - spacing * 0.40, top * 0.5 - 13, spacing * 0.80, 25)
+			draw_rect(tile, Color("3e2d23") if current else CARBON)
+			draw_rect(tile, AMBER.darkened(0.35) if current else UiKit.RULE, false, 1.0)
+			text(px - width(pip, 13) * 0.5, top * 0.5 + 4, pip, 13, AMBER if current else Color("bfb49e"))
 			if current:
-				rect(px - spacing * 0.40, top * 0.5 + 12, spacing * 0.80, 2, AMBER)
+				rect(tile.position.x, top * 0.5 + 12, tile.size.x, 2, AMBER)
 
 		var left := 24.0
 		var right := w - 24.0
@@ -363,6 +365,7 @@ class Sheet extends Control:
 
 	func draw_call_sheet() -> void:
 		var d = owner_desk
+		rect(0, 0, w, h, Color("121316d9"))
 		var bw := 510.0
 		var bx := (w - bw) * 0.5
 		var paragraphs: Array[TextParagraph] = []
@@ -448,10 +451,10 @@ class Sheet extends Control:
 		draw_rect(tape, Color("d9c9a6"))
 		tilt(bounds.get_center(), angle)
 		var note := "TAKE 01"
-		var faded_ink := Color("7b6e57")
-		text(note_x, note_y, note, 9, faded_ink)
-		draw_line(Vector2(note_x - 1, note_y - 2), Vector2(note_x + width(note, 9) + 2, note_y - 5),
-			STAMP_RED.darkened(0.2), 0.8, true)
+		var faded_ink := Color("52493a")
+		text(note_x, note_y, note, 10, faded_ink)
+		draw_line(Vector2(note_x - 1, note_y + 1), Vector2(note_x + width(note, 10) + 2, note_y - 8),
+			Color(STAMP_RED, 0.58), 1.1, true)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE * s)
 
 	func draw_contract(i:int) -> void:

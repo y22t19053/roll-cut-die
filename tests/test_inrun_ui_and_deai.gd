@@ -45,6 +45,7 @@ static func run(h: Harness, tree: SceneTree = null) -> void:
 		session.apply_engine_settings()
 		session.persist_prefs = persist
 		await _desk(h, tree)
+		await _run_cut_sync(h, tree)
 		_rooms(h, tree)
 		await tree.process_frame
 	h.finish()
@@ -165,6 +166,34 @@ static func _desk(h: Harness, tree: SceneTree) -> void:
 			desk.call("hide_cut_preview")
 			h.ok("CUT loupe cleared", desk._cut_preview.is_empty())
 	desk.free()
+
+
+static func _run_cut_sync(h: Harness, tree: SceneTree) -> void:
+	var packed: PackedScene = load("res://scenes/relay/run.tscn") as PackedScene
+	h.ok("relay run scene loads for CUT loupe sync", packed != null)
+	if packed == null:
+		return
+	var inst: Node = packed.instantiate()
+	tree.root.add_child(inst)
+	await tree.process_frame
+	await tree.process_frame
+	var slate: Node = inst.get("slate") as Node
+	if slate != null and slate.call("is_running"):
+		slate.call("_process", 1.0)
+	inst.set("mark_stock", 2)
+	inst.set("cut_stock", 2)
+	inst.call("_press", KEY_M)
+	inst.call("_press", KEY_C)
+	var desk: Variant = inst.get("desk")
+	h.eq("CUT loupe opens on latest anchor (0-based)", int(desk._cut_preview.get("index", -1)), int(inst.get("_selected")))
+	inst.call("_press", KEY_UP)
+	h.eq("CUT loupe steps to anchor 0 (0-based)", int(desk._cut_preview.get("index", -1)), 0)
+	h.eq("CUT loupe total matches anchors", int(desk._cut_preview.get("total", 0)), (inst.get("anchors") as Array).size())
+	inst.call("_press", KEY_ESCAPE)
+	h.ok("leaving CUT clears loupe preview", desk._cut_preview.is_empty())
+	inst.queue_free()
+	await tree.process_frame
+	await tree.process_frame
 
 
 static func _rooms(h: Harness, tree: SceneTree) -> void:

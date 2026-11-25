@@ -19,6 +19,7 @@ extends SceneTree
 ## that abort and reports which module was running.
 
 const Harness = preload("res://tests/harness.gd")
+const RelaySave = preload("res://scripts/relay/relay_save.gd")
 
 ## Well under the 130 s ceiling of a single headless tool call.
 const WATCHDOG_SECONDS := 100.0
@@ -61,6 +62,8 @@ func _watchdog() -> void:
 func _main() -> void:
 	var watchdog := create_timer(WATCHDOG_SECONDS)
 	watchdog.timeout.connect(_watchdog)
+	var prior_relay_save := RelaySave.save_path
+	RelaySave.save_path = "user://rcd_test_saves/relay_run_%s.json" % Crypto.new().generate_random_bytes(8).hex_encode()
 
 	var passed := 0
 	var failed := 0
@@ -90,6 +93,8 @@ func _main() -> void:
 	else:
 		print("RCD TESTS: FAILED — %s" % ", ".join(broken))
 		print("RCD TESTS: %d passed, %d failed, %.1f s" % [passed, failed, secs])
+	RelaySave.clear()
+	RelaySave.save_path = prior_relay_save
 	await process_frame
 	watchdog.timeout.disconnect(_watchdog)
 	quit(0 if failed == 0 else 1)

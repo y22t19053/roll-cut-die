@@ -1435,7 +1435,6 @@ func _show_sheet(won: bool) -> void:
 		% [int(score_info["legs"]), Rules.SCORE_LEG, int(score_info["acts"]), Rules.SCORE_ACT,
 			int(score_info["deaths"]) * -Rules.SCORE_DEATH, int(score_info["cuts"]) * -Rules.SCORE_CUT])
 	lines.append(_w("种子 %06X", "SEED %06X") % run_seed)
-	lines.append(_w("空格：再来一局　R：同种子重开", "SPACE: new run   R: same seed"))
 	# The only thing this game keeps between runs is how far you got. Saying it out
 	# loud is the whole progression: there is no tree, no currency, no unlocks.
 	if segments.size() > prev_best:
@@ -1498,8 +1497,8 @@ func _open_pause() -> void:
 		_refresh()
 		return
 	pause_ui.briefing = {
-		"set": segments.size(),
-		"sets": MODULES,
+		"set": (_tutorial + 1) if _in_prologue() else _sets(),
+		"sets": TUTORIAL.size() if _in_prologue() else MODULES,
 		"pass": mini(room_pass + 1, required_passes),
 		"passes": required_passes,
 		"seed": run_seed,
@@ -1630,7 +1629,7 @@ func _refresh() -> void:
 		if desk.has_method("set_cut_preview"):
 			_hud.visible = false
 			desk.call("set_cut_preview", {
-				"active": true, "index": _selected + 1, "total": anchors.size(),
+				"active": true, "index": _selected, "total": anchors.size(),
 				"tag": tag, "take": int(p.get("leg", 1)), "time": float(p.get("time", 0.0)),
 				"lost": lost, "back_pass": back, "free": free_cut > 0 and not forced_cut,
 				"forced": forced_cut, "cuts": cut_stock,
