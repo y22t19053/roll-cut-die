@@ -252,7 +252,12 @@ func _exit_tree() -> void:
 			helper.queue_free()
 
 
+func _apply_difficulty() -> void:
+	_props.warn_scale = Rules.warning_scale(difficulty)
+	out_of_frame.warn_scale = Rules.warning_scale(difficulty)
+
 func _ready() -> void:
+	_apply_difficulty()
 	Engine.time_scale = 1.0 # A previous hit-stop must never outlive its run.
 	add_child(_foley)
 	out_of_frame.bind(self)
@@ -565,6 +570,7 @@ func _apply_run(d: Dictionary) -> void:
 	_final_outtakes = d.get("final_outtakes", []) if d.get("final_outtakes") is Array else []
 	_rng.seed = run_seed
 	difficulty = int(d.get("difficulty", difficulty))
+	_apply_difficulty()
 	required_passes = int(d.get("required_passes", PASSES))
 	mark_stock = int(d.get("mark_stock", mark_stock))
 	cut_stock = int(d.get("cut_stock", cut_stock))
@@ -1255,7 +1261,8 @@ func _pick_card(i: int) -> void:
 		leg_event = "extra" if _rng.randf() < 0.5 else "relight"
 	# The last two sets are the endgame: the crew speeds the dollies up before it
 	# starts dressing them, so the last set is faster *and* busier.
-	var hurry := hurry_for(segments.size(), MODULES)
+	# hurry is a divisor of mechanism periods: smaller pace makes the run harder.
+	var hurry := hurry_for(segments.size(), MODULES) / Rules.pace(difficulty)
 	var room: Dictionary = $Rooms.append_room(c.kind,c.variant,str(c.get("mod","")),last,leg_event,hurry)
 	segments.append(room)
 	if leg_event != "":
