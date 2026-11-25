@@ -7,7 +7,6 @@ const Logger = preload("res://scripts/core/logger.gd")
 const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
 const NightStage = preload("res://scripts/ui/night_stage.gd")
 const NightStageMusic = preload("res://scripts/ui/night_stage_music.gd")
-const RunScript = preload("res://scripts/relay/relay_run.gd")
 const Rules = preload("res://scripts/relay/relay_rules.gd")
 const Save = preload("res://scripts/relay/relay_save.gd")
 const ToyBridge = preload("res://scripts/relay/toy_bridge.gd")
@@ -17,6 +16,7 @@ static var _print_font: Font
 static var _print_font_probed := false
 
 const RUN_SCENE := "res://scenes/relay/run.tscn"
+const RUN_SCRIPT := "res://scripts/relay/relay_run.gd"
 const STUDIO_SLUG := "MACGUFFIN WORKS  //  SOUNDSTAGE NO. 04  ·  ORBIT 30°/S"
 const PAPER := Color("c8bfa8")
 const MODE_KEYS: Array[String] = ["relay.mode_novice", "relay.mode_expert", "relay.mode_master"]
@@ -229,7 +229,7 @@ func _build_call_sheet(zh: bool) -> void:
 			var set_number: int = int(here.get("sets", 1))
 			var act_number: int = int(here.get("act", 0)) + 1
 			cont.tooltip_text = ("棚 %02d / %d · 第 %d 节" if zh else "SET %02d / %d · ACT %d") % [
-				set_number, RunScript.MODULES, act_number]
+				set_number, Rules.MODULES, act_number]
 		else:
 			badge = "存档无法读取" if zh else "SAVE UNREADABLE"
 			cont.tooltip_text = Loc.ui("save.corrupt")
@@ -256,8 +256,8 @@ func _build_difficulty(zh: bool) -> void:
 	_body.add_child(section)
 	var tabs := _row(6)
 	section.add_child(tabs)
-	var locked := false
-	var unlock_hint := "通关上一档解锁" if zh else "Clear the previous tier to unlock"
+	var unlock_hints: Array[String] = []
+	var best_set := clampi(Rules.meta()["best_set"], 0, Rules.MODULES)
 	for tier: int in MODE_KEYS.size():
 		var key: String = MODE_KEYS[tier]
 		var text: String = Loc.ui(key) if Loc.STRINGS.has(key) else (MODE_ZH[tier] if zh else MODE_EN[tier])
@@ -268,11 +268,14 @@ func _build_difficulty(zh: bool) -> void:
 		tab.clip_text = false
 		tab.disabled = not Rules.unlocked(tier)
 		if tab.disabled:
+			var unlock_hint := ("%s 解锁：通关 %s（你最远 %d/%d）" if zh
+				else "%s unlocks on clearing %s (best %d/%d)") % [
+				MODE_EN[tier], MODE_EN[tier - 1], best_set, Rules.MODULES]
 			tab.text += "\n未解锁" if zh else "\nLOCKED"
 			tab.tooltip_text = unlock_hint
 			tab.focus_mode = Control.FOCUS_NONE
 			tab.draw.connect(_draw_lock.bind(tab))
-			locked = true
+			unlock_hints.append(unlock_hint)
 		tabs.add_child(tab)
 		_mode_tabs.append(tab)
 	_focus_rows.append(_mode_tabs.duplicate())
@@ -280,7 +283,7 @@ func _build_difficulty(zh: bool) -> void:
 	_mode_spec = _print("", 14, PAPER)
 	_mode_spec.name = "ModeCaption"
 	section.add_child(_mode_spec)
-	if locked:
+	for unlock_hint: String in unlock_hints:
 		section.add_child(_print(unlock_hint, 12, UiKit.DIM))
 	_update_modes()
 
@@ -373,6 +376,9 @@ func _build_ledger(zh: bool) -> void:
 		Loc.ui("final_cut.frame_up"), stats["frameup"],
 	]
 	heading.add_child(_print(verdicts, 10, ink))
+	var gap := Rules.archive_next_gap(stats["marks_total"])
+	if gap > 0:
+		ledger.add_child(_print(("下一级还差 %d 枚" if zh else "Marks to next rank: %d") % gap, 11, UiKit.DIM))
 	ledger.add_child(_rule(UiKit.RULE, 1))
 	var fields := _row(0)
 	ledger.add_child(fields)
@@ -568,15 +574,11 @@ func _toggle_language() -> void:
 
 
 func _on_new_game() -> void:
-	RunScript.pending_resume = {}
-	RunScript.next_seed = 0
-	_leave(RUN_SCENE)
+	_leave({})
 
 
 func _on_daily() -> void:
-	RunScript.pending_resume = {}
-	RunScript.next_seed = Rules.daily_seed()
-	_leave(RUN_SCENE)
+	_leave({}, Rules.daily_seed())
 
 
 func _on_continue() -> void:
@@ -584,18 +586,19 @@ func _on_continue() -> void:
 	if state.is_empty():
 		_rerender.call_deferred()
 		return
-	RunScript.pending_resume = state
-	RunScript.next_seed = 0
-	_leave(RUN_SCENE)
+	_leave(state)
 
 
-func _leave(path: String) -> void:
+func _leave(resume: Dictionary, seed: int = 0) -> void:
+	var run_script = load(RUN_SCRIPT)
+	run_script.pending_resume = resume
+	run_script.next_seed = seed
 	music.halt()
-	var err := get_tree().change_scene_to_file(path)
+	var err := get_tree().change_scene_to_file(RUN_SCENE)
 	if err == OK:
 		return
-	RunScript.pending_resume = {}
-	RunScript.next_seed = 0
+	run_script.pending_resume = {}
+	run_script.next_seed = 0
 	music.start()
 	Logger.error("cannot open relay run: %s" % error_string(err))
 	_failed = true

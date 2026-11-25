@@ -30,3 +30,7 @@ static func run(h, _tree = null) -> void:
 		for rank: int in range(5):
 			h.ok("archive rank %d has a name in %s" % [rank, language], not Rules.archive_name(rank).is_empty())
 	Loc.set_language(prior_language)
+
+	for edge: Array in [[0, 3], [2, 1], [3, 6], [40, 1], [41, 0], [99, 0], [-1, 3]]:
+		h.eq("archive gap at %d marks" % edge[0], Rules.archive_next_gap(edge[0]), edge[1])
+	h.eq("relay has sixteen sets", Rules.MODULES, 16)

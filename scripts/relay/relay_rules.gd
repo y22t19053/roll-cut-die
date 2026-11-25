@@ -2,6 +2,7 @@ extends RefCounted
 ## Relay progression is separate from campaign saves. Mode selection and all
 ## consumables are session-only; the highest unlocked difficulty is permanent.
 const Loc = preload("res://scripts/core/loc.gd")
+const MODULES := 16
 const _PATH := "user://rcd/relay_progress.cfg"
 const _META_PATH := "user://rcd/relay_meta.cfg"
 const _VERSION := 1
@@ -30,6 +31,7 @@ const _ARCHIVE_NAMES := [
 const _VERDICT_KEYS := {
 	"file_closed": "truth", "bury_registered": "coverup", "reframe_held": "frameup",
 }
+const _ARCHIVE_THRESHOLDS := [3, 9, 21, 41]
 const _MARK := [6, 6, 3]
 const _CUT := [3, 3, 2]
 static var selected_mode: int = 0
@@ -89,11 +91,18 @@ static func merge_meta(raw: Dictionary) -> Dictionary:
 
 
 static func archive_rank(marks_total: int) -> int:
-	if marks_total >= 41: return 4
-	if marks_total >= 21: return 3
-	if marks_total >= 9: return 2
-	if marks_total >= 3: return 1
-	return 0
+	for rank: int in _ARCHIVE_THRESHOLDS.size():
+		if marks_total < _ARCHIVE_THRESHOLDS[rank]:
+			return rank
+	return _ARCHIVE_THRESHOLDS.size()
+
+
+## How many more marks the archive needs for the next rank; 0 at the top rank.
+static func archive_next_gap(marks_total: int) -> int:
+	var rank := archive_rank(marks_total)
+	if rank == _ARCHIVE_THRESHOLDS.size():
+		return 0
+	return _ARCHIVE_THRESHOLDS[rank] - maxi(marks_total, 0)
 
 
 static func archive_name(rank: int) -> String:
