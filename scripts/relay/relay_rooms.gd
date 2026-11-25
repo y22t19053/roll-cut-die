@@ -116,7 +116,10 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 	for z in [-1,1]:
 		if pocket and z == hand:
 			for sx: float in [1.5, 7.5]:
-				_box(room,Vector3(sx,.48,z*2.94),Vector3(3.0,.96,.12),FLAT,true)
+				if z == -1 and sx == 1.5:
+					_frame_wall(room, 3.0)
+				else:
+					_box(room,Vector3(sx,.48,z*2.94),Vector3(3.0,.96,.12),FLAT,true)
 				_box(room,Vector3(sx,.91,z*2.94),Vector3(2.9,.09,.14),ink)
 			var pz: float = z*3.70
 			_box(room,Vector3(4.5,-.12,pz),Vector3(3.0,.24,1.52),DECK,true)
@@ -127,7 +130,10 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 			# gap is a way through and not a seam in the wall.
 			_box(room,Vector3(4.5,1.02,z*2.94),Vector3(3.2,.08,.16),WHITE)
 			continue
-		_box(room,Vector3(4.5,.48,z*2.94),Vector3(9,.96,.12),FLAT,true)
+		if z == -1:
+			_frame_wall(room, 9.0)
+		else:
+			_box(room,Vector3(4.5,.48,z*2.94),Vector3(9,.96,.12),FLAT,true)
 		_box(room,Vector3(4.5,.91,z*2.94),Vector3(8.84,.09,.14),ink)
 		# Twin grip bays make a narrow throat at each end, not a sealed door.
 		# THROAT walks them in to 1.62 m apart: the mouth is now a decision.
@@ -886,3 +892,12 @@ func _reduce_motion() -> bool:
 	if session == null: return false
 	var settings: Dictionary = session.get("settings")
 	return bool(settings.get("reduce_motion", false))
+
+## A 1.2 m clear crew door at x=1.6; before the letter scenery and past grip bays.
+func _frame_wall(room: Node3D, end: float) -> void:
+	for span: Vector2 in [Vector2(0, 1.0), Vector2(2.2, end)]:
+		_box(room, Vector3((span.x+span.y)*0.5,.48,-2.94), Vector3(span.y-span.x,.96,.12), FLAT, true)
+	_box(room, Vector3(1.6,1.14,-2.94), Vector3(1.4,.10,.20), WHITE)
+	_box(room, Vector3(1.6,-.12,-4.4), Vector3(2.4,.24,3.0), Color("242830"), true)
+	for z: float in [-4.9,-4.3,-3.7,-3.1]:
+		_box(room, Vector3(1.6,.012,z), Vector3(.16,.02,.28), WHITE)

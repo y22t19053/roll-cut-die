@@ -50,7 +50,7 @@
 |---|---|---|---|
 | 1 | 互联摄影棚 | 已合入 `master`（`46cef17`、`b394cc1`） | 走回旧棚是合法状态：每棚一套半开 Take 区间，旧棚 Ghost 留在自己录制的棚里；V2 存档记录位置与朝向，V1 真实存档仍能载入。 |
 | 2 | 新机关与片场道具 | 已合入 `master`（`ff813cc`、`d7832b7`） | 道具架 / 摇臂摄影机 / 备用胶卷 / 场记板曝光四类机关，双语预警 0.9 秒，判定可重复，Ghost 被拍到会变亮。 |
-| 3 | OUT OF FRAME 与 CUT 脱困 | 部分合入（回程已通，越界仍待做） | 已能走回旧棚并看到过去的穿越路线；玩家走出取景框的越界判定与 `CUT BACK` 逃生尚未实装（依赖 `docs/RCD_DESIGN_DECISION_LOG.md` §2 的预警红线）。 |
+| 3 | OUT OF FRAME 与 CUT 脱困 | Sprint 6 已实现（本分支，待主控合并与实机验收） | 同一 leg 第 3 次 NG 触发 2.5 秒可操作预警；过线或付费 CUT BACK 回 MARK 化解。脱景不扣光量，固定外景镜头、片场远景音与历史脚步引回 1.2 米缺口；无 CUT 必须步行返回。见 D-077。 |
 | 4 | Free-Blocking 整合 | 已合入候选（`6fae059`） | `scripts/relay/h_gantry.gd` 双层灯架作为几何件入主仓，垂直行走（`player.vertical_walk`）与桥上历史轨迹重放由 `tests/test_gantry.gd` 覆盖；尚未作为 Relay 房间类型接入。 |
 | 5 | WRAP·Final Cut | 已合入 `master`（`6db7bb8`、`bbd19c3`） | 12.60 秒十拍过场，剪影碎片来自本局真实轨迹与废条；Relay 终局不再依赖案件报告，判词由本局账本自裁（D-076）。 |
 

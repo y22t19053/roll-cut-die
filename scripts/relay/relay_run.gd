@@ -203,6 +203,8 @@ func _in_prologue() -> bool:
 func _sets() -> int:
 	return maxi(segments.size() - _prologue, 0)
 
+var out_of_frame := preload("res://scripts/relay/out_of_frame.gd").new()
+
 var _foley := preload("res://scripts/ui/foley.gd").new()
 
 func _exit_tree() -> void:
@@ -220,6 +222,8 @@ func _exit_tree() -> void:
 func _ready() -> void:
 	Engine.time_scale = 1.0 # A previous hit-stop must never outlive its run.
 	add_child(_foley)
+	out_of_frame.bind(self)
+	add_child(out_of_frame)
 	desk = load("res://scripts/relay/cutting_desk.gd").new()
 	add_child(desk)
 	desk.picked.connect(_pick_card)
@@ -369,6 +373,7 @@ static func _won_light(fast: int, need: int) -> bool:
 
 
 func _start_leg(back: bool) -> void:
+	out_of_frame.reset_leg()
 	leg_room = segments.size() - 1
 	_sync_track_ranges()
 	_reset_audio_tracking()
@@ -835,6 +840,7 @@ func _show_target() -> void:
 	_refresh()
 
 func _finish_leg() -> void:
+	out_of_frame.resolve()
 	_sample()
 	tracks.append(live)
 	_sync_track_ranges()
@@ -1263,6 +1269,15 @@ func _step_set_props() -> void:
 
 
 func _physics_process(dt: float) -> void:
+	out_of_frame.advance(dt)
+	if out_of_frame.state() == "OUT":
+		if out_of_frame.playable():
+			active_clock += dt
+			elapsed += dt
+			_sample()
+			for bay in $Rooms.bays(): $Rooms.set_clock(bay, elapsed)
+			_refresh()
+		return
 	var here := _room_at()
 	if here != _visited_room:
 		if _visited_room >= 0:
@@ -1471,6 +1486,7 @@ func _hit(source: int) -> bool:
 			desk.show_message(_w("接片续拍", "SPLICED"))
 		return false
 	deaths += 1
+	if phase == Mode.PLAY and not _in_prologue(): out_of_frame.note_ng()
 	_final_outtakes.append(FinalReel.relay_outtake(live, elapsed, "die", source))
 	score.cue("trap" if source == 0 else "hit")
 	rig.add_shake(1.0)
@@ -1511,6 +1527,7 @@ func _hit(source: int) -> bool:
 ## The call sheet. Win or lose, a run ends with one page that says what it was:
 ## how far, how many takes, how many deaths, and the seed to replay it.
 func _show_sheet(won: bool) -> void:
+	out_of_frame.resolve()
 	if not is_inside_tree(): return
 	if _final_cut != null: return
 	if won and not _final_cut_played:
@@ -1715,6 +1732,7 @@ func _press(key: int) -> void:
 						cut_stock -= 1
 						cuts_used += 1
 					if not forced_cut: _final_outtakes.append(FinalReel.relay_outtake(live, elapsed, "cut"))
+					out_of_frame.resolve()
 					forced_cut = false
 					_board_cut()
 					_leave_cut()
@@ -1726,6 +1744,10 @@ func _press(key: int) -> void:
 			KEY_ESCAPE:
 				_open_pause()
 			KEY_C:
+				if out_of_frame.state() != "IN":
+					out_of_frame.cut_back()
+					_refresh()
+					return
 				_foley.play(Foley.INSPECT)
 				phase = Mode.CUT
 				_selected = last_anchor
@@ -1733,6 +1755,7 @@ func _press(key: int) -> void:
 				_show_preview()
 				_hint("cut_desk", "↑ ↓ 选一段，空格才花 CUT。看片不要钱。", "↑ ↓ to pick a strip. Looking is free; SPACE spends the CUT.")
 			KEY_M:
+				if out_of_frame.state() == "OUT": return
 				if mark_stock > 0:
 					mark_stock -= 1
 					_checkpoint(true)
