@@ -20,7 +20,7 @@
 | **商店视觉物料剥离运行包**（`D-071`） | 导出预设 `exclude_filter` 排除 `visual/*` | 封面、胶囊图与 TOY 海报并非运行时资源；剔除后 `index.pck` 从 `23.08 MB` 降至 `20.33 MB`，零风险瘦身 | `export_presets.cfg` |
 | **开发桥接 Autoload 出包剥离流程**（`D-072`） | 仓库保留 `McpInteractionServer`，正式导出前后强制夹跑 `tools/strip_dev_autoload.py --strip` 与 `--restore` | `godot-bridge` 每次交互运行会自动写回该 Autoload；直接从仓库删行会导致下次测试后静默回归 Web 端 `File not found` 报错 | `tools/strip_dev_autoload.py` · `docs/WORKFLOW_GUIDE.md` |
 | **片场标准术语锁定** | 固化 `TAKE` / `NG` / `CUT` / `MARK` / `MEAL BREAK` / `COMPANY MOVE` / `LOCAL MOVE` / `SET CHANGE (REDRESS)` / `WRAP` / `MAGIC HOUR` / `OUT OF FRAME` | 让系统反馈与片场叙事合一；严禁把 `Company Move` 拼错成 `Compound Move`，严禁把 `Magic Hour` 泛化为整个游戏代称 | `docs/RCD_MASTER_PROJECT_CONTEXT.md` §4 |
-| **D-073 · 研发主控切换与三路 Codex 协作制**（本次接管） | Gemini 4 Carbon 担任唯一研发主控；Claude 退出固定研发编制；工程执行交由三路职责解耦、Git Worktree 物理隔离的 Codex CLI 执行端（A 核心机制 / B 界面美术 / C 测试与独立审查） | 消除多智能体在同一工作树并发改坏场景的冲突（当前脏 `master` 混杂两条流即为前车之鉴），建立可验证、可回滚的工业级流水线 | `docs/RCD_MULTI_AGENT_OPERATIONS.md` |
+| **D-073 · 研发主控切换与三路 Codex 协作制**（本次接管） | Gemini 4 Carbon 担任唯一研发主控；Claude 退出固定研发编制；工程执行交由三路职责解耦、Git Worktree 物理隔离的 Codex CLI 执行端（A 核心机制 / B 界面美术 / C 测试与独立审查） | 消除多智能体在同一工作树并发改坏场景的冲突（接管时的脏 `master` 混杂两条流即为前车之鉴），建立可验证、可回滚的工业级流水线 | `docs/RCD_MULTI_AGENT_OPERATIONS.md` |
 | **D-074 · 脏主工作区止血原则**（本次接管） | 在未将脏 `master` 的「TOY 计分桥接」与「Free-Blocking 残留（含 `title_screen.gd:437` 分叉）」拆入独立干净分支前，禁止从 `master` 导出覆盖任何构建 | 保护线上已参赛版本与本地唯一构建基线，杜绝新开局与续档进入不同场景的致命割裂 | `docs/RCD_ENGINEERING_STATUS.md` §2 |
 | **D-075 · 主菜单去原型化与片场物质化 UI 方向**（本次接管） | 主菜单升级拒绝赛博霓虹、毛玻璃卡片和单张 AI 死图底板；确立以**片场通告单（Call Sheet）、场记板（Clapperboard）、遮光旗与实景摄影棚深度**为核心的 Godot 原生可交互界面 | 让玩家从打开标题页第一秒就进入「片场重拍」的物质语境，同时完整保留全部 10 项既有交互功能与键鼠/双语无障碍体验 | `docs/RCD_CURRENT_ROADMAP.md` · Stage E 计划 |
 
@@ -42,9 +42,9 @@
 
 ---
 
-## 3. 尚未解决的设计与工程争议（OPEN CONTROVERSIES & PENDING DECISIONS）
+## 3. 接管时的争议记录（C-01、C-02 的结案见 §4）
 
-### C-01 · 原地静止 Ghost 出生点连续碰撞死循环（高优待决）
+### C-01 · 原地静止 Ghost 出生点连续碰撞死循环（Sprint 1 已结案）
 - **争议焦点**：当玩家在某条成功/记录段起点几乎未发生位移，生成的静止 Ghost 会堵死出生点，触发高达 20 次连环出生暴毙（见 Mnemon 审计文档 `36638903`）。
 - **候选方案对比**：
   - *方案 1（时间宽限窗）*：每次开拍/重拍前 `0.60–0.75s` 赋予当前玩家对历史 Ghost 的短暂穿透保护（视觉半透明闪烁提示）。优点：不丢弃任何历史记录；代价：极短距离起点博弈时有半秒无碰撞窗口。
@@ -56,9 +56,17 @@
 - **待裁决动作**：在冲刺 1 核对 `relay_rules.gd` 与 `blocking_run.gd` 实测单局时长，将文档口径与难度曲线正式统一，消除双轨描述。
 
 ### C-03 · `relay`（参数化点阵快切）与 `free-blocking`（手搭摄影棚自由选机位）的合流关系
-- **争议焦点**：`master` 主线跑的是稳定成熟的 `scenes/relay/run.tscn`，而 `free-blocking-sets` 分支（`28a8e6b`）与脏工作区正在推进带 `Meal Break`、`Company Move` 和自由机位覆盖（Coverage）的 `blocking.tscn`。
+- **争议焦点**：`master` 主线跑的是稳定成熟的 `scenes/relay/run.tscn`，而 `free-blocking-sets` 分支（`28a8e6b`）与接管时的脏工作区曾推进带 `Meal Break`、`Company Move` 和自由机位覆盖（Coverage）的 `blocking.tscn`。
 - **主控裁决路线**：**双轨隔离推进，禁止硬切覆盖**——主菜单默认 `New Game` 先恢复指向经过 646 断言与线上赛事验证的 `run.tscn`；`free-blocking` 在独立分支打磨成熟后，作为可选「自由调度模式（Studio Blocking）」或下一大版本升级合入。
 
 ### C-04 · 地图翻景（Redress / Set Change）与非正交拼接后的 Ghost 坐标基准
 - **争议焦点**：当场地发生 180° 翻转、局部重搭或未来引入 30°/45°/60°/120° 多出口拼接时，历史 Ghost 应当**锁死录制时的绝对世界坐标**（哪怕穿墙/悬空也要忠实重演当时的物理空间），还是**跟随片场局部坐标系一起旋转变换**？
 - **当前原则**：基础规则优先保护**录制时的真实世界轨迹**；若特殊翻景机关需要局部坐标跟随，必须作为显式标记的特殊片场设备单独定义，严禁暗中篡改底层 Ghost 坐标系。
+
+## 4. 2026-11-25 · Sprint 1–4 裁决
+
+- **C-01、C-02 已结案**。仅同位出生的玩家与该 Ghost 暂时豁免，分开后再相遇仍会 NG。`ecc261d` 覆盖空轨迹与出生重叠。正式 Relay 为四幕、每幕三棚，显示进度读取 RunScript。
+- **标题方向已交付**。`89b6451`、`4f0f1ea` 确立印刷通告单与三重曝光的 3D 夜棚；双语标题图见 `visual/preview/`。
+- **Sprint 3 局内界面**。抽卡与结算沿用手工通告单。Steenbeck 放大镜在 `Mode.CUT` 标注回退点与耗费，给中央轨迹留出视野。
+- **Sprint 4 视听**。22,050 Hz D 小调配乐推动行动节奏，动作由 Foley / FX 标识。静止超过两秒时淡入 −34 dB 剧组低语；DEAI #1–#6 限于表现层，碰撞、计时、库存与抽卡概率沿用主线。
+- **交付边界**。三个工作树按文件分工；主控负责合并、Godot 回归和实机视听验收。
