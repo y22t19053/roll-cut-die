@@ -203,6 +203,22 @@ func _in_prologue() -> bool:
 func _sets() -> int:
 	return maxi(segments.size() - _prologue, 0)
 
+## How briskly the crew runs the rigs on set `done` of `total`. The day wears on:
+## each act is a little faster than the last, and the last two sets are the
+## endgame. `hurry` divides the dollies' periods in `relay_rooms.gd`, so a larger
+## number is a faster, meaner set — never a longer patience.
+static func hurry_for(done: int, total: int) -> float:
+	if total <= 1 or done >= total - 1:
+		return 1.25
+	var per := maxi(SETS_PER_ACT, 1)
+	var act := clampi(int(done / per), 0, maxi(ACTS - 1, 0))
+	var base := 1.0
+	match act:
+		1: base = 1.05
+		2: base = 1.11
+		3: base = 1.17
+	return maxf(base, 1.2) if done >= total - 2 else base
+
 var out_of_frame := preload("res://scripts/relay/out_of_frame.gd").new()
 
 var _foley := preload("res://scripts/ui/foley.gd").new()
@@ -1184,9 +1200,7 @@ func _pick_card(i: int) -> void:
 		leg_event = "extra" if _rng.randf() < 0.5 else "relight"
 	# The last two sets are the endgame: the crew speeds the dollies up before it
 	# starts dressing them, so the last set is faster *and* busier.
-	var hurry := 1.0
-	if last: hurry = 1.25
-	elif segments.size() >= MODULES - 2: hurry = 1.12
+	var hurry := hurry_for(segments.size(), MODULES)
 	var room: Dictionary = $Rooms.append_room(c.kind,c.variant,str(c.get("mod","")),last,leg_event,hurry)
 	segments.append(room)
 	if leg_event != "":
