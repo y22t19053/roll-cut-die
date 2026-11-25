@@ -23,6 +23,7 @@ var _splice := false
 var _items := false
 var _cards := []
 var _message := ""
+var _message_on_sheet := false
 var _remaining := 0.0
 var _result := -1
 var _sheet_title := ""
@@ -107,9 +108,10 @@ func hide_cut_preview() -> void:
 		_refresh()
 
 
-func show_message(text: String) -> void:
+func show_message(text: String, seconds := 3.0, on_sheet := false) -> void:
+	_message_on_sheet = on_sheet
 	_message = text
-	_remaining = 3.0
+	_remaining = seconds
 	_refresh()
 
 
@@ -233,6 +235,8 @@ class Sheet extends Control:
 			draw_picker()
 		elif not d._sheet_lines.is_empty():
 			draw_call_sheet()
+			if d._message_on_sheet and d._remaining > 0:
+				draw_notice(d._message)
 		elif d._result >= 0:
 			var x := w * 0.5 - 192
 			var y := h * 0.5 - 60

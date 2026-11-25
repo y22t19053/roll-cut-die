@@ -19,6 +19,7 @@ const FrameFX = preload("res://scripts/relay/frame_fx.gd")
 const Save = preload("res://scripts/relay/relay_save.gd")
 const TouchPad = preload("res://scripts/relay/touch_pad.gd")
 const ToyBridge = preload("res://scripts/relay/toy_bridge.gd")
+const Phrasebook = preload("res://scripts/relay/phrasebook.gd")
 const SetProps = preload("res://scripts/relay/set_props.gd")
 const FinalCut = preload("res://scripts/relay/final_cut.gd")
 const FinalReel = preload("res://scripts/relay/final_cut_reel.gd")
@@ -247,6 +248,8 @@ func _ready() -> void:
 	add_child(_foley)
 	out_of_frame.bind(self)
 	add_child(out_of_frame)
+	out_of_frame.changed.connect(func(value: String) -> void:
+		if value == "WARN": _teach.call_deferred("frame"))
 	desk = load("res://scripts/relay/cutting_desk.gd").new()
 	add_child(desk)
 	desk.picked.connect(_pick_card)
@@ -437,6 +440,7 @@ func _start_leg(back: bool) -> void:
 	_arrival_locked = false
 	phase = Mode.PLAY
 	player.vertical_walk = $Rooms.is_gantry(_room_at())
+	if player.vertical_walk: _teach.call_deferred("gantry")
 	player.set_frozen(false)
 	rig.set_physics_process(true)
 	live = Track.new()
@@ -446,6 +450,8 @@ func _start_leg(back: bool) -> void:
 	if _props.room != room_node:
 		var prop_spec: Dictionary = {} if _in_prologue() else segments.back()
 		_props.build(room_node, prop_spec, run_seed, ri)
+	if not _props.active_props().is_empty():
+		_teach.call_deferred("props")
 	_props.reset_take(_prop_film_room == ri)
 	_sample()
 	_restart_actors()
@@ -486,6 +492,16 @@ func _hint(key: String, zh: String, en: String) -> void:
 func _show_notice(text: String, seconds := 3.0) -> void:
 	_notice = text
 	_notice_left = seconds
+
+
+## Deferred event notices let the existing hints claim their slot first.
+func _teach(kind: String) -> bool:
+	if _notice_left > 0.0: return false
+	if not Phrasebook.mark(kind): return false
+	_show_notice(Phrasebook.line(kind, Loc.language == "zh"), 4.0)
+	desk.show_message(_notice, 4.0, kind == "final")
+	_notice = ""
+	return true
 
 
 ## Everything a run remembers, in the order it was paid for.
@@ -1322,6 +1338,7 @@ func _step_set_props() -> void:
 
 
 func _physics_process(dt: float) -> void:
+	_notice_left = maxf(0.0, _notice_left - dt)
 	out_of_frame.advance(dt)
 	if out_of_frame.state() == "OUT":
 		if out_of_frame.playable():
@@ -1358,7 +1375,6 @@ func _physics_process(dt: float) -> void:
 	elapsed += dt
 	grace = maxf(grace-dt,0)
 	_top_up_grace()
-	_notice_left -= dt
 	if not _in_prologue() and not slate.is_running() and is_instance_valid(_props.room):
 		_step_set_props()
 	if elapsed >= _next_sample:
@@ -1608,6 +1624,7 @@ func _show_sheet(won: bool) -> void:
 			_final_cut.finished.connect(func() -> void:
 				_final_cut.queue_free()
 				_final_cut = null
+				_teach("final")
 				_settle_sheet(true), CONNECT_ONE_SHOT)
 			_final_cut.play(reel)
 			return
@@ -1878,9 +1895,10 @@ func _refresh() -> void:
 	else:
 		_hud.visible = false
 		if desk.has_method("hide_cut_preview"): desk.call("hide_cut_preview")
-	if _notice_left > 0:
+	if _notice_left > 0 and not _notice.is_empty():
 		desk.show_message(_notice)
-		_notice_left = 0
+		_notice_left = maxf(_notice_left, 3.0)
+		_notice = ""
 
 ## The board, three ways. It never changes state itself: it names what just
 ## happened and gets out of the way, so the player learns one object for all of
