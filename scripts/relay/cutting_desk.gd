@@ -141,9 +141,11 @@ func hide_draw() -> void:
 
 
 ## The leaderboard can answer after the sheet is already on screen.
-func append_sheet_lines(more: Array) -> void:
+func append_sheet_lines(more: Array, before_last := false) -> void:
 	if not more.is_empty():
+		var footer: Array = [_sheet_lines.pop_back()] if before_last and not _sheet_lines.is_empty() else []
 		_sheet_lines.append_array(more)
+		_sheet_lines.append_array(footer)
 		_refresh()
 
 
