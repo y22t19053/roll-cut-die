@@ -1,6 +1,7 @@
 extends Node3D
 ## Each leg is a real recording. Geometry and supplies belong to the whole run;
 ## only a bookmark made in the current leg may restore that leg's progress.
+const Foley = preload("res://scripts/ui/foley.gd")
 const Player = preload("res://scripts/player/player.gd")
 const Rig = preload("res://scripts/camera/camera_rig.gd")
 const Orbit = preload("res://scripts/camera/roll_modes.gd").ORBIT
@@ -54,6 +55,11 @@ var act_mod := ""
 var act_grace := GRACE
 var leg_event := "" # How the crew dressed this set: relight / extra / guide.
 var _riding := false # On the wire: input is gone and the deck cannot reach you.
+var _still_time: float = 0.0
+var _still_position: Vector3 = Vector3.ZERO
+var _on_belt: bool = false
+var _in_key: bool = false
+var _on_catwalk: bool = false
 var _wire_used := false # The rig is good for one pass per set.
 # One death, one card. Without this the same ghost could bill you every frame
 # while the board was still talking, which stacked respawns until nothing moved.
@@ -333,6 +339,9 @@ static func _won_light(fast: int, need: int) -> bool:
 
 
 func _start_leg(back: bool) -> void:
+	_reset_audio_tracking()
+	score.set_act(act)
+	score.set_final_sprint(required_passes >= 2 and room_pass + 1 >= required_passes)
 	returning = back
 	route.clear()
 	var room_node := $Rooms.get_child(segments.size() - 1) as Node3D
@@ -610,6 +619,8 @@ func _restore(i: int) -> void:
 	_wire_used = false
 	desk.clear_sheet()
 	score.resume_beds()
+	_reset_audio_tracking()
+	score.set_final_sprint(required_passes >= 2 and room_pass + 1 >= required_passes)
 	# A respawn you cannot act on is not a respawn. The checkpoint is where the
 	# take was, not a promise that the truck has left it.
 	grace = maxf(act_grace, 2.0)
@@ -772,12 +783,24 @@ func _finish_leg() -> void:
 	if _won_light(_fast_legs, required_passes):
 		_fast_legs = 0
 		mark_stock += 1
+		score.cue("light_bonus")
+		fx.flash(Color("9ceccb"), 0.14, 0.02, 0.24)
+		fx.edge_pulse(Color("ffde79"))
 		_show_notice(_w("这一棚抢下天光。多给你一枚打点。", "You beat the light. One spare MARK."), 2.5)
 	if room_pass < required_passes:
 		_save_run() # One take is in the can; a quit now costs nothing.
 		score.cue("line")
+		fx.edge_pulse(Color("9ceccb"), 0.14)
+		if required_passes >= 2 and room_pass == required_passes - 1:
+			# Let the line's two notes land before the sprint answers them.
+			get_tree().create_timer(0.18).timeout.connect(func() -> void:
+				if phase == Mode.PLAY and not _dying: score.cue("sprint"))
+			score.set_final_sprint(true)
+			fx.flash(Color("ffde79"), 0.10, 0.02, 0.18)
+			fx.edge_pulse(Color("ffde79"))
 		_start_leg(not returning)
 		return
+	score.set_final_sprint(false)
 	# The prologue hands the run over one set at a time and never asks a question:
 	# no doors, no tray, no contract until the four lessons are done.
 	if _in_prologue():
@@ -1105,6 +1128,7 @@ func _start_wire_ride() -> void:
 	if ride.is_empty(): return
 	_riding = true
 	_wire_used = true
+	score.cue("wire")
 	player.set_frozen(true)
 	rig.set_physics_process(false)
 	_show_notice(_w("剧组把你吊过去了。","The crew flies you across."), 2.0)
@@ -1126,6 +1150,8 @@ func _end_wire_ride() -> void:
 	_show_target()
 
 func _leave_cut() -> void:
+	if desk.has_method("hide_cut_preview"): desk.call("hide_cut_preview")
+	_hud.visible = false
 	_close_preview()
 	phase = Mode.PLAY
 	player.set_frozen(false)
@@ -1134,7 +1160,26 @@ func _leave_cut() -> void:
 	for g in _actors: g.playing = not g.spent
 	_show_target()
 
+func _reset_audio_tracking() -> void:
+	_still_time = 0.0
+	_still_position = player.global_position
+	_on_belt = false
+	_in_key = false
+	_on_catwalk = false
+	score.set_stillness(0.0)
+
+
 func _physics_process(dt: float) -> void:
+	var displacement: Vector3 = player.global_position - _still_position
+	_still_position = player.global_position
+	if phase == Mode.PLAY and not slate.is_running() and not _dying and not _riding:
+		if Vector2(displacement.x, displacement.z).length() < 0.06 * dt:
+			_still_time += dt
+		else:
+			_still_time = 0.0
+	else:
+		_still_time = 0.0
+	score.set_stillness(_still_time)
 	if phase != Mode.PLAY: return
 	# The card is up. Nothing on the deck is allowed to bill you again while it
 	# is talking, or one ghost standing on the checkpoint bills you every frame.
@@ -1162,10 +1207,19 @@ func _physics_process(dt: float) -> void:
 	player.global_position.y = lerpf(player.global_position.y, floor_h + 0.05, clampf(dt*14.0, 0.0, 1.0))
 	# The deck can be doing something to you. The belt answers to the set, so a
 	# turned set carries you the other way without any new rule.
-	player.set_push($Rooms.belt_push(player.global_position, segments.size()-1))
+	var belt: Vector3 = $Rooms.belt_push(player.global_position, segments.size()-1)
+	player.set_push(belt)
+	var on_belt: bool = belt.length_squared() > 0.0
+	if on_belt and not _on_belt: score.cue("belt")
+	_on_belt = on_belt
+	var on_catwalk: bool = player.global_position.y > 0.35
+	if on_catwalk and not _on_catwalk: score.cue("catwalk")
+	_on_catwalk = on_catwalk
 	# On the green screen's key square you are not in the plate: the crew, the
 	# dolly and your own past all pass through where you are standing.
 	var keyed: bool = $Rooms.key_at(player.global_position, segments.size()-1)
+	if keyed and not _in_key: score.cue("key_safe")
+	_in_key = keyed
 	if grace <= 0 and not keyed:
 		var reach: float = Ghost.DANGER_RADIUS + Player.RADIUS
 		for g in _actors:
@@ -1199,11 +1253,13 @@ func _physics_process(dt: float) -> void:
 	if inside and not _arrival_locked:
 		cursor += 1
 		# Crossing is the one thing you do hundreds of times: it gets a mark, not
-		# a celebration. A short cool wash, no sound, no number on screen.
+		# a celebration. A short cool wash and a two-note gate answer.
 		fx.flash(Color("9ceccb"), 0.10, 0.0, 0.12)
 		if cursor == route.size():
 			_finish_leg()
 			return
+		score.cue("line")
+		fx.edge_pulse(Color("9ceccb"), 0.14)
 		_checkpoint(false)
 		_show_target()
 	_track_gaps()
@@ -1506,16 +1562,19 @@ func _press(key: int) -> void:
 			KEY_C, KEY_ESCAPE:
 				if not forced_cut: _leave_cut()
 			KEY_UP:
+				_foley.play(Foley.INSPECT)
 				_selected = posmod(_selected-1,anchors.size())
 				_show_preview()
 			KEY_DOWN:
+				_foley.play(Foley.INSPECT)
 				_selected = posmod(_selected+1,anchors.size())
 				_show_preview()
 			KEY_SPACE, KEY_ENTER:
 				# The first splice of the run is free: knowing what a CUT costs
 				# has to happen before it can cost anything.
-				var cost := 0 if (free_cut > 0 and not forced_cut) else 1
+				var cost: int = 0 if (free_cut > 0 and not forced_cut) else 1
 				if cut_stock >= cost:
+					_foley.play(Foley.SPLICE)
 					if cost == 0:
 						free_cut = 0
 						desk.show_message(_w("第一次剪回不收钱。", "The first splice is free."))
@@ -1526,11 +1585,14 @@ func _press(key: int) -> void:
 					_board_cut()
 					_leave_cut()
 					_restore(_selected)
+				else:
+					_foley.play(Foley.DENY)
 	elif phase == Mode.PLAY:
 		match key:
 			KEY_ESCAPE:
 				_open_pause()
 			KEY_C:
+				_foley.play(Foley.INSPECT)
 				phase = Mode.CUT
 				_selected = last_anchor
 				_freeze()
@@ -1540,8 +1602,12 @@ func _press(key: int) -> void:
 				if mark_stock > 0:
 					mark_stock -= 1
 					_checkpoint(true)
+					_foley.play(Foley.MARK)
+					fx.flash(Color("ffde79"), 0.09, 0.01, 0.14)
 					_notice = _w("已标记；失手会自动回到这里。","Marked. A collision returns you here.")
-				else: _notice = _w("标记已用完。","No MARKs left.")
+				else:
+					_foley.play(Foley.DENY)
+					_notice = _w("标记已用完。","No MARKs left.")
 				_notice_left = 2.5
 	_refresh()
 
@@ -1556,18 +1622,28 @@ func _refresh() -> void:
 		desk.update_run(_tutorial + 1,TUTORIAL.size(),mini(room_pass+1,required_passes),required_passes,mark_stock,cut_stock,splice.has_splice(),zh)
 	else:
 		desk.update_run(_sets(),MODULES,mini(room_pass+1,required_passes),required_passes,mark_stock,cut_stock,splice.has_splice(),zh)
-	_hud.visible = phase == Mode.CUT
-	if _hud.visible:
-		var p := anchors[_selected]
-		var tag := ("MARK %d" % int(p.get("number",0))) if p.manual else _w("起点","START")
-		# What the CUT costs, in seconds you already walked, and in passes you
-		# gave back. Looking is free; this line is the only place the price shows.
-		var lost := maxf(elapsed - float(p.time), 0.0)
-		var back := maxi(room_pass - int(p.get("pass", room_pass)), 0)
-		var price := _w("剪回去：少 %.1f 秒走位" % lost, "SPLICE BACK: %.1f s of walking" % lost)
-		if back > 0:
-			price += _w("，本棚回到第 %d 趟" % (back + 1), ", back to pass %d" % (back + 1))
-		_hud.text = _w("剪辑台　↑ ↓　%02d / %02d", "CUT DESK   ↑ ↓   %02d / %02d") % [_selected+1, anchors.size()] + "\n%s · TAKE %02d · %.1fs\n" % [tag,p.leg,p.time] + price + "\n" + _w("空格：剪回　−1 CUT　·　C 退出（看片不要钱）", "SPACE: splice   −1 CUT   ·   C to back out (looking is free)")
+	if phase == Mode.CUT and not anchors.is_empty():
+		var p: Dictionary = anchors[_selected]
+		var tag: String = ("MARK %d" % int(p.get("number", 0))) if bool(p.get("manual", false)) else _w("起点", "START")
+		var lost: float = maxf(elapsed - float(p.get("time", 0.0)), 0.0)
+		var back: int = maxi(room_pass - int(p.get("pass", room_pass)), 0)
+		if desk.has_method("set_cut_preview"):
+			_hud.visible = false
+			desk.call("set_cut_preview", {
+				"active": true, "index": _selected + 1, "total": anchors.size(),
+				"tag": tag, "take": int(p.get("leg", 1)), "time": float(p.get("time", 0.0)),
+				"lost": lost, "back_pass": back, "free": free_cut > 0 and not forced_cut,
+				"forced": forced_cut, "cuts": cut_stock,
+			}, zh)
+		else:
+			_hud.visible = true
+			var price := _w("剪回去：少 %.1f 秒走位" % lost, "SPLICE BACK: %.1f s of walking" % lost)
+			if back > 0:
+				price += _w("，本棚回到第 %d 趟" % (back + 1), ", back to pass %d" % (back + 1))
+			_hud.text = _w("剪辑台　↑ ↓　%02d / %02d", "CUT DESK   ↑ ↓   %02d / %02d") % [_selected+1, anchors.size()] + "\n%s · TAKE %02d · %.1fs\n" % [tag,p.leg,p.time] + price + "\n" + _w("空格：剪回　−1 CUT　·　C 退出（看片不要钱）", "SPACE: splice   −1 CUT   ·   C to back out (looking is free)")
+	else:
+		_hud.visible = false
+		if desk.has_method("hide_cut_preview"): desk.call("hide_cut_preview")
 	if _notice_left > 0:
 		desk.show_message(_notice)
 		_notice_left = 0
@@ -1649,7 +1725,7 @@ func _rotate_stage() -> void:
 	tw.tween_method(_apply_stage_angle, a0, a0 + SET_TURN, 0.45)
 	rig.add_shake(0.35)
 	fx.flash(Color("cfd6e0"), 0.16, 0.02, 0.20)
-	score.cue("choose")
+	score.cue("stage_turn")
 
 
 func _apply_stage_angle(a: float) -> void:

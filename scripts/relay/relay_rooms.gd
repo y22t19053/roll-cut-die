@@ -53,6 +53,8 @@ var _wires := {}
 var _notes := {}
 var _plans := {}
 var _spots := {}
+var _off_duty_crew: Dictionary = {}
+var _flicker_lamps: Dictionary = {}
 ## You are on the hook when you stand on the painted mark: the rig does the rest.
 func wire_at(world_pos: Vector3, room_index: int) -> bool:
 	if not _wires.has(room_index): return false
@@ -302,6 +304,8 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 		_buffer(room,0,-1)
 		_line(room,0)
 	_dress(room, kind, ink, variant)
+	if _count == 1 or _count == 2 or (_count >= 5 and _count % 3 == 2):
+		_off_duty(room, variant)
 	if is_instance_valid(_cap):
 		for part: MeshInstance3D in _cap.find_children("*","MeshInstance3D",true,false): part.mesh = null
 		_cap.get_parent().remove_child(_cap)
@@ -333,6 +337,7 @@ func append_room(kind: String, variant: int, mod := "", final := false, event :=
 ## are five places rather than five wall layouts. Nothing here is solid: dressing
 ## must never change a route or a timing, only what the room looks like.
 func _dress(room: Node3D, kind: String, ink: Color, variant: int) -> void:
+	var first_prop: int = room.get_child_count()
 	var side := 1.0 if variant % 2 == 0 else -1.0
 	# A strip of paint down the lane: this is the family's colour on the deck.
 	_box(room, Vector3(LENGTH * 0.5, .011, side * 2.62), Vector3(LENGTH - 1.2, .02, .30), ink.darkened(0.35))
@@ -341,7 +346,10 @@ func _dress(room: Node3D, kind: String, ink: Color, variant: int) -> void:
 	# crew left on the deck.
 	_box(room, Vector3(7.25, .014, 2.24), Vector3(.42, .02, .30), Color("e9dfc4"))
 	_box(room, Vector3(7.55, .20, 2.42), Vector3(.05, .40, .05), IRON)
-	_box(room, Vector3(7.55, .42, 2.42), Vector3(.13, .10, .13), Color("ffde79"))
+	var cap: MeshInstance3D = _box(room, Vector3(7.55, .42, 2.42), Vector3(.13, .10, .13), Color("ffde79"))
+	if _count >= 2:
+		cap.material_override = cap.material_override.duplicate()
+		_flicker_lamps[_count] = {"cap": cap, "period": 42.0 + float(posmod(_count * 17, 25))}
 	_notes[_count] = Vector3(7.25, .05, 2.24)
 	# The one object in this set that belongs to this family alone. Walking near it
 	# plays the family's voice once — the loop says which room, this says where.
@@ -386,6 +394,62 @@ func _dress(room: Node3D, kind: String, ink: Color, variant: int) -> void:
 			# Two bends: a duct and a painted mark where a rig used to stand.
 			_box(room, Vector3(LENGTH * 0.5, .32, side * 2.55), Vector3(LENGTH - 1.6, .55, .5), IRON)
 			_box(room, Vector3(7.2, .02, -side * 2.1), Vector3(1.4, .02, 1.4), ink.darkened(0.45))
+
+	# Only new, non-solid dressing meshes. Structural geometry is never rotated.
+	for i: int in range(first_prop, room.get_child_count()):
+		var prop: MeshInstance3D = room.get_child(i) as MeshInstance3D
+		if prop == null or prop.get_child_count() > 0: continue
+		var box: BoxMesh = prop.mesh as BoxMesh
+		if box == null or box.size.y < 0.15 or absf(prop.position.z) < 2.3: continue
+		var sign_yaw: float = -1.0 if posmod(i + variant, 2) == 0 else 1.0
+		prop.rotation.y = deg_to_rad(sign_yaw * (2.5 + float(posmod(_count * 7 + variant * 3 + i, 44)) * 0.1))
+	var kicked: MeshInstance3D = _box(room, Vector3(5.9, .20, 2.76), Vector3(.42, .40, .32), FLAT.darkened(0.18), false)
+	kicked.name = "KickedCrate"
+	kicked.rotation.y = deg_to_rad(13.0 + float(posmod(_count + variant, 4)))
+
+
+func _off_duty(room: Node3D, variant: int) -> void:
+	var crew := Node3D.new()
+	crew.name = "OffDutyCrew"
+	room.add_child(crew)
+	var z: float = 2.78 if variant % 2 == 0 else -2.78
+	crew.position = Vector3(6.4, 0.0, z)
+	_box(crew, Vector3(0, .78, 0), Vector3(.26, .62, .25), Color("343945"), false)
+	_box(crew, Vector3(0, 1.20, 0), Vector3(.20, .23, .20), Color("887c70"), false)
+	var legs: Array[MeshInstance3D] = []
+	for side: float in [-1.0, 1.0]:
+		legs.append(_box(crew, Vector3(0, .24, side * .085), Vector3(.12, .46, .12), IRON, false))
+	_box(crew, Vector3(.16, .65, .12), Vector3(.32, .18, .27), Color("6b6259"), false)
+	# A purely scenic door frame beyond the end of the unchanged perimeter.
+	for x: float in [9.18, 9.70]:
+		_box(room, Vector3(x, .8, z), Vector3(.07, 1.6, .07), IRON, false)
+	_box(room, Vector3(9.44, 1.62, z), Vector3(.59, .08, .08), IRON, false)
+	_off_duty_crew[_count] = {"node": crew, "legs": legs}
+
+
+func _ambient_clock(room_index: int, t: float) -> void:
+	if _off_duty_crew.has(room_index):
+		var data: Dictionary = _off_duty_crew[room_index]
+		var crew: Node3D = data["node"]
+		crew.position.x = minf(6.4 + maxf(t, 0.0) * 1.15, 9.6)
+		crew.visible = crew.position.x < 9.4
+		var fade: float = smoothstep(9.05, 9.4, crew.position.x)
+		for mesh: MeshInstance3D in crew.get_children(): mesh.transparency = fade
+		var legs: Array[MeshInstance3D] = data["legs"]
+		for i: int in legs.size():
+			legs[i].rotation.z = sin(t * 9.0 + float(i) * PI) * 0.24
+	if _flicker_lamps.has(room_index):
+		var lamp: Dictionary = _flicker_lamps[room_index]
+		var cap: MeshInstance3D = lamp["cap"]
+		var period: float = float(lamp["period"])
+		var clock: float = fposmod(maxf(t, 0.0), period)
+		var power: float = 1.0
+		if not _reduce_motion():
+			if clock >= period - 0.12: power = 0.0
+			elif clock >= period - 0.16: power = 0.35
+		var material: StandardMaterial3D = cap.material_override as StandardMaterial3D
+		material.emission_energy_multiplier = 0.65 * power
+		material.albedo_color = Color("ffde79").lerp(Color("343139"), 1.0 - power)
 
 ## Where this family's signature object stands, in world space. The game plays
 ## that family's voice when the player brushes it.
@@ -610,6 +674,7 @@ func _stall_t(room_index: int,t: float) -> float:
 	return t-float(d["stall"])
 
 func set_clock(room_index: int,t: float) -> void:
+	_ambient_clock(room_index, t)
 	if room_index<0 or room_index>=_dollies.size(): return
 	var te := _stall_t(room_index,t)
 	for d: Dictionary in _dollies[room_index]: d["node"].position.z = _z_of(d,te)
@@ -655,12 +720,25 @@ func notice_player(world_pos: Vector3, room_index: int, dt: float) -> void:
 			if absf(want - float(r.get("walk_yaw", 0.0))) > PI * 0.5:
 				want += PI if want < 0.0 else -PI
 		body.rotation.y = lerpf(body.rotation.y, want, clampf(dt * 14.0, 0.0, 1.0))
-		head.rotation.y = lerpf(head.rotation.y, 0.0, clampf(dt * 6.0, 0.0, 1.0))
 		if float(r["look"]) <= 0.0:
 			r["rest"] = 5.0
 	elif float(r["rest"]) > 0.0:
 		r["rest"] = float(r["rest"]) - dt
 		body.rotation.y = lerpf(body.rotation.y, float(r.get("walk_yaw", 0.0)), clampf(dt * 4.0, 0.0, 1.0))
+
+	var dist: float = Vector2(p.x, p.z).length()
+	var head_time: float = float(r.get("head_time", 0.0))
+	var head_seen: bool = bool(r.get("head_seen", false))
+	if dist >= 2.5: r["head_seen"] = false
+	if dist < 2.5 and not head_seen and head_time <= 0.0:
+		head_time = 0.90 # 0.25 turn, 0.40 hold, 0.25 return.
+		r["head_seen"] = true
+		var angle: float = wrapf(atan2(p.x, p.z) - body.rotation.y, -PI, PI)
+		r["head_angle"] = clampf(angle, -PI * 0.28, PI * 0.28)
+	head_time = maxf(head_time - dt, 0.0)
+	r["head_time"] = head_time
+	var head_target: float = float(r.get("head_angle", 0.0)) if head_time > 0.25 else 0.0
+	head.rotation.y = move_toward(head.rotation.y, head_target, dt * PI * 1.12)
 
 ## What the deck is doing under your feet here. Stage-local, so a set that has been
 ## turned end for end pushes you the other way in the world — the belt answers to
@@ -789,3 +867,11 @@ func _box(root: Node3D, at: Vector3, size: Vector3, color: Color, solid := false
 		mi.add_child(body)
 		body.add_child(cs)
 	return mi
+
+
+func _reduce_motion() -> bool:
+	# Resolve at runtime: these scripts are also preloaded by standalone tests.
+	var session: Node = get_node_or_null("/root/GameSession")
+	if session == null: return false
+	var settings: Dictionary = session.get("settings")
+	return bool(settings.get("reduce_motion", false))
