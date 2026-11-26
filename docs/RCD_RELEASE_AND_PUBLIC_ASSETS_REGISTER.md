@@ -12,8 +12,8 @@
 
 | 名称 | 类型 | 本地对应位置 / 物料 | 对应提交锚点 | 是否公开 | 外部链接 | 当前状态（实时核验） | 是否需更新 | 原版本保留策略 |
 |---|---|---|---|---|---|---|---|---|
-| **GitHub 公开镜像仓** | Git 源码仓库 | `default-workspace\roll-cut-die` | `aba4c01`（`origin/master`，2026-11-25 21:05 推送） | **已公开** | <https://github.com/y22t19053/roll-cut-die> | **LIVE（HTTP 200）**；`Releases` 列表为空（`0` 个 GitHub Release） | 脏树未清理前禁止盲推 | 保留全部提交历史，严禁 `force push` |
-| **itch.io 项目主页**（ID `5420775`） | 独立游戏商店页 + Web/Win 双包 | `builds/RCD-s8-aba4c01-windows.zip` · `builds/RCD-s8-aba4c01-web.zip` · `visual/cover_titled_630.png` | `aba4c01` 导出（upload `20815878` / `20815877`） | **已公开发布（非 Draft）** | <https://y22t19053.itch.io/roll-cut-die> | **LIVE PUBLIC**；2026-11-25 21:10 已把两个包换成 Sprint 8 构建（十六棚 + 成片质量 + 档案等级 + Final Cut + 四类一次性教学 + 结算「下一把」+ 标题页进度），Web embed 直连实测可启动（canvas `2188x1395`，标题页显示 `EXPERT unlocks on clearing NOVICE (best 0/16)` 与 `Marks to next rank: 3`） | 四大 Jam 评审期内保持线上稳定，未经批准不覆盖 | 旧 `roll-cut-die-*`、`RCD-s6-*`、`RCD-s7-*` 仍在 `builds/` 与 git 历史中保留 |
+| **GitHub 公开镜像仓** | Git 源码仓库 | `default-workspace\roll-cut-die` | `a6a7b66`（本次构建的源码锚点，2026-11-26 已推至 `origin/master`） | **已公开** | <https://github.com/y22t19053/roll-cut-die> | **LIVE（HTTP 200）**；`Releases` 列表为空（`0` 个 GitHub Release） | 脏树未清理前禁止盲推 | 保留全部提交历史，严禁 `force push` |
+| **itch.io 项目主页**（ID `5420775`） | 独立游戏商店页 + Web/Win 双包 | `builds/RCD-s10-a6a7b66-windows.zip` · `builds/RCD-s10-a6a7b66-web.zip` | `a6a7b66` 导出（upload `20831851` / `20831850`） | **已公开发布（非 Draft）** | <https://y22t19053.itch.io/roll-cut-die> | **LIVE PUBLIC**；2026-11-26 换成语言修复版，公开下载与内嵌指向新包；托管 Web 实测启动 | 评审期内保持线上稳定，未经批准不覆盖 | 旧 s8 上传已隐藏、未删除；本地历史包保留 |
 | **Mauspi Lab Jam #2 · ONE MORE TRY!** | 赛事投稿 | `docs/JAM_SUBMISSIONS.md` · itch `5420775` | `2026-11-22` 投稿快照 | **已公开参赛** | <https://itch.io/jam/mauspi-lab-jam-2/rate/5420775> | **LIVE（HTTP 200）**；截止 `2026-12-14`；规则明确欢迎既有原型与披露后的 AI 辅助 | 否（评审期求稳） | 锁定参赛关联包 |
 | **Places That Shouldn't Exist** | 赛事投稿（Liminal × Non-Euclidean） | `builds/roll-cut-die-windows.zip` | `2026-11-22` 投稿快照 | **已公开参赛** | <https://itch.io/jam/places-that-shouldnt-exist/rate/5420775> | **LIVE（HTTP 200）**；截止 `2026-12-03`；严格遵守规则 03 上传 Windows 可执行压缩包 | 否（评审期求稳） | 保留 Windows zip |
 | **Tiny Loop Jam 2026** | 赛事投稿 | itch `5420775` | `2026-11-22` 投稿快照 | **已公开参赛** | <https://itch.io/jam/tiny-loop-jam-2026/rate/5420775> | **LIVE（HTTP 200）**；截止 `2026-11-29`（最近到期赛事） | 否（严禁在截止前改动破坏包体） | 锁定参赛关联包 |
@@ -67,10 +67,15 @@
 | `RCD-s7-a76e4d2-windows.zip` | **Sprint 7 定版 Windows 压缩包** | `50,670,017` | `55b0dc99cb34d9b607f0a184157c8551f8b5134f21cced5e9b51a131e945ae7d` | 同上，内含单个自包含 exe | 曾上线（itch upload `20815485`，Sprint 8 换包时删除） | 当前线上包，保留 |
 | `RCD-s7-a76e4d2-web.zip` | **Sprint 7 定版 Web 包** | `28,618,107` | `b3c4b6274cf49d3adfa1ba34ed6e30fbd08a9e5ce552c22f000f4a5e6908f5f7` | 同上，关闭 extensions support 后导出 | 曾上线（itch upload `20815484`，Sprint 8 换包时删除） | 当前线上可玩包，保留 |
 | `RCD-s8-aba4c01.exe` | **Sprint 8 定版 Windows 包** | `105,570,880` | `30a7211b07fe577d58bb715fbad2504296bbbfa0e53cae282adf88c438ce80b2` | 提交 `aba4c01`（Sprint 5–8 全部内容：互联摄影棚、片场机关、OUT OF FRAME、灯架房间族、Final Cut、成片质量、档案 v2、四类一次性教学、结算「下一把」、标题页进度；2,215 条断言 + 31 Python 全过） | 随 windows zip 分发 | 当前定版，保留 |
-| `RCD-s8-aba4c01-windows.zip` | **Sprint 8 定版 Windows 压缩包** | `50,675,154` | `90b6b1fe7a5e3e64c5649e31e67c7a0785c07f7da8711db728bca888f5e6f3fb` | 同上，内含单个自包含 exe | **是（itch upload `20815878`，`p_windows` 勾选）** | 当前线上包，保留 |
-| `RCD-s8-aba4c01-web.zip` | **Sprint 8 定版 Web 包** | `28,622,988` | `8d816b1643933c21f08760093c1c25faf09fc023bb92f201dc442b73192892ea` | 同上，关闭 extensions support 后导出 | **是（itch upload `20815877`，`embed` 勾选）** | 当前线上可玩包，保留 |
+| `RCD-s8-aba4c01-windows.zip` | **Sprint 8 定版 Windows 压缩包** | `50,675,154` | `90b6b1fe7a5e3e64c5649e31e67c7a0785c07f7da8711db728bca888f5e6f3fb` | 同上，内含单个自包含 exe | 曾上线（itch upload `20815878`，语言修复版上线后隐藏） | 本地保留 |
+| `RCD-s8-aba4c01-web.zip` | **Sprint 8 定版 Web 包** | `28,622,988` | `8d816b1643933c21f08760093c1c25faf09fc023bb92f201dc442b73192892ea` | 同上，关闭 extensions support 后导出 | 曾上线（itch upload `20815877`，语言修复版上线后隐藏） | 本地保留 |
+| `RCD-s10-a6a7b66.exe` | 语言修复版 Windows 可执行程序 | `105,575,104` | `28728f496d48c75e48fbb5d3f6c48d3a45bd371d01e926183c05ea00546102e9` | `a6a7b66`，2,458 条 Godot 断言、31 项 Python 测试通过 | 随 Windows zip 分发 | 保留 |
+| `RCD-s10-a6a7b66-windows.zip` | 语言修复版 Windows 下载包 | `50,679,041` | `1ad0a97057e72581e35a281c33c9975f051a7b6433aca918f6dfe0f3b23408c9` | 内含单个自包含 exe | itch `20831851` | 保留 |
+| `RCD-s10-a6a7b66-web.zip` | 语言修复版 Web 内嵌包 | `28,626,673` | `f88270a67b38de35799079e96d1260fc48ae972ddc8e3a1fca9bfa4c22abdf5f` | 浏览器冒烟通过，无控制台错误或警告 | itch `20831850` | 保留 |
 
-## 3.1 平台状态变更（2026-11-25 夜间主控接管）
+## 3.1 平台状态变更（2026-11-25 起）
+
+- **2026-11-26 语言修复版**：GitHub 已推送源码 `a6a7b66`。itch `5420775` 公开下载只列出 Windows upload `20831851`，内嵌指向 Web upload `20831850`；[托管 Web](https://html-classic.itch.zone/html/20831850/index.html) 启动至标题页（canvas `2188×1395`）。旧 s8 uploads `20815877` / `20815878` 已隐藏，未删除。B 站 TOY 按创作者指令保持暂停。
 
 - **GitHub 公开镜像**：master 已从 `04aa585` 推进到 `aba4c01`（仓库共 300 个提交），含 Sprint 5 四路交付、Final Cut 接通、Sprint 6（OUT OF FRAME / 灯架房间族 / 配乐分层）、Sprint 7（十六棚 + 成片质量 + 档案 v2）与 Sprint 8（四类一次性教学 + 结算「下一把」+ 标题页进度）。
 - **Bilibili TOY**：旧 `58061569920000` 已不可解析 —— `toy stats` 与 `toy update` 都返回 `307000 请求参数错误`，通知里有「大包体上传申请未通过」，判定旧 Toy 已被平台移除。新建 `59100293499904`（slug `roll-cut-die`，public，GAME）提交后处于 `status=auditing`；**创作者随后要求 B 站 TOY 暂停，不再维护也不发布新包**，后续所有发版只走 itch 与 GitHub。
