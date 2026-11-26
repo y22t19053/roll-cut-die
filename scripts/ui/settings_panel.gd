@@ -193,7 +193,7 @@ func _controls() -> void:
 		["1 / 2 / 3", "选片条" if zh else "Pick strip"],
 		["SPACE", "确认 / 重拍" if zh else "Confirm / Retake"],
 		["R", "同种子重拍 / 报告" if zh else "Replay seed / Report"],
-		["F2", "中文 / EN"],
+		["F2", "中文 / EN" if zh else "LANGUAGE"],
 		["F3", "镜头横倾" if zh else "Lens tilt"],
 		["ESC", "暂停 / 返回" if zh else "Pause / Back"],
 		[Loc.ui("controls.key_look"), Loc.ui("controls.look")],

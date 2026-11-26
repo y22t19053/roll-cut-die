@@ -16,8 +16,10 @@ const FALLBACK_DEFAULT := "en"
 const SETTING_DEFAULT := "rcd/default_language"
 
 ## Name the destination in the active UI language (shared by both pickers).
+## An English screen may not show a Chinese glyph even here: the picker is what
+## a Chinese player reaches for, but it still has to read as English.
 const LANGUAGE_NAMES := {
-	"zh": {"en": "简体中文", "zh": "简体中文"},
+	"zh": {"en": "Simplified Chinese", "zh": "简体中文"},
 	"en": {"en": "English", "zh": "English"},
 }
 

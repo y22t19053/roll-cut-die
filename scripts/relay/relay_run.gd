@@ -85,6 +85,7 @@ var free_cut := 1
 ## A run is only written down in the record book once, however often the sheet
 ## ends up on screen.
 var _recorded := false
+var _result_sheet: Dictionary = {}
 ## What this run was worth, and what the board said about it. Both are decided
 ## once, when the sheet goes up: a score that kept changing while the page was
 ## being read would be a number nobody could argue about.
@@ -275,6 +276,7 @@ func _ready() -> void:
 	add_child(pause_ui)
 	pause_ui.resumed.connect(func() -> void: _refresh())
 	pause_ui.left_run.connect(_to_title)
+	GameSession.language_changed.connect(_on_language_changed)
 	fx = FrameFX.new()
 	fx.name = "FrameFX"
 	add_child(fx)
@@ -997,7 +999,7 @@ func _finish_leg() -> void:
 ## is that the crossing is worth the takes it cost.
 func _finish_line() -> void:
 	score.resume_beds()
-	slate.play_wrap(_w("全部接通", "ANSWER PRINT"), _w("这一卷是你的", "this reel is yours"))
+	slate.play_wrap({"zh": "全部接通", "en": "ANSWER PRINT"}, {"zh": "这一卷是你的", "en": "this reel is yours"})
 	rig.add_shake(0.7)
 	fx.flash(Color("ffeec4"), 0.46, 0.06, 0.42)
 	_hint("finish", "冲线。这一卷是你的。", "Across the line. This reel is yours.")
@@ -1530,7 +1532,7 @@ func _read_note() -> void:
 	var key := _room_at() + 1
 	if _notes_read.has(key): return
 	_notes_read[key] = true
-	var lines := [
+	var zh_lines := [
 		"通告：今天补第一条。上一条被剪了，剪的人没留名。",
 		"地上那圈胶带是昨天的走位。标得比你准。",
 		"灯不够了。场务说再拍两条就收，他没说拍不拍得完。",
@@ -1542,7 +1544,7 @@ func _read_note() -> void:
 		"Not enough light left. The gaffer says two more takes, and does not say two more of what.",
 		"Past that door is the delivery bay. Cross the line and this reel is somebody else's.",
 	]
-	var line := _w(lines[clampi(act, 0, 3)], en[clampi(act, 0, 3)])
+	var line := _w(zh_lines[clampi(act, 0, 3)], en[clampi(act, 0, 3)])
 	# The same sheet also says how tonight's set is built: every family walks a
 	# different way, and the crew would rather tell you than watch you find out.
 	var how: String = $Rooms.family_note(str((segments.back() as Dictionary).get("kind", "")), Loc.language == "zh")
@@ -1680,14 +1682,26 @@ func _settle_sheet(won: bool) -> void:
 	# The archive is the only thing that survives a run, so it has to be told the
 	# whole run: marks picked up, cuts spent, and which of the three endings this
 	# reel turned out to be. A lost run has no ending to tally.
-	var rank_line := ""
+	var rank_up := -1
 	if not _recorded:
 		_recorded = true
 		Rules.record_run_full(segments.size(), deaths, won, run_seed, marks_earned, cuts_used,
 			verdict if won else "")
 		var rank_now := Rules.archive_rank(int(Rules.meta().get("marks_total", 0)))
 		if rank_now > Rules.archive_rank(int(prev_meta.get("marks_total", 0))):
-			rank_line = _w("档案等级：%s", "ARCHIVE: %s") % Rules.archive_name(rank_now)
+			rank_up = rank_now
+	_result_sheet = {"won": won, "best": best, "rank_up": rank_up,
+		"personal_best": segments.size() > prev_best}
+	_draw_result_sheet()
+	# A language switch redraws the sheet, but must never submit the score again.
+	if won and daily: _send_score()
+
+
+func _draw_result_sheet() -> void:
+	var won: bool = _result_sheet["won"]
+	var best: int = _result_sheet["best"]
+	var rank_up: int = _result_sheet["rank_up"]
+	var daily := _is_daily()
 	var lines: Array = [
 		_w("走完 %d / %d 棚　　废条 %d　　死亡 %d", "SETS %d / %d   WASTED %d   DEATHS %d") % [segments.size(),MODULES,maxi(tracks.size()-segments.size(),0),deaths],
 		_w("手上还剩　标记 %d　剪 %d", "LEFT   MARKS %d   CUTS %d") % [mark_stock,cut_stock],
@@ -1706,11 +1720,11 @@ func _settle_sheet(won: bool) -> void:
 		% [int(score_info["legs"]), Rules.SCORE_LEG, int(score_info["acts"]), Rules.SCORE_ACT,
 			int(score_info["deaths"]) * -Rules.SCORE_DEATH, int(score_info["cuts"]) * -Rules.SCORE_CUT])
 	lines.append(_w("种子 %06X", "SEED %06X") % run_seed)
-	if not rank_line.is_empty():
-		lines.insert(0, rank_line)
+	if rank_up >= 0:
+		lines.insert(0, _w("档案等级：%s", "ARCHIVE: %s") % Rules.archive_name(rank_up))
 	# The only thing this game keeps between runs is how far you got. Saying it out
 	# loud is the whole progression: there is no tree, no currency, no unlocks.
-	if segments.size() > prev_best:
+	if _result_sheet["personal_best"]:
 		lines.insert(0, _w("走得最远的一次。", "The furthest you have been."))
 	if not won and daily:
 		# A board needs one rule or it is just a list of numbers: the reels that
@@ -1728,9 +1742,16 @@ func _settle_sheet(won: bool) -> void:
 		# left by somebody who was there, not like a system message about a score.
 		lines.insert(1,_w("场务把这条剪了。他说明天再来。","The stagehand cut this one. He says come back tomorrow."))
 		desk.show_call_sheet(_w("这卷到头了","END OF REEL"), lines, false, Loc.language == "zh")
-	# Only a finished reel goes on the board, and only if the platform is there:
-	# on a desktop build, in the editor, or on a preview page this is a no-op.
-	if won and daily: _send_score()
+	if _result_sheet.has("board_rank"):
+		var rank: int = _result_sheet["board_rank"]
+		var row: String
+		if rank < 0:
+			row = _w("榜单没有回应。", "The board did not answer.")
+		elif rank == 0:
+			row = _w("今日榜：这次没排上。", "TODAY: not ranked yet.")
+		else:
+			row = _w("今日榜第 %d 名。", "TODAY: number %d on the board.") % rank
+		desk.append_sheet_lines([row], true)
 
 
 ## A daily run is the one that carries today's seed: the same map for everyone,
@@ -1751,19 +1772,27 @@ func _send_score() -> void:
 	_bridge.send_score(Rules.board_for(difficulty), int(score_info.get("total", 0)), "day", 5)
 
 
-func _on_score_sent(ok: bool, mine: Dictionary, message: String) -> void:
-	if not is_inside_tree(): return
-	if not ok:
-		# Silence is not an error the player should have to act on: the run is
-		# still over, the page still says what it was, and one line says why there
-		# is no rank on it.
-		desk.append_sheet_lines([_w("榜单没有回应（%s）。", "The board did not answer (%s).") % message], true)
-		return
-	var rank := int(mine.get("rank", 0))
-	if rank <= 0:
-		desk.append_sheet_lines([_w("今日榜：这次没排上。", "TODAY: not ranked yet.")], true)
-	else:
-		desk.append_sheet_lines([_w("今日榜第 %d 名。", "TODAY: number %d on the board.") % rank], true)
+func _on_score_sent(ok: bool, mine: Dictionary, _message: String) -> void:
+	if not is_inside_tree() or _result_sheet.is_empty(): return
+	# Keep platform error text off the localized player-facing sheet.
+	_result_sheet["board_rank"] = maxi(0, int(mine.get("rank", 0))) if ok else -1
+	_draw_result_sheet()
+
+
+func _on_language_changed(_lang: String) -> void:
+	# Transient notices were already translated when queued; don't carry them
+	# across a language switch. Rebuild persistent paper from its raw data.
+	_notice = ""
+	_notice_left = 0.0
+	desk.show_message("", 0.0)
+	if phase == Mode.ACT:
+		cards = _offer_contracts()
+		desk.show_draw(cards, Loc.language == "zh")
+	if not _result_sheet.is_empty():
+		_draw_result_sheet()
+	slate.relocalize()
+	out_of_frame._render()
+	_refresh()
 
 func _on_focus_lost() -> void:
 	if phase == Mode.PLAY and not paused and not _dying and _final_cut == null:
@@ -1802,7 +1831,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	if not e is InputEventKey or not e.pressed or e.echo: return
 	var key: int = e.physical_keycode
 	if key == KEY_F2:
-		Loc.set_language("en" if Loc.language == "zh" else "zh")
+		GameSession.set_language("en" if Loc.language == "zh" else "zh")
 		return
 	if key == KEY_F3:
 		# A/B switch for the handheld bank: F3 must give the old picture back.
@@ -1951,7 +1980,7 @@ func _board_roll() -> void:
 	score.duck(true)
 	# The board carries the take number and nothing else: the premise belongs to the
 	# title page now, and a board that explains itself delays the first step.
-	slate.play_roll(n, _w("第 %02d 条" % n, "TAKE %02d" % n), "")
+	slate.play_roll(n, {"zh": "第 %02d 条" % n, "en": "TAKE %02d" % n}, "")
 
 
 ## 抢天光: the day is going. Each act the key light drops and warms, so the last
@@ -1987,7 +2016,7 @@ func _act_line(n: int, zh: bool) -> String:
 func _board_cut() -> void:
 	var n := maxi(live.take_id,1)
 	score.duck(true)
-	slate.play_cut(n, _w("第 %02d 条" % n, "TAKE %02d" % n))
+	slate.play_cut(n, {"zh": "第 %02d 条" % n, "en": "TAKE %02d" % n})
 
 ## A death is when the crew rebuilds: the set is turned end for end, and the ghost
 ## that killed you keeps walking the way it was walking. The floor turns around
@@ -2094,7 +2123,7 @@ func _mark_killer(pos: Vector3) -> void:
 func _board_die() -> void:
 	var n := maxi(live.take_id,1)
 	score.duck(true)
-	slate.play_die(n, _w("第 %02d 条" % n, "TAKE %02d" % n))
+	slate.play_die(n, {"zh": "第 %02d 条" % n, "en": "TAKE %02d" % n})
 
 
 func _clear_killer_mark() -> void:

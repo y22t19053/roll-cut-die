@@ -25,8 +25,8 @@ var _clack: AudioStreamWAV
 var _kind := ""
 ## Callers outside the campaign (the relay) name the take their own way; empty
 ## keeps the campaign's corner/subline from Loc.
-var _corner_text := ""
-var _subline_text := ""
+var _corner_text: Variant = ""
+var _subline_text: Variant = ""
 var _t := 0.0
 var _dur := 0.0
 var _running := false
@@ -63,7 +63,7 @@ func is_running() -> bool:
 ## First take of a session: the board opens, shuts, clacks, says ROLL.
 ## Headlines ROLL./CUT!/DIE. are the game's name and stay as written; the
 ## corner and subline follow the language and re-render on a switch.
-func play_roll(take_index: int, corner := "", subline := "") -> void:
+func play_roll(take_index: int, corner: Variant = "", subline: Variant = "") -> void:
 	_take = take_index
 	_corner_text = corner
 	_subline_text = subline
@@ -78,7 +78,7 @@ func play_roll(take_index: int, corner := "", subline := "") -> void:
 
 
 ## Deliberate cut: no death wording, the player did this.
-func play_cut(take_index: int, corner := "", subline := "") -> void:
+func play_cut(take_index: int, corner: Variant = "", subline: Variant = "") -> void:
 	_take = take_index
 	_corner_text = corner
 	_subline_text = subline
@@ -94,7 +94,7 @@ func play_cut(take_index: int, corner := "", subline := "") -> void:
 
 ## Death: DIE first, then the slate shuts on it. The cause is the HUD's line,
 ## not the board's: two copies of it on screen at once read as two events.
-func play_die(take_index: int, corner := "", subline := "") -> void:
+func play_die(take_index: int, corner: Variant = "", subline: Variant = "") -> void:
 	_take = take_index
 	_corner_text = corner
 	_subline_text = subline
@@ -112,7 +112,7 @@ func play_die(take_index: int, corner := "", subline := "") -> void:
 ## The line at the end of a run: the same shut-board as a cut, but it holds long
 ## enough to be read over the room. CUT! is what a set hears when it is done;
 ## the corner says what was printed.
-func play_wrap(corner := "", subline := "") -> void:
+func play_wrap(corner: Variant = "", subline: Variant = "") -> void:
 	_corner_text = corner
 	_subline_text = subline
 	_run("cut", 0.95, [
@@ -135,8 +135,10 @@ func relocalize() -> void:
 func _apply_text() -> void:
 	if board == null:
 		return
-	board.corner = _corner_text if not _corner_text.is_empty() else _default_corner()
-	board.subline = _subline_text if not _subline_text.is_empty() else _default_subline()
+	var corner := Loc.t(_corner_text)
+	var subline := Loc.t(_subline_text)
+	board.corner = corner if not corner.is_empty() else _default_corner()
+	board.subline = subline if not subline.is_empty() else _default_subline()
 	board.take_no = _take
 
 

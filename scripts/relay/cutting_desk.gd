@@ -417,7 +417,9 @@ class Sheet extends Control:
 			return
 		var ink := AMBER
 		var lower := message.strip_edges().to_lower()
-		for keyword: String in ["ng ", "ng/", "ng·", "take failed", "the dolly did not see", "you hit ",
+		# Matched against the message, never drawn: the Chinese tokens are here so
+		# a Chinese-only notice still inks red when the desk did not translate it.
+		for keyword: String in ["ng ", "ng/", "ng·", "take failed", "the dolly did not see", "you hit ",  # zh-ok
 				"you stepped into", "no marks left", "no cuts left", "no mark stock", "no cut stock",
 				"out of mark", "out of cut", "empty stock", "collision!", "撞上", "没看见你",
 				"踩进了画面", "用完", "耗尽"]:

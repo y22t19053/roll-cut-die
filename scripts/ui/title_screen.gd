@@ -168,7 +168,7 @@ func _build_header(zh: bool) -> void:
 
 	_tools = _row(6)
 	_sheet.add_child(_tools)
-	var language := _key("中文 / EN  ·  F2", _toggle_language, 13, 34)
+	var language := _key("中文 / EN  ·  F2" if zh else "LANGUAGE  ·  F2", _toggle_language, 13, 34)
 	language.name = "Language"
 	language.tooltip_text = "切换语言 · F2" if zh else "Switch language · F2"
 	_tools.add_child(language)

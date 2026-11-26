@@ -48,6 +48,24 @@ def run_web(timeout):
     return result.returncode == 0 and bool(detail.get("ok")), detail
 
 
+def run_text(timeout):
+    """The static half of the language rule: no Chinese that can reach English."""
+    script = ROOT / "tools/check_text_language.py"
+    if not script.is_file():
+        return True, {}
+    try:
+        result = subprocess.run([sys.executable, str(script), "--json"], cwd=ROOT,
+                                capture_output=True, timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return False, {"error": str(exc)}
+    out = result.stdout.decode("utf-8", "replace")
+    try:
+        detail = json.loads(out)
+    except ValueError:
+        return False, {"error": out.strip()[:400]}
+    return result.returncode == 0, detail
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
@@ -109,11 +127,10 @@ def main():
     noise = err.count("mesh_get_surface_count")
     # NOISE BUDGET: run_all.gd keeps every Mesh that leaves the tree, which turns the
     # hundreds of lines a module teardown used to spray into a single one per whole
-    # scene freed at once (test_scene frees main.tscn from its root). A probe that
-    # retained all 61 MeshInstance3D meshes first still produced that one line, so the
-    # remainder is the dummy renderer's own teardown order, not a missing reference.
-    # The budget fails the gate the moment a second scene or a new module starts
-    # spraying again, which is the regression this number exists to catch.
+    # scene freed at once. A probe that retained all 61 MeshInstance3D meshes first
+    # still produced that one line, so the remainder is the dummy renderer's own
+    # teardown order, not a missing reference. The budget of one covers the
+    # known case-scene teardown and still catches new rendering noise.
     # A GDScript runtime error can abort just one module and still leave an
     # ALL PASS summary from the remaining modules.
     godot_ok = (ok and "SCRIPT ERROR:" not in err and summary is not None and assertions >= args.baseline
@@ -125,6 +142,17 @@ def main():
 
     report = dict(python_ok=python_ok, python_tests=python_tests, godot_ok=godot_ok,
                   assertions=assertions, stderr_noise=noise, seconds=round(time.monotonic() - start, 2))
+
+    # The promise to the player is that an English build shows no Chinese. The
+    # runtime half of that lives in tests/test_text_language.gd; this is the
+    # source half, and it costs a second, so it always runs.
+    text_ok, text_detail = run_text(args.timeout)
+    report["text_ok"] = text_ok
+    if not text_ok:
+        report["text"] = text_detail
+        for leak in text_detail.get("detail", [])[:12]:
+            print(f"{leak.get('file')}:{leak.get('line')}: {leak.get('text')}", file=sys.stderr)
+        print("Chinese can reach an English player; see tools/check_text_language.py", file=sys.stderr)
 
     # The suites say the code is right; only a browser says the thing the judges open
     # actually boots. Skipped (None) when there is no exported build to look at.
@@ -142,7 +170,7 @@ def main():
     else:
         for key, value in report.items():
             print(f"{key}: {json.dumps(value)}")
-    return 0 if python_ok and godot_ok and report.get("web_ok") is not False else 1
+    return 0 if python_ok and godot_ok and text_ok and report.get("web_ok") is not False else 1
 
 
 if __name__ == "__main__":
